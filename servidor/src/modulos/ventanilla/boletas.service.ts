@@ -168,6 +168,45 @@ export class BoletasService {
     };
   }
 
+  // Traduce el DTO de la API al JSON que espera crear_boleta. La base decide el estado
+  // final, descuenta inventario y genera folio dentro de una sola transacción.
+  async crear(token: string, dto: CrearBoletaDto) {
+    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('crear_boleta', {
+      // La API usa camelCase; las funciones RPC esperan snake_case.
+      p_materiales: (dto.materiales ?? []).map((material) => ({
+        producto_id: material.productoId,
+        cantidad: material.cantidad,
+        presentacion_id: material.presentacionId ?? null,
+        comentario: material.comentario ?? null,
+        motivo_excepcion: material.motivoExcepcion ?? null,
+      })),
+      p_herramientas: (dto.herramientas ?? []).map((herramienta) => ({
+        activo_id: herramienta.activoId,
+        dias_prestamo: herramienta.diasPrestamo,
+      })),
+      p_trabajador_id: dto.trabajadorId,
+      p_solicitante_nombre: dto.solicitanteNombre,
+      p_solicitante_unidad: dto.solicitanteUnidad,
+      p_zona_id: dto.zonaId,
+      p_numero_solicitud: dto.numeroSolicitud,
+      p_autorizo_nombre: dto.autorizoNombre,
+      p_supervisor_id: dto.supervisorId,
+      p_firma_recibe: dto.firmaRecibe,
+      p_firma_entrega: dto.firmaEntrega,
+      p_campus_id: dto.campusId,
+    });
+    if (error) throw this.errorDeBase(error);
+
+    const fila = data?.[0];
+    if (!fila) throw new Error('La base no devolvió la boleta creada.');
+    return {
+      boletaId: Number(fila.boleta_id),
+      folio: fila.folio,
+      estado: fila.estado,
+      alertas: fila.alertas ?? [],
+    };
+  }
+
   // Sube la firma al bucket privado. La ruta incluye el campus porque la política de
   // Storage exige que la primera carpeta esté entre los campus del usuario.
   async subirFirma(token: string, usuario: UsuarioAutenticado, dto: SubirFirmaDto) {

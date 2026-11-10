@@ -58,4 +58,20 @@ export class BoletasController {
   subirFirma(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: SubirFirmaDto) {
     return this.boletas.subirFirma(usuario.token, usuario, dto);
   }
+
+  // La función crear_boleta decide si entrega en el acto o deja la boleta pendiente de autorización.
+  @Post()
+  @Roles(Rol.Almacenista, Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
+  @ApiOperation({
+    summary: 'Crea la boleta de entrega',
+    description:
+      'Registra materiales y herramientas de un solo solicitante. Si todo está dentro de los ' +
+      'límites, la boleta se entrega en el acto y descuenta existencias; si algún material ' +
+      'excede la periodicidad o el límite de la zona, queda PENDIENTE_AUTORIZACION y no se ' +
+      'mueve inventario.',
+  })
+  @ApiCreatedResponse({ description: 'Boleta creada, con su folio, estado y alertas.' })
+  crear(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: CrearBoletaDto) {
+    return this.boletas.crear(usuario.token, dto);
+  }
 }
