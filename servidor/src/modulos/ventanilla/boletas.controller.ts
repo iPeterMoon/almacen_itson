@@ -39,4 +39,23 @@ export class BoletasController {
   validarMaterial(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: ValidarMaterialDto) {
     return this.boletas.validarMaterial(usuario.token, dto);
   }
+
+  // La app sube primero cada firma y luego manda la ruta devuelta al crear o confirmar la boleta.
+  @Post('firmas')
+  @Roles(Rol.Almacenista, Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
+  @ApiOperation({
+    summary: 'Sube una firma al bucket privado "firmas"',
+    description:
+      'Devuelve la ruta que se pasa a la boleta o a la confirmación de entrega. ' +
+      'Acepta PNG, JPG o WebP de hasta 500 KB en base64.',
+  })
+  @ApiCreatedResponse({
+    description: 'Ruta de la firma dentro del bucket.',
+    schema: {
+      example: { ruta: '2/7f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f-firma-recibe.png' },
+    },
+  })
+  subirFirma(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: SubirFirmaDto) {
+    return this.boletas.subirFirma(usuario.token, usuario, dto);
+  }
 }

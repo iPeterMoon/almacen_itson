@@ -168,6 +168,27 @@ export class BoletasService {
     };
   }
 
+  // Sube la firma al bucket privado. La ruta incluye el campus porque la política de
+  // Storage exige que la primera carpeta esté entre los campus del usuario.
+  async subirFirma(token: string, usuario: UsuarioAutenticado, dto: SubirFirmaDto) {
+    const { datos, extension, tipoMime } = this.decodificarFirma(dto.imagenBase64);
+    const campusId = dto.campusId ?? usuario.campusId;
+    if (!Number.isInteger(campusId) || campusId <= 0) {
+      throw new ErrorNegocio('CAMPUS_INVALIDO', 'No se pudo determinar el campus de la firma.');
+    }
+
+    const nombre = `${randomUUID()}-${this.nombreDeFirma(dto.tipo)}.${extension}`;
+    const ruta = `${campusId}/${nombre}`;
+
+    const { error } = await this.supabase
+      .clienteDeUsuario(token)
+      .storage.from('firmas')
+      .upload(ruta, datos, { contentType: tipoMime, upsert: false });
+
+    if (error) throw new ErrorNegocio('FIRMA_NO_SUBIDA', error.message);
+    return { ruta };
+  }
+
   private errorDeBase(error: ErrorSupabase): Error {
     // Los errores de negocio llegan como "CODIGO: mensaje"; el resto se deja como error 500.
     return parsearErrorBase(error.message) ?? new Error(error.message);
