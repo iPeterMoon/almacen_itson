@@ -221,6 +221,18 @@ export class BoletasService {
     return { boletaId, estado: data as EstadoBoleta };
   }
 
+  // Confirmar es un paso aparte para las boletas que requirieron autorización.
+  async confirmarEntrega(token: string, boletaId: number, dto: ConfirmarEntregaDto) {
+    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('confirmar_entrega', {
+      p_boleta_id: boletaId,
+      p_firma_recibe: dto.firmaRecibe,
+      p_firma_entrega: dto.firmaEntrega,
+    });
+    if (error) throw this.errorDeBase(error);
+    if (!data) throw new Error('La base no devolvió el folio de la boleta.');
+    return { boletaId, folio: data, estado: 'ENTREGADA' as const };
+  }
+
   // Listado paginado. Los campus permitidos los filtra RLS, no el cliente.
   async listar(token: string, dto: ListarBoletasDto) {
     const pagina = dto.pagina ?? 1;

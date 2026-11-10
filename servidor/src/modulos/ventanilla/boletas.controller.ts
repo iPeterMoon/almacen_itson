@@ -112,4 +112,27 @@ export class BoletasController {
   ) {
     return this.boletas.resolverAutorizacion(usuario.token, id, dto);
   }
+
+  // Se separa de la creación porque algunas boletas necesitan autorización antes de entregarse.
+  @Post(':id/entrega')
+  @Roles(Rol.Almacenista, Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
+  @ApiOperation({
+    summary: 'Confirma la entrega de una boleta autorizada',
+    description:
+      'Requiere las dos firmas ya subidas. Descuenta existencias y abre los préstamos de las ' +
+      'herramientas incluidas.',
+  })
+  @ApiOkResponse({
+    description: 'Folio de la boleta entregada.',
+    schema: {
+      example: { boletaId: 7, folio: 'BOL-2026-000007', estado: 'ENTREGADA' },
+    },
+  })
+  confirmarEntrega(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ConfirmarEntregaDto,
+  ) {
+    return this.boletas.confirmarEntrega(usuario.token, id, dto);
+  }
 }
