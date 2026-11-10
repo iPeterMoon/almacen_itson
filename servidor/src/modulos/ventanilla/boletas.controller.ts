@@ -90,4 +90,26 @@ export class BoletasController {
   obtener(@UsuarioActual() usuario: UsuarioAutenticado, @Param('id', ParseIntPipe) id: number) {
     return this.boletas.obtener(usuario.token, id);
   }
+
+  // La base vuelve a validar que sea el supervisor asignado, un jefe o un administrador.
+  @Post(':id/autorizacion')
+  @Roles(Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
+  @ApiOperation({
+    summary: 'Autoriza o rechaza una boleta pendiente',
+    description:
+      'Solo puede resolverla el supervisor al que se le solicitó, un SUPERVISOR_JEFE o un ADMIN.',
+  })
+  @ApiOkResponse({
+    description: 'Nuevo estado de la boleta.',
+    schema: {
+      example: { boletaId: 7, estado: 'AUTORIZADA' },
+    },
+  })
+  resolverAutorizacion(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ResolverAutorizacionDto,
+  ) {
+    return this.boletas.resolverAutorizacion(usuario.token, id, dto);
+  }
 }

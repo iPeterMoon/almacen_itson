@@ -207,6 +207,20 @@ export class BoletasService {
     };
   }
 
+  // La RPC valida quién puede resolver la autorización y devuelve el nuevo estado.
+  async resolverAutorizacion(token: string, boletaId: number, dto: ResolverAutorizacionDto) {
+    const { data, error } = await this.supabase
+      .clienteDeUsuario(token)
+      .rpc('resolver_autorizacion', {
+        p_boleta_id: boletaId,
+        p_autorizar: dto.autorizar,
+        p_comentario: dto.comentario,
+      });
+    if (error) throw this.errorDeBase(error);
+    if (!data) throw new Error('La base no devolvió el estado de la boleta.');
+    return { boletaId, estado: data as EstadoBoleta };
+  }
+
   // Listado paginado. Los campus permitidos los filtra RLS, no el cliente.
   async listar(token: string, dto: ListarBoletasDto) {
     const pagina = dto.pagina ?? 1;
