@@ -5,7 +5,10 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['eslint.config.mjs', 'dist/**', 'coverage/**'] },
+  {
+    // tipos-base.ts es generado por Supabase; no se revisa ni se edita a mano.
+    ignores: ['eslint.config.mjs', 'dist/**', 'coverage/**', 'src/supabase/tipos-base.ts'],
+  },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   eslintPluginPrettierRecommended,
