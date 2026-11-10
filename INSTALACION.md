@@ -135,15 +135,29 @@ scoop install supabase
 supabase --version
 ```
 
-> **Pendiente:** el repositorio todavía no tiene `supabase/config.toml`, así que la base local
-> (`supabase start` / `supabase db reset`) aún no está configurada. Se crea una sola vez con
-> `supabase init` y se sube al repositorio.
+> La configuración local está en `supabase/config.toml`. Para levantarla:
+>
+> ```powershell
+> npx supabase start
+> npx supabase stop
+> ```
+>
+> `supabase start` aplica las migraciones de `supabase/migrations` y el `seed.sql`.
 
 Reglas para migraciones:
 
 - Crea las nuevas con `supabase migration new <nombre>`; **no renombres** las existentes
   (el número del inicio es la versión que la base registra como aplicada).
 - No edites una migración que ya se aplicó en el proyecto compartido; crea una nueva.
+- Después de cambiar una migración, regenera los tipos de TypeScript:
+
+  ```powershell
+  cd servidor
+  npm run gen:types
+  ```
+
+  El comando requiere que Supabase local esté corriendo (`npx supabase start`). Genera
+  `servidor/src/supabase/tipos-base.ts` a partir del esquema `public`.
 
 ## 7. VS Code (opcional)
 

@@ -25,6 +25,35 @@ App móvil (Flutter)  →  API REST (NestJS)  →  Base de datos (Supabase / Pos
 | `servidor/` | API REST en NestJS, 6 módulos de dominio, Swagger en `/docs`        | `servidor/.env.example`                   |
 | `supabase/` | Migraciones (tablas, funciones, RLS, firmas) y datos de ejemplo     | `supabase/migrations/`                    |
 
+## API de boletas de entrega
+
+El flujo de ventanilla se expone en `servidor/src/modulos/ventanilla/`:
+
+| Método | Ruta                             | Qué hace                                                        |
+| ------ | -------------------------------- | --------------------------------------------------------------- |
+| `POST` | `/api/v1/boletas/validar-material` | Valida existencia, periodicidad y límite de zona antes de agregar |
+| `POST` | `/api/v1/boletas/firmas`           | Sube una firma al bucket privado `firmas` y devuelve su ruta     |
+| `POST` | `/api/v1/boletas`                  | Crea la boleta; entrega en el acto o pide autorización           |
+| `GET`  | `/api/v1/boletas`                  | Lista las boletas de los campus del usuario                      |
+| `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas y autorización              |
+| `POST` | `/api/v1/boletas/:id/autorizacion` | El supervisor autoriza o rechaza                                 |
+| `POST` | `/api/v1/boletas/:id/entrega`      | Confirma la entrega con las dos firmas                           |
+
+Todas requieren `Authorization: Bearer <token>`. El contrato completo, con ejemplos y roles,
+está en Swagger (`/docs`).
+
+## Tipos de Supabase
+
+`servidor/src/supabase/tipos-base.ts` se genera desde el esquema `public` de la base local:
+
+```bash
+npx supabase start        # requiere Docker
+cd servidor
+npm run gen:types
+```
+
+El archivo se versiona en Git y no se edita a mano. Regénéralo después de cada migración.
+
 ## Empezar
 
 1. Clona `https://github.com/iPeterMoon/almacen_itson.git` e instala las herramientas:
