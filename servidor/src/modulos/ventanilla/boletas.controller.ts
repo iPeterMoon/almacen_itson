@@ -74,4 +74,20 @@ export class BoletasController {
   crear(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: CrearBoletaDto) {
     return this.boletas.crear(usuario.token, dto);
   }
+
+  // Sin @Roles: cualquier usuario autenticado puede consultar; las políticas RLS filtran por campus.
+  @Get()
+  @ApiOperation({ summary: 'Lista las boletas de los campus del usuario' })
+  @ApiOkResponse({ description: 'Página de boletas, más recientes primero.' })
+  listar(@UsuarioActual() usuario: UsuarioAutenticado, @Query() dto: ListarBoletasDto) {
+    return this.boletas.listar(usuario.token, dto);
+  }
+
+  // El detalle incluye las relaciones que el front necesita para pintar la boleta completa.
+  @Get(':id')
+  @ApiOperation({ summary: 'Consulta una boleta con materiales, herramientas y autorización' })
+  @ApiOkResponse({ description: 'Detalle completo de la boleta.' })
+  obtener(@UsuarioActual() usuario: UsuarioAutenticado, @Param('id', ParseIntPipe) id: number) {
+    return this.boletas.obtener(usuario.token, id);
+  }
 }

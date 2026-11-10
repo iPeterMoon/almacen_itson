@@ -207,6 +207,65 @@ export class BoletasService {
     };
   }
 
+  // Listado paginado. Los campus permitidos los filtra RLS, no el cliente.
+  async listar(token: string, dto: ListarBoletasDto) {
+    const pagina = dto.pagina ?? 1;
+    const limite = dto.limite ?? 20;
+
+    let consulta = this.supabase
+      .clienteDeUsuario(token)
+      .from('boletas')
+      .select(CAMPOS_RESUMEN, { count: 'exact' });
+
+    if (dto.estado) consulta = consulta.eq('estado', dto.estado);
+    if (dto.folio) consulta = consulta.ilike('folio', `%${dto.folio}%`);
+    if (dto.trabajadorId) consulta = consulta.eq('trabajador_id', dto.trabajadorId);
+    if (dto.desde) consulta = consulta.gte('creado_en', dto.desde);
+    if (dto.hasta) consulta = consulta.lte('creado_en', dto.hasta);
+
+    // PostgREST usa rangos inclusivos: 0..limite-1 es la primera página.
+    const { data, error, count } = await consulta
+      .order('creado_en', { ascending: false })
+      .range((pagina - 1) * limite, pagina * limite - 1);
+
+    if (error) throw this.errorDeBase(error);
+
+    return {
+      datos: (data ?? []).map((fila) => ({
+        id: Number(fila.id),
+        folio: fila.folio,
+        campusId: Number(fila.campus_id),
+        estado: fila.estado,
+        solicitanteNombre: fila.solicitante_nombre,
+        trabajadorId: fila.trabajador_id,
+        zonaId: fila.zona_id,
+        numeroSolicitud: fila.numero_solicitud,
+        creadoEn: fila.creado_en,
+        entregadoEn: fila.entregado_en,
+      })),
+      total: count ?? 0,
+      pagina,
+      limite,
+    };
+  }
+
+  // Una fila inexistente también puede significar que la boleta es de otro campus:
+  // RLS la oculta y se responde igual con BOLETA_NO_EXISTE para no filtrar información.
+  async obtener(token: string, boletaId: number) {
+    const { data, error } = await this.supabase
+      .clienteDeUsuario(token)
+      .from('boletas')
+      .select(CAMPOS_DETALLE)
+      .eq('id', boletaId)
+      .maybeSingle();
+
+    if (error) throw this.errorDeBase(error);
+    if (!data) {
+      throw new ErrorNegocio('BOLETA_NO_EXISTE', `La boleta ${boletaId} no existe.`);
+    }
+    return this.aDetalle(data);
+  }
+
   // Sube la firma al bucket privado. La ruta incluye el campus porque la política de
   // Storage exige que la primera carpeta esté entre los campus del usuario.
   async subirFirma(token: string, usuario: UsuarioAutenticado, dto: SubirFirmaDto) {
