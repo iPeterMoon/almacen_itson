@@ -432,6 +432,40 @@ caso("Firmas", "No puede borrar una firma", CEN,
 caso("Firmas", "No puede reemplazar una firma", CEN,
      "update storage.objects set name = name || 'x' returning name", contiene="UPDATE 0")
 
+# ---------- HU6: historial de entregas (AI-39) ----------
+H = "select {} from vista_historial_entregas where {}"
+ZONA = admin("select id from zonas where nombre='Edificio 1800 - Planta baja'")
+caso("HU6 Hist", "Por solicitante registrado: 3 entregas de CD-123 a Juan (5 L)", CEN,
+     H.format("count(*)||'|'||sum(cantidad_base)", f"trabajador_id={JUAN} and producto_id={P1}"), contiene="3|5.000")
+caso("HU6 Hist", "Boletas rechazadas o pendientes no son entregas", CEN,
+     H.format("count(*)", f"trabajador_id={MARIA}"), contiene="0")
+caso("HU6 Hist", "Por solicitante sin registro (nombre parcial)", CEN,
+     H.format("tipo_solicitante||'|'||solicitante_nombre||'|'||numero_solicitud||'|'||comentario", "solicitante_nombre ilike '%rosa%'"),
+     contiene="SIN_REGISTRO|Rosa Molina|OT-9981|Para limpieza de oficina")
+caso("HU6 Hist", "Por insumo: guantes solo en la boleta combinada", CEN,
+     H.format("string_agg(folio||'|'||cantidad, ',')", f"producto_id={P3}"), contiene="BOL-2026-0007|2.000")
+caso("HU6 Hist", "Conserva la presentación entregada y su equivalente", CEN,
+     H.format("presentacion||'|'||cantidad||'|'||cantidad_base||'|'||unidad_base", "solicitante_nombre='Ana'"),
+     contiene="Medio litro|2.000|1.000|L")
+caso("HU6 Hist", "Por zona: 4 renglones entregados en el Edificio 1800", CEN,
+     H.format("count(*)||'|'||min(zona)", f"zona_id={ZONA}"), contiene="4|Edificio 1800 - Planta baja")
+caso("HU6 Hist", "Muestra la excepción autorizada y su motivo", CEN,
+     H.format("excede_periodicidad||'|'||motivo_excepcion", "folio='BOL-2026-0002'"), contiene="true|Derrame en baños")
+caso("HU6 Hist", "Muestra lo reingresado de cada renglón (HU4)", CEN,
+     H.format("cantidad||'|'||cantidad_reingresada||'|'||entregado_por", "folio='BOL-2026-0001'"),
+     contiene="2.000|1.000|Alicia García")
+caso("HU6 Hist", "Entrega en Náinari", NAI,
+     boleta(f'[{{"producto_id":{P1},"cantidad":1}}]', f", p_solicitante_nombre=>'Luis Ochoa', p_solicitante_unidad=>'Náinari', "
+            f"p_firma_recibe=>'{NAI_ID}/r.png', p_firma_entrega=>'{NAI_ID}/e.png'"), contiene="ENTREGADA")
+caso("Seg", "Centro no ve el historial de Náinari", CEN, H.format("count(*)", f"campus_id={NAI_ID}"), contiene="0")
+caso("Seg", "Náinari ve solo su entrega", NAI, H.format("string_agg(solicitante_nombre, ',')", "true"), contiene="Luis Ochoa")
+caso("Seg", "Supervisor jefe ve el historial de ambos campus", JEFE,
+     H.format("count(distinct campus_id)", "true"), contiene="2")
+caso("Seg", "Sin sesión no se lee el historial", "anon", H.format("count(*)", "true"), espera="permission denied")
+caso("Seg", "El historial no se modifica desde la app", CEN,
+     "select bool_or(has_table_privilege('vista_historial_entregas', p)) "
+     "from unnest(array['INSERT','UPDATE','DELETE','TRUNCATE']) p", contiene="f")
+
 cuadre = admin("""select count(*) from existencias e where e.cantidad <>
   (select coalesce(sum(m.cantidad),0) from movimientos_inventario m where m.producto_id=e.producto_id and m.ubicacion_id=e.ubicacion_id)""")
 resultados.append((cuadre == "0", "Kardex", "Saldo = suma del historial en cada ubicación", f"descuadres: {cuadre}"))

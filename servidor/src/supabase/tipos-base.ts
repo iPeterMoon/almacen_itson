@@ -210,6 +210,13 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
+            foreignKeyName: 'autorizaciones_boleta_id_fkey';
+            columns: ['boleta_id'];
+            isOneToOne: true;
+            referencedRelation: 'vista_historial_entregas';
+            referencedColumns: ['boleta_id'];
+          },
+          {
             foreignKeyName: 'autorizaciones_resuelto_por_fkey';
             columns: ['resuelto_por'];
             isOneToOne: false;
@@ -369,6 +376,13 @@ export type Database = {
             referencedRelation: 'boletas';
             referencedColumns: ['id'];
           },
+          {
+            foreignKeyName: 'boletas_herramientas_boleta_id_fkey';
+            columns: ['boleta_id'];
+            isOneToOne: false;
+            referencedRelation: 'vista_historial_entregas';
+            referencedColumns: ['boleta_id'];
+          },
         ];
       };
       boletas_materiales: {
@@ -415,6 +429,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'boletas';
             referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'boletas_materiales_boleta_id_fkey';
+            columns: ['boleta_id'];
+            isOneToOne: false;
+            referencedRelation: 'vista_historial_entregas';
+            referencedColumns: ['boleta_id'];
           },
           {
             foreignKeyName: 'boletas_materiales_presentacion_id_fkey';
@@ -617,6 +638,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'boletas_materiales';
             referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'entradas_boleta_material_id_fkey';
+            columns: ['boleta_material_id'];
+            isOneToOne: false;
+            referencedRelation: 'vista_historial_entregas';
+            referencedColumns: ['boleta_material_id'];
           },
           {
             foreignKeyName: 'entradas_creado_por_fkey';
@@ -885,6 +913,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'boletas_materiales';
             referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'movimientos_inventario_boleta_material_id_fkey';
+            columns: ['boleta_material_id'];
+            isOneToOne: false;
+            referencedRelation: 'vista_historial_entregas';
+            referencedColumns: ['boleta_material_id'];
           },
           {
             foreignKeyName: 'movimientos_inventario_creado_por_fkey';
@@ -1514,6 +1549,73 @@ export type Database = {
             columns: ['producto_id'];
             isOneToOne: false;
             referencedRelation: 'productos';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      vista_historial_entregas: {
+        Row: {
+          alias: string | null;
+          boleta_id: number | null;
+          boleta_material_id: number | null;
+          campus: string | null;
+          campus_id: number | null;
+          cantidad: number | null;
+          cantidad_base: number | null;
+          cantidad_reingresada: number | null;
+          codigo: string | null;
+          comentario: string | null;
+          compania: string | null;
+          dependencia: string | null;
+          edificio: string | null;
+          entregado_en: string | null;
+          entregado_por: string | null;
+          excede_limite: boolean | null;
+          excede_periodicidad: boolean | null;
+          folio: string | null;
+          motivo_excepcion: string | null;
+          nombre_estandar: string | null;
+          numero_solicitud: string | null;
+          piso: string | null;
+          presentacion: string | null;
+          producto_id: number | null;
+          solicitante_nombre: string | null;
+          solicitante_unidad: string | null;
+          tipo_producto: string | null;
+          tipo_solicitante: string | null;
+          tipo_trabajador: string | null;
+          trabajador_id: number | null;
+          unidad_base: string | null;
+          zona: string | null;
+          zona_id: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'boletas_campus_id_fkey';
+            columns: ['campus_id'];
+            isOneToOne: false;
+            referencedRelation: 'campus';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'boletas_materiales_producto_id_fkey';
+            columns: ['producto_id'];
+            isOneToOne: false;
+            referencedRelation: 'productos';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'boletas_trabajador_id_fkey';
+            columns: ['trabajador_id'];
+            isOneToOne: false;
+            referencedRelation: 'trabajadores';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'boletas_zona_id_fkey';
+            columns: ['zona_id'];
+            isOneToOne: false;
+            referencedRelation: 'zonas';
             referencedColumns: ['id'];
           },
         ];
