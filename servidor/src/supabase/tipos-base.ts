@@ -1711,6 +1711,7 @@ export type Database = {
           p_categoria_id?: number;
           p_desplazar?: number;
           p_limite?: number;
+          p_solo_con_existencia?: boolean;
           p_texto?: string;
           p_tipo?: string;
           p_unidad_id?: number;

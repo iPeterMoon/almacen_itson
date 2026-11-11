@@ -155,6 +155,35 @@ caso("HU3 E4", "Filtro por almacén 2", CEN,
 caso("HU3 E5", "Detalle con fecha de última entrada", CEN,
      "select ultima_entrada is not null from buscar_productos('CD-123')", contiene="t")
 
+# ---------- HU6 (AI-30): búsqueda de materiales que se pueden entregar ----------
+# CD-001 no tiene entradas y por nombre queda antes que CD-123: sirve para ver que el
+# filtro de existencia se aplica antes del límite.
+caso("HU6 Bus", "Alta de un producto sin existencia para la búsqueda", CEN,
+     ins + f"('CD-001','Aromatizante ambiental',null,{LITRO},{LIQ},'SERVICIOS_GENERALES') returning codigo",
+     contiene="CD-001")
+caso("HU6 Bus", "Sin el parámetro nuevo devuelve todos, también los de existencia 0", CEN,
+     "select string_agg(codigo||'|'||existencia, ',' order by codigo) from buscar_productos()",
+     contiene="CD-001|0,CD-123|19.000,CD-500|0")
+caso("HU6 Bus", "Con p_solo_con_existencia=false se comporta igual", CEN,
+     "select count(*) = 3 from buscar_productos(p_solo_con_existencia=>false)", contiene="t")
+caso("HU6 Bus", "Solo con existencia oculta los de existencia 0", CEN,
+     "select string_agg(codigo, ',') = 'CD-123' from buscar_productos(p_solo_con_existencia=>true)", contiene="t")
+caso("HU6 Bus", "Solo con existencia y sin coincidencias en stock", CEN,
+     "select count(*) from buscar_productos('CD-500', p_solo_con_existencia=>true)", contiene="0")
+caso("HU6 Bus", "Solo con existencia busca por alias", CEN,
+     "select codigo||'|'||existencia from buscar_productos('pinol', p_solo_con_existencia=>true)", contiene="CD-123|19")
+caso("HU6 Bus", "Sin filtro, el primero de la página es el de existencia 0", CEN,
+     "select codigo from buscar_productos(p_limite=>1)", contiene="CD-001")
+caso("HU6 Bus", "El filtro de existencia se aplica antes del límite", CEN,
+     "select string_agg(codigo, ',') = 'CD-123' from buscar_productos(p_limite=>1, p_solo_con_existencia=>true)",
+     contiene="t")
+caso("HU6 Bus", "Náinari ve el producto con su propia existencia (7)", NAI,
+     "select codigo||'|'||existencia from buscar_productos(p_solo_con_existencia=>true)", contiene="CD-123|7")
+caso("HU6 Bus", "Supervisor jefe suma la existencia de sus campus (26)", JEFE,
+     "select codigo||'|'||existencia from buscar_productos(p_solo_con_existencia=>true)", contiene="CD-123|26")
+caso("Seg", "Sin sesión no se usa la búsqueda", "anon",
+     "select * from buscar_productos(p_solo_con_existencia=>true)", espera="permission denied")
+
 # ---------- Personal, zona y supervisor (mínimo Épica 5) ----------
 admin(f"""
 insert into auth.users values ('{SUP}');
