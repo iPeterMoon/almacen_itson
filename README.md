@@ -43,6 +43,14 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 Todas requieren `Authorization: Bearer <token>`. El contrato completo, con ejemplos y roles,
 está en Swagger (`/docs`).
 
+## API de catálogo
+
+La búsqueda de materiales para la boleta se expone en `servidor/src/modulos/catalogo-inventario/`:
+
+| Método | Ruta                          | Qué hace                                                                 |
+| ------ | ----------------------------- | ------------------------------------------------------------------------ |
+| `GET`  | `/api/v1/catalogo/productos`  | Busca por código, nombre o alias (`texto`, 2 a 100 caracteres) solo productos con existencia en los campus del usuario; `limite` 8 por defecto, máximo 50 |
+
 ## Tipos de Supabase
 
 `servidor/src/supabase/tipos-base.ts` se genera desde el esquema `public` de la base local:

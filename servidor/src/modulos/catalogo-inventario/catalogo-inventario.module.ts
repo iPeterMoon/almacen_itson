@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ProductosController } from './productos.controller';
 import { ProductosService } from './productos.service';
 
 // Módulo de catálogo e inventario: productos, entradas, reingresos y ajustes.
 // Por ahora solo la búsqueda de productos para la boleta (AI-30).
 @Module({
+  controllers: [ProductosController],
   providers: [ProductosService],
 })
 export class CatalogoInventarioModule {}
