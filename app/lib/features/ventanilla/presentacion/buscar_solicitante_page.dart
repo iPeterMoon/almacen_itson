@@ -19,12 +19,19 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
   bool _usarSinRegistro = false;
   String? _autorizoSeleccionado;
 
+  // Variables de paginación
+  int _paginaActual = 1;
+  final int _elementosPorPagina = 4; 
+
   // Datos simulados (Mock) para la tabla de búsqueda
   final List<Map<String, String>> _resultadosBusqueda = [
     {'nombre': 'Miguel Angel', 'dependencia': 'Servicios Generales', 'tipo': 'ITSON', 'zona': 'AV 1800'},
     {'nombre': 'Ana Lizbeth', 'dependencia': 'Mantenimiento', 'tipo': 'Compañía', 'zona': 'Polideportivo'},
     {'nombre': 'Nayeli Solis', 'dependencia': 'Servicios Generales', 'tipo': 'ITSON', 'zona': 'Tutoria'},
     {'nombre': 'Rosa Molina', 'dependencia': 'Maxi Servicios', 'tipo': 'ITSON', 'zona': 'Video conferencias'},
+    {'nombre': 'Ros Molina', 'dependencia': 'Maxi Servicios', 'tipo': 'ITSON', 'zona': 'Video conferencias'},
+    {'nombre': 'Ro Molina', 'dependencia': 'Maxi Servicios', 'tipo': 'ITSON', 'zona': 'Video conferencias'},
+    {'nombre': 'R Molina', 'dependencia': 'Maxi Servicios', 'tipo': 'ITSON', 'zona': 'Video conferencias'},
   ];
 
   final List<String> _opcionesAutorizo = [
@@ -46,7 +53,7 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50], // Fondo claro como en el diseño
+      backgroundColor: const Color.fromRGBO(244, 247, 251, 1), // Fondo claro como en el diseño
       appBar: _buildAppBar(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -133,7 +140,7 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
             height: 4,
             margin: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
-              color: isActive ? Colors.blue[700] : Colors.grey[300],
+              color: isActive ? const Color.fromRGBO(37, 99, 235, 1) : Colors.grey[300],
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -142,7 +149,7 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: isActive ? Colors.blue[700] : Colors.grey[200],
+              color: isActive ? const Color.fromRGBO(37, 99, 235, 1) : Colors.grey[200],
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -159,7 +166,7 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
           Text(
             title,
             style: TextStyle(
-              color: isActive ? Colors.blue[700] : Colors.grey[600],
+              color: isActive ? const Color.fromRGBO(37, 99, 235, 1) : Colors.grey[600],
               fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
               fontSize: 12,
             ),
@@ -197,13 +204,15 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
             onChanged: (value) {
-              // Si el usuario escribe, mostramos la lista (reiniciamos selección)
               if (_solicitanteSeleccionado != null || _usarSinRegistro) {
                 setState(() {
                   _solicitanteSeleccionado = null;
                   _usarSinRegistro = false;
                 });
               }
+              setState(() {
+                _paginaActual = 1; // Regresar a la primera página al buscar
+              });
             },
           ),
           const SizedBox(height: 16),
@@ -244,6 +253,16 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
   }
 
   Widget _buildTablaResultados() {
+    // 1. Calcular total de páginas
+    int totalPaginas = (_resultadosBusqueda.length / _elementosPorPagina).ceil();
+    if (totalPaginas == 0) totalPaginas = 1;
+
+    // 2. Extraer solo los elementos de la página actual
+    List<Map<String, String>> elementosPagina = _resultadosBusqueda
+        .skip((_paginaActual - 1) * _elementosPorPagina)
+        .take(_elementosPorPagina)
+        .toList();
+
     return Column(
       children: [
         // Encabezado de tabla
@@ -258,8 +277,8 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
             ],
           ),
         ),
-        // Filas
-        ..._resultadosBusqueda.map((solicitante) {
+        // Filas (usando elementosPagina en lugar de _resultadosBusqueda)
+        ...elementosPagina.map((solicitante) {
           return InkWell(
             onTap: () {
               setState(() {
@@ -280,7 +299,49 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
             ),
           );
         }),
+        
+        // 3. Agregar los controles de paginación
+        const Divider(),
+        _buildControlesPaginacion(totalPaginas),
       ],
+    );
+  }
+
+  // Nuevo widget para los botones de "Anterior" y "Siguiente"
+  Widget _buildControlesPaginacion(int totalPaginas) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            color: const Color.fromRGBO(37, 99, 235, 1),
+            onPressed: _paginaActual > 1
+                ? () {
+                    setState(() {
+                      _paginaActual--;
+                    });
+                  }
+                : null, // Se deshabilita si estás en la primera página
+          ),
+          Text(
+            'Página $_paginaActual de $totalPaginas',
+            style: TextStyle(color: Colors.grey[700], fontSize: 13),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            color: const Color.fromRGBO(37, 99, 235, 1),
+            onPressed: _paginaActual < totalPaginas
+                ? () {
+                    setState(() {
+                      _paginaActual++;
+                    });
+                  }
+                : null, // Se deshabilita si estás en la última página
+          ),
+        ],
+      ),
     );
   }
 
@@ -301,12 +362,12 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
         ),
         child: Row(
           children: [
-            Icon(Icons.person_add_alt_1, color: Colors.blue[700]),
+            Icon(Icons.person_add_alt_1, color: const Color.fromRGBO(37, 99, 235, 1)),
             const SizedBox(width: 16),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Usar solicitante sin registro', style: TextStyle(color: Colors.blue[700], fontWeight: FontWeight.bold)),
+                Text('Usar solicitante sin registro', style: TextStyle(color: const Color.fromRGBO(37, 99, 235, 1), fontWeight: FontWeight.bold)),
                 const Text('Ingresa nombre y unidad/campus para solicitantes no registrados.', style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             )
@@ -481,7 +542,7 @@ class _BuscarSolicitantePageState extends State<BuscarSolicitantePage> {
             // Mover al paso "Materiales"
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color.fromARGB(255, 25, 68, 210),
+            backgroundColor: const Color.fromRGBO(37, 99, 235, 1),
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
