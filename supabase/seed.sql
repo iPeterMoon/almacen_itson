@@ -3,5 +3,5 @@
 insert into public.almacenes (campus_id, nombre)
 select c.id, a.nombre
   from (values ('CEN', 'Almacén 1'), ('CEN', 'Almacén 2'), ('CEN', 'Almacén 3'),
-               ('NAI', 'Almacén 1'), ('NAI', 'Dormitorios')) as a(clave, nombre)
+               ('NAI', 'Principal'), ('NAI', 'Dormitorios')) as a(clave, nombre)
   join public.campus c on c.clave = a.clave;
