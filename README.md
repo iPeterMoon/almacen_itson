@@ -79,6 +79,19 @@ cd servidor && npm run lint && npm test && npm run build
 cd app && flutter analyze && flutter test
 ```
 
+## Skills de Claude Code
+
+En `.claude/skills/` hay tres skills que Claude Code carga solo al abrir el repo:
+
+| Skill                         | Para qué                                                    |
+| ----------------------------- | ----------------------------------------------------------- |
+| `disenador-base-datos`        | Tablas, funciones, RLS y migraciones de Supabase            |
+| `desarrollador-backend-nestjs`| Módulos, endpoints y pruebas del servidor                   |
+| `desarrollador-flutter`       | Pantallas de la app a partir del Figma y la API             |
+
+Úsalas escribiendo `/desarrollador-flutter` (o el nombre que toque) en Claude Code, o pídele la tarea
+y él elige la skill.
+
 ## Historias priorizadas
 
 HU1 alta de producto · HU2 entradas · HU3 consulta · HU4 reingreso · HU5 ajuste ·
