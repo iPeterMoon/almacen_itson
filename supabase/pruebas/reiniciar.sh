@@ -12,10 +12,12 @@ if [ -z "$(docker ps -q -f name=^${C}$)" ]; then
   if [ -n "$(docker ps -aq -f name=^${C}$)" ]; then
     docker start $C >/dev/null || exit 1
   else
-    docker run -d --name $C -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null || exit 1
+    # Puerto 54329 solo en localhost, para herramientas como "supabase gen types --db-url"
+    docker run -d --name $C -p 127.0.0.1:54329:5432 -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null || exit 1
   fi
-  until docker exec $C pg_isready -U postgres -q 2>/dev/null; do sleep 1; done
-  sleep 1
+  # Por TCP: en la primera corrida la imagen arranca un servidor temporal solo por
+  # socket para inicializarse y luego lo reinicia; el socket daría falso "listo".
+  until docker exec $C pg_isready -h 127.0.0.1 -U postgres -q 2>/dev/null; do sleep 1; done
 fi
 
 P="docker exec -i -e PGOPTIONS=-cclient_min_messages=warning $C psql -X -U postgres -v ON_ERROR_STOP=1 -q"

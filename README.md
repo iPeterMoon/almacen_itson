@@ -89,8 +89,9 @@ bash supabase/pruebas/reiniciar.sh     # recrea la base: stub + migraciones + se
 python supabase/pruebas/probar.py      # corre los escenarios de HU1 a HU10
 ```
 
-La primera vez descarga la imagen `postgres:16` y crea el contenedor `almacenes-pruebas`.
-Cada caso imprime `PASA` o `FALLA` con el error, y al final el total (`125/125 casos pasan`).
+La primera vez descarga la imagen `postgres:16` y crea el contenedor `almacenes-pruebas`
+(publicado solo en `127.0.0.1:54329`, usuario y contraseña `postgres`, base `almacenes`).
+Cada caso imprime `PASA` o `FALLA` con el error, y al final el total (`139/139 casos pasan`).
 Corre `reiniciar.sh` antes de cada `probar.py`, porque las pruebas dejan datos en la base.
 Para borrar el contenedor: `docker rm -f almacenes-pruebas`.
 
