@@ -7,7 +7,7 @@ Sistema de inventario, entregas en ventanilla y préstamo de herramientas de los
 
 ## Arquitectura
 
-```
+```text
 App móvil (Flutter)  →  API REST (NestJS)  →  Base de datos (Supabase / PostgreSQL)
       app/                 servidor/                supabase/
 ```
@@ -23,7 +23,7 @@ App móvil (Flutter)  →  API REST (NestJS)  →  Base de datos (Supabase / Pos
 | ----------- | ------------------------------------------------------------------- | ----------------------------------------- |
 | `app/`      | App Flutter para Android                                            | [app/README.md](app/README.md)            |
 | `servidor/` | API REST en NestJS, 6 módulos de dominio, Swagger en `/docs`        | `servidor/.env.example`                   |
-| `supabase/` | Migraciones (tablas, funciones, RLS, firmas) y datos de ejemplo     | `supabase/migrations/`                    |
+| `supabase/` | Migraciones (tablas, funciones, RLS, firmas), datos de ejemplo y pruebas | `supabase/migrations/`, `supabase/pruebas/` |
 
 ## API de boletas de entrega
 
@@ -59,24 +59,47 @@ El archivo se versiona en Git y no se edita a mano. Regénéralo después de cad
 1. Clona `https://github.com/iPeterMoon/almacen_itson.git` e instala las herramientas:
    **[INSTALACION.md](INSTALACION.md)**.
 2. Servidor:
+
    ```bash
    cd servidor
    npm ci
    cp .env.example .env      # y llena SUPABASE_URL y SUPABASE_ANON_KEY
    npm run start:dev         # http://localhost:3000/api/v1/salud y /docs
    ```
+
 3. App:
+
    ```bash
    cd app
    flutter pub get
    flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1
    ```
 
+## Pruebas de la base de datos
+
+`supabase/pruebas/` prueba las funciones RPC, RLS y firmas contra un PostgreSQL 16 en Docker,
+como los usuarios reales de la app (almacenista, supervisor y supervisor jefe de cada campus).
+No usa la cuenta de Supabase ni `supabase start`: el archivo `00_stub_supabase.sql` imita lo
+mínimo de Supabase (roles, `auth.uid()`, `storage`).
+
+Requiere Docker Desktop abierto y Python 3. Desde la raíz del repo, en Git Bash:
+
+```bash
+bash supabase/pruebas/reiniciar.sh     # recrea la base: stub + migraciones + seed.sql
+python supabase/pruebas/probar.py      # corre los escenarios de HU1 a HU10
+```
+
+La primera vez descarga la imagen `postgres:16` y crea el contenedor `almacenes-pruebas`.
+Cada caso imprime `PASA` o `FALLA` con el error, y al final el total (`125/125 casos pasan`).
+Corre `reiniciar.sh` antes de cada `probar.py`, porque las pruebas dejan datos en la base.
+Para borrar el contenedor: `docker rm -f almacenes-pruebas`.
+
 ## Antes de subir cambios
 
 ```bash
 cd servidor && npm run lint && npm test && npm run build
 cd app && flutter analyze && flutter test
+bash supabase/pruebas/reiniciar.sh && python supabase/pruebas/probar.py   # si tocaste supabase/
 ```
 
 ## Skills de Claude Code
