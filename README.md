@@ -27,7 +27,7 @@ App móvil (Flutter)  →  API REST (NestJS)  →  Base de datos (Supabase / Pos
 
 ## API de boletas de entrega
 
-El flujo de ventanilla se expone en `servidor/src/modulos/ventanilla/`:
+El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventanilla/`:
 
 | Método | Ruta                             | Qué hace                                                        |
 | ------ | -------------------------------- | --------------------------------------------------------------- |
@@ -38,6 +38,7 @@ El flujo de ventanilla se expone en `servidor/src/modulos/ventanilla/`:
 | `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas y autorización              |
 | `POST` | `/api/v1/boletas/:id/autorizacion` | El supervisor autoriza o rechaza                                 |
 | `POST` | `/api/v1/boletas/:id/entrega`      | Confirma la entrega con las dos firmas                           |
+| `GET`  | `/api/v1/entregas`                 | Historial de material entregado por solicitante, insumo y zona   |
 
 Todas requieren `Authorization: Bearer <token>`. El contrato completo, con ejemplos y roles,
 está en Swagger (`/docs`).
