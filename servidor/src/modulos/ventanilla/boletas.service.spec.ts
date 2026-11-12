@@ -195,6 +195,40 @@ describe('BoletasService', () => {
         excedeLimite: false,
       });
     });
+        it('marca stockSuficiente en false y conserva lo disponible cuando no alcanza', async () => {
+      // Escenario HU6-E6: se piden 10 y el campus solo tiene 4.
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, disponible: 4, stock_suficiente: false }],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', { productoId: 12, cantidad: 10 });
+
+      expect(resultado.stockSuficiente).toBe(false);
+      expect(resultado.disponible).toBe(4);
+    });
+
+    it('convierte a número la existencia que la base devuelve como texto', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, disponible: '4.500', stock_suficiente: false }],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', { productoId: 12, cantidad: 10 });
+
+      expect(resultado.disponible).toBe(4.5);
+    });
+
+    it('falla si la base no devuelve ninguna fila de validación', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.validarMaterial('token', { productoId: 12, cantidad: 1 }),
+      ).rejects.toThrow('La base no devolvió la validación del material.');
+    });
   });
 
   describe('resolverAutorizacion', () => {
