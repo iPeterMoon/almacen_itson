@@ -14,20 +14,33 @@ class ProductosRepository {
 
   final Dio _dio;
 
-  // Busca por código, nombre estándar o alias. El servidor solo devuelve
-  // productos con existencia en los campus del usuario y valida el texto
-  // (2 a 100 caracteres); sin [limite] usa 8. [pagina] y [limite] quedan para
-  // la paginación (AI-63).
+  // Busca productos con existencia en los campus del usuario. Todo es opcional y
+  // se combina (AI-62):
+  // - [texto]: código, nombre estándar o alias; el servidor exige 2 a 100
+  //   caracteres. Vacío o nulo no se manda (lista sin filtrar por texto).
+  // - [categoriaId] y [almacenId]: ids de GET /catalogo/categorias y /almacenes.
+  // - [tipo]: 'SERVICIOS_GENERALES' o 'MANTENIMIENTO' (ver tiposProducto).
+  // - [soloMasComunes]: solo los marcados como "Más comunes".
+  // Sin [limite] el servidor usa 8. [pagina] y [limite] son para AI-63.
   Future<ResultadoBusquedaProductos> buscar({
-    required String texto,
+    String? texto,
+    int? categoriaId,
+    String? tipo,
+    int? almacenId,
+    bool soloMasComunes = false,
     int? pagina,
     int? limite,
   }) async {
+    final textoLimpio = texto?.trim();
     try {
       final respuesta = await _dio.get<Map<String, dynamic>>(
         '/catalogo/productos',
         queryParameters: {
-          'texto': texto,
+          if (textoLimpio != null && textoLimpio.isNotEmpty) 'texto': textoLimpio,
+          'categoriaId': ?categoriaId,
+          'tipo': ?tipo,
+          'almacenId': ?almacenId,
+          if (soloMasComunes) 'soloMasComunes': 'true',
           'pagina': ?pagina,
           'limite': ?limite,
         },

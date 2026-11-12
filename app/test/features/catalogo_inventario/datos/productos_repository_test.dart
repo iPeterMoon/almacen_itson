@@ -56,6 +56,51 @@ void main() {
       });
     });
 
+    test('manda los filtros indicados (AI-62)', () async {
+      final adaptador = AdaptadorHttpFalso(
+        cuerpo: {'datos': <Object>[], 'pagina': 1, 'limite': 8},
+      );
+
+      await crearRepositorio(adaptador).buscar(
+        texto: 'cloro',
+        categoriaId: 1,
+        tipo: 'SERVICIOS_GENERALES',
+        almacenId: 5,
+        soloMasComunes: true,
+      );
+
+      expect(adaptador.ultimaPeticion!.queryParameters, {
+        'texto': 'cloro',
+        'categoriaId': 1,
+        'tipo': 'SERVICIOS_GENERALES',
+        'almacenId': 5,
+        'soloMasComunes': 'true',
+      });
+    });
+
+    test('sin texto ni filtros no manda ningún parámetro', () async {
+      final adaptador = AdaptadorHttpFalso(
+        cuerpo: {'datos': <Object>[], 'pagina': 1, 'limite': 8},
+      );
+
+      await crearRepositorio(adaptador).buscar();
+      final sinFiltros = adaptador.ultimaPeticion!.queryParameters;
+      await crearRepositorio(adaptador).buscar(texto: '   ', soloMasComunes: false);
+
+      expect(sinFiltros, isEmpty);
+      expect(adaptador.ultimaPeticion!.queryParameters, isEmpty);
+    });
+
+    test('recorta el texto antes de mandarlo', () async {
+      final adaptador = AdaptadorHttpFalso(
+        cuerpo: {'datos': <Object>[], 'pagina': 1, 'limite': 8},
+      );
+
+      await crearRepositorio(adaptador).buscar(texto: '  pinol ');
+
+      expect(adaptador.ultimaPeticion!.queryParameters, {'texto': 'pinol'});
+    });
+
     test('sin coincidencias devuelve una página vacía', () async {
       final adaptador = AdaptadorHttpFalso(
         cuerpo: {'datos': <Object>[], 'pagina': 1, 'limite': 8},

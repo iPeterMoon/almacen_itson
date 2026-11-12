@@ -13,11 +13,27 @@ class ProductosFalso implements ProductosRepository {
 
   final List<ProductoResumen> productos;
   final ErrorNegocio? error;
-  final llamadas = <({String texto, int? pagina, int? limite})>[];
+  final llamadas = <({String? texto, int? pagina, int? limite})>[];
+  // Filtros de la última búsqueda (AI-62).
+  ({int? categoriaId, String? tipo, int? almacenId, bool soloMasComunes})? ultimosFiltros;
 
   @override
-  Future<ResultadoBusquedaProductos> buscar({required String texto, int? pagina, int? limite}) async {
+  Future<ResultadoBusquedaProductos> buscar({
+    String? texto,
+    int? categoriaId,
+    String? tipo,
+    int? almacenId,
+    bool soloMasComunes = false,
+    int? pagina,
+    int? limite,
+  }) async {
     llamadas.add((texto: texto, pagina: pagina, limite: limite));
+    ultimosFiltros = (
+      categoriaId: categoriaId,
+      tipo: tipo,
+      almacenId: almacenId,
+      soloMasComunes: soloMasComunes,
+    );
     if (error != null) throw error!;
     return ResultadoBusquedaProductos(datos: productos, pagina: pagina ?? 1, limite: limite ?? 8);
   }
