@@ -51,25 +51,36 @@ class _PasoMaterialesState extends ConsumerState<PasoMateriales> {
           alignment: Alignment.centerRight,
           child: OutlinedButton.icon(
             onPressed: () => mostrarDialogoListaMateriales(context),
-            icon: const Icon(Icons.assignment_outlined),
-            label: Text('Materiales a entregar (${e.totalPartidas})'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 56),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            icon: Badge(
+              isLabelVisible: e.totalPartidas > 0,
+              label: Text('${e.totalPartidas}'),
+              child: const Icon(Icons.assignment_turned_in_outlined, size: 28),
+            ),
+            label: const Text('Materiales a entregar', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ),
         const SizedBox(height: 12),
         TarjetaSeccion(
           titulo: 'Selecciona material o equipo a entregar',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Materiales')),
-                  ButtonSegment(value: 1, label: Text('Activos')),
-                ],
-                selected: {_pestana},
-                onSelectionChanged: (v) => setState(() => _pestana = v.first),
-              ),
-            ),
+            Row(children: [
+              Expanded(
+                  child: BotonPestana(
+                      texto: 'Materiales',
+                      seleccionado: _pestana == 0,
+                      onTap: () => setState(() => _pestana = 0))),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: BotonPestana(
+                      texto: 'Activos',
+                      seleccionado: _pestana == 1,
+                      onTap: () => setState(() => _pestana = 1))),
+            ]),
             const SizedBox(height: 12),
             TextField(
               onChanged: _buscar,
@@ -100,37 +111,31 @@ class _FiltrosMateriales extends ConsumerWidget {
     final opciones = ref.watch(opcionesFiltrosProvider);
 
     Widget selector(String etiqueta, String? valor, List<String> lista, ValueChanged<String?> alCambiar) =>
-        SizedBox(
-          width: 200,
-          child: CampoSelector<String?>(
-            etiqueta: etiqueta,
-            valor: valor,
-            hint: 'Todos',
-            items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('Todos')),
-              for (final o in lista) DropdownMenuItem<String?>(value: o, child: Text(o)),
-            ],
-            onChanged: alCambiar,
-          ),
+        SelectorCompacto<String?>(
+          etiqueta: etiqueta,
+          valor: valor,
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('Todos')),
+            for (final o in lista) DropdownMenuItem<String?>(value: o, child: Text(o)),
+          ],
+          onChanged: alCambiar,
         );
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Text('Filtrar por:', style: TextStyle(fontWeight: FontWeight.w700)),
         const Spacer(),
-        ChoiceChip(
-          label: const Text('Más comunes'),
-          selected: filtro.soloComunes,
-          onSelected: (_) => notif.setSoloComunes(true),
-        ),
+        PildoraFiltro(
+            texto: 'Más comunes',
+            seleccionada: filtro.soloComunes,
+            onTap: () => notif.setSoloComunes(true)),
         const SizedBox(width: 8),
-        ChoiceChip(
-          label: const Text('Todos'),
-          selected: !filtro.soloComunes,
-          onSelected: (_) => notif.setSoloComunes(false),
-        ),
+        PildoraFiltro(
+            texto: 'Todos',
+            seleccionada: !filtro.soloComunes,
+            onTap: () => notif.setSoloComunes(false)),
       ]),
-      const SizedBox(height: 12),
+      const SizedBox(height: 16),
       opciones.when(
         loading: () => const LinearProgressIndicator(),
         error: (_, __) => const AvisoCaja(
@@ -159,25 +164,33 @@ class _ResultadosMateriales extends ConsumerWidget {
               padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
           error: (_, __) =>
               const AvisoCaja(tipo: TipoAviso.error, mensaje: 'No se pudo cargar el catálogo.'),
-          data: (lista) => lista.isEmpty
+          data: (pagina) => pagina.items.isEmpty
               ? const Padding(
                   padding: EdgeInsets.all(8),
                   child: Text('No hay materiales con ese criterio.',
                       style: TextStyle(color: Colores.textoSuave)))
-              : Column(children: [
-                  for (var i = 0; i < lista.length; i++)
-                    ListTile(
-                      minTileHeight: 64,
-                      tileColor: i.isOdd ? Colores.filaAlterna : null,
-                      title: Text('${lista[i].codigo} · ${lista[i].concepto}',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text(
-                          '${lista[i].alias} · ${lista[i].categoria} · ${lista[i].almacen} · Existencia: ${lista[i].existenciaTexto}'),
-                      trailing: e.materiales.any((m) => m.material.codigo == lista[i].codigo)
-                          ? const Icon(Icons.check_circle, color: Colores.exitoOscuro)
-                          : const Icon(Icons.add_circle_outline, color: Colores.primario),
-                      onTap: () => mostrarDialogoAgregarMaterial(context, lista[i]),
-                    ),
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  TablaDatos(
+                    encabezados: const [
+                      'Código', 'Concepto', 'Alias', 'Categoría', 'Almacén', 'Existencia'
+                    ],
+                    flex: const [2, 3, 3, 2, 3, 2],
+                    filas: [
+                      for (final m in pagina.items)
+                        [m.codigo, m.concepto, m.alias, m.categoria, m.almacen, m.existenciaTexto]
+                    ],
+                    // Las filas ya agregadas a la boleta se resaltan.
+                    resaltada: (i) =>
+                        e.materiales.any((x) => x.material.codigo == pagina.items[i].codigo),
+                    onTap: (i) => mostrarDialogoAgregarMaterial(context, pagina.items[i]),
+                  ),
+                  PaginadorTabla(
+                    pagina: pagina.pagina,
+                    totalPaginas: pagina.totalPaginas,
+                    mostrando: pagina.items.length,
+                    total: pagina.total,
+                    onCambiar: ref.read(paginaMaterialesProvider.notifier).set,
+                  ),
                 ]),
         );
   }
