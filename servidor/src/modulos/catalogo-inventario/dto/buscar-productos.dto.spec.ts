@@ -27,10 +27,20 @@ describe('BuscarProductosDto', () => {
     expect(dto.texto).toBe('CD-123');
   });
 
-  it('exige el texto', async () => {
-    const { campos } = await validar({});
+  it('el texto es opcional (AI-62): sin texto no hay errores', async () => {
+    const { dto, campos } = await validar({});
 
-    expect(campos).toEqual(['texto']);
+    expect(campos).toEqual([]);
+    expect(dto.texto).toBeUndefined();
+  });
+
+  it('un texto vacío o de puros espacios se trata como si no viniera', async () => {
+    for (const texto of ['', '   ']) {
+      const { dto, campos } = await validar({ texto });
+
+      expect(campos).toEqual([]);
+      expect(dto.texto).toBeUndefined();
+    }
   });
 
   it('rechaza un texto de 1 carácter, aunque traiga espacios', async () => {
@@ -60,6 +70,60 @@ describe('BuscarProductosDto', () => {
   it('rechaza una página menor a 1 o que no sea entera', async () => {
     expect((await validar({ texto: 'pinol', pagina: '0' })).campos).toEqual(['pagina']);
     expect((await validar({ texto: 'pinol', pagina: '1.5' })).campos).toEqual(['pagina']);
+  });
+
+  describe('filtros (AI-62)', () => {
+    it('convierte los filtros del query string a sus tipos', async () => {
+      const { dto, campos } = await validar({
+        categoriaId: '2',
+        tipo: 'MANTENIMIENTO',
+        almacenId: '5',
+        soloMasComunes: 'true',
+      });
+
+      expect(campos).toEqual([]);
+      expect(dto).toMatchObject({
+        categoriaId: 2,
+        tipo: 'MANTENIMIENTO',
+        almacenId: 5,
+        soloMasComunes: true,
+      });
+    });
+
+    it('acepta soloMasComunes=false', async () => {
+      const { dto, campos } = await validar({ soloMasComunes: 'false' });
+
+      expect(campos).toEqual([]);
+      expect(dto.soloMasComunes).toBe(false);
+    });
+
+    it('rechaza soloMasComunes que no sea true o false', async () => {
+      expect((await validar({ soloMasComunes: 'si' })).campos).toEqual(['soloMasComunes']);
+      expect((await validar({ soloMasComunes: '1' })).campos).toEqual(['soloMasComunes']);
+    });
+
+    it('acepta los dos tipos y rechaza AMBOS u otros', async () => {
+      expect((await validar({ tipo: 'SERVICIOS_GENERALES' })).campos).toEqual([]);
+      expect((await validar({ tipo: 'AMBOS' })).campos).toEqual(['tipo']);
+      expect((await validar({ tipo: 'servicios' })).campos).toEqual(['tipo']);
+    });
+
+    it('rechaza ids de categoría o almacén que no sean enteros positivos', async () => {
+      expect((await validar({ categoriaId: '0' })).campos).toEqual(['categoriaId']);
+      expect((await validar({ categoriaId: 'abc' })).campos).toEqual(['categoriaId']);
+      expect((await validar({ almacenId: '-1' })).campos).toEqual(['almacenId']);
+      expect((await validar({ almacenId: '2.5' })).campos).toEqual(['almacenId']);
+    });
+
+    it('combina texto y filtros', async () => {
+      const { campos } = await validar({
+        texto: 'pinol',
+        categoriaId: '1',
+        soloMasComunes: 'true',
+      });
+
+      expect(campos).toEqual([]);
+    });
   });
 
   it('rechaza parámetros que no existen', async () => {

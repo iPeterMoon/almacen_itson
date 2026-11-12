@@ -75,15 +75,32 @@ describe('GET /api/v1/catalogo/productos (e2e)', () => {
     expect(servicioFalso.buscar).not.toHaveBeenCalled();
   });
 
-  it('responde 400 si falta el texto o el límite pasa de 50', async () => {
-    await http().get(RUTA).set('Authorization', 'Bearer valido').expect(400);
-    await http()
-      .get(RUTA)
-      .query({ texto: 'pinol', limite: '51' })
-      .set('Authorization', 'Bearer valido')
-      .expect(400);
+  it('responde 400 si el límite pasa de 50 o un filtro no es válido', async () => {
+    for (const consulta of [
+      { texto: 'pinol', limite: '51' },
+      { tipo: 'AMBOS' },
+      { soloMasComunes: 'si' },
+      { categoriaId: '0' },
+    ]) {
+      await http().get(RUTA).query(consulta).set('Authorization', 'Bearer valido').expect(400);
+    }
 
     expect(servicioFalso.buscar).not.toHaveBeenCalled();
+  });
+
+  it('sin texto acepta la búsqueda y pasa los filtros convertidos (AI-62)', async () => {
+    await http()
+      .get(RUTA)
+      .query({ categoriaId: '1', tipo: 'MANTENIMIENTO', almacenId: '5', soloMasComunes: 'true' })
+      .set('Authorization', 'Bearer valido')
+      .expect(200);
+
+    expect(servicioFalso.buscar).toHaveBeenCalledWith('valido', {
+      categoriaId: 1,
+      tipo: 'MANTENIMIENTO',
+      almacenId: 5,
+      soloMasComunes: true,
+    });
   });
 
   it('documenta la ruta en Swagger', async () => {
