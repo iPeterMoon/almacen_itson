@@ -127,30 +127,34 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
                     padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator())),
                 error: (_, __) => const AvisoCaja(
                     tipo: TipoAviso.error, mensaje: 'No se pudo cargar el personal. Intenta de nuevo.'),
-                data: (lista) => lista.isEmpty
+                data: (pagina) => pagina.items.isEmpty
                     ? const Padding(
                         padding: EdgeInsets.all(8),
                         child: Text('Sin resultados. Puedes usar un solicitante sin registro.',
                             style: TextStyle(color: Colores.textoSuave)))
-                    : Column(children: [
-                        const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text('Selecciona un solicitante para continuar.',
-                                style: TextStyle(color: Colores.textoSuave))),
-                        for (var i = 0; i < lista.length; i++)
-                          ListTile(
-                            minTileHeight: 56,
-                            tileColor: i.isOdd ? Colores.filaAlterna : null,
-                            selected: s?.id == lista[i].id,
-                            selectedTileColor: Colores.infoFondo,
-                            title: Text(lista[i].nombre,
-                                style: const TextStyle(fontWeight: FontWeight.w700)),
-                            subtitle: Text('${lista[i].dependencia} · ${lista[i].tipo} · ${lista[i].zona}'),
-                            trailing: s?.id == lista[i].id
-                                ? const Icon(Icons.check_circle, color: Colores.primario)
-                                : null,
-                            onTap: () => c.seleccionarSolicitante(lista[i]),
-                          ),
+                    : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Selecciona un solicitante para continuar. Toca de nuevo para quitar la selección.',
+                            style: TextStyle(color: Colores.textoSuave)),
+                        const SizedBox(height: 8),
+                        TablaDatos(
+                          encabezados: const ['Nombre', 'Dependencia', 'Tipo', 'Zona'],
+                          flex: const [3, 3, 2, 3],
+                          primeraNegrita: true,
+                          filas: [
+                            for (final x in pagina.items) [x.nombre, x.dependencia, x.tipo, x.zona]
+                          ],
+                          resaltada: (i) => s?.id == pagina.items[i].id,
+                          onTap: (i) => s?.id == pagina.items[i].id
+                              ? c.deseleccionarSolicitante()
+                              : c.seleccionarSolicitante(pagina.items[i]),
+                        ),
+                        PaginadorTabla(
+                          pagina: pagina.pagina,
+                          totalPaginas: pagina.totalPaginas,
+                          mostrando: pagina.items.length,
+                          total: pagina.total,
+                          onCambiar: ref.read(paginaSolicitantesProvider.notifier).set,
+                        ),
                       ]),
               ),
               if (s != null) ...[
@@ -162,6 +166,14 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
                 FilaInfo('Área de trabajo 2:', s.areaTrabajo2 ?? '-'),
                 FilaInfo('Dependencia:', s.dependencia),
                 FilaInfo('Tipo:', s.tipo),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: c.deseleccionarSolicitante,
+                    icon: const Icon(Icons.close),
+                    label: const Text('Quitar selección'),
+                  ),
+                ),
               ],
             ],
           ]),
@@ -174,10 +186,14 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
             final autorizo = autorizadores.when(
               loading: () => const LinearProgressIndicator(),
               error: (_, __) => const Text('No se pudo cargar la lista.'),
-              data: (lista) => CampoSelector<String>(
+              data: (lista) => CampoSelector<String?>(
                 etiqueta: 'Autorizó (Opcional)',
                 valor: e.autorizoId,
-                items: [for (final a in lista) DropdownMenuItem(value: a.id, child: Text(a.nombre))],
+                hint: 'Sin seleccionar',
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Sin seleccionar')),
+                  for (final a in lista) DropdownMenuItem<String?>(value: a.id, child: Text(a.nombre)),
+                ],
                 onChanged: c.setAutorizo,
               ),
             );
