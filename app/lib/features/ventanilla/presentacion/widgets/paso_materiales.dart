@@ -154,10 +154,30 @@ class _FiltrosMateriales extends ConsumerWidget {
   }
 }
 
-// Mensajes de la búsqueda de materiales (AI-30).
+// Mensajes de la búsqueda de materiales (AI-30 y AI-62).
 const mensajeEscribeParaBuscar = 'Escribe al menos 2 caracteres para buscar';
 const mensajeSinMateriales = 'No hay materiales disponibles con ese nombre';
+const mensajeSinMaterialesComunes =
+    'No hay materiales disponibles con ese nombre. Prueba con el filtro Todos.';
+const mensajeSinMasComunes =
+    'No hay materiales disponibles en "Más comunes". Prueba con el filtro Todos.';
+const mensajeSinMaterialesFiltros = 'No hay materiales disponibles con esos filtros';
 const mensajeErrorCatalogo = 'No se pudo cargar el catálogo.';
+
+// Qué decir cuando la lista llega vacía, según lo que el usuario escribió y eligió.
+String mensajeListaVacia(FiltroMateriales filtro) {
+  final texto = filtro.consulta.trim();
+  // Con 1 carácter la API no se consulta (pide 2 o más).
+  if (texto.isNotEmpty && texto.length < minimoCaracteresBusqueda) {
+    return mensajeEscribeParaBuscar;
+  }
+  // Con "Más comunes" seleccionado, el texto busca solo dentro de ellos (opción A):
+  // se sugiere "Todos" para buscar en todos los materiales.
+  if (texto.isNotEmpty) {
+    return filtro.soloComunes ? mensajeSinMaterialesComunes : mensajeSinMateriales;
+  }
+  return filtro.soloComunes ? mensajeSinMasComunes : mensajeSinMaterialesFiltros;
+}
 
 class _ResultadosMateriales extends ConsumerWidget {
   const _ResultadosMateriales();
@@ -165,10 +185,7 @@ class _ResultadosMateriales extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final e = ref.watch(entregaControllerProvider);
-    // Con la API, menos de 2 caracteres no consulta y la lista llega vacía: se pide
-    // escribir más (aunque esté seleccionado "Más comunes", que es de AI-62).
-    final textoCorto =
-        ref.watch(filtroMaterialesProvider).consulta.trim().length < minimoCaracteresBusqueda;
+    final filtro = ref.watch(filtroMaterialesProvider);
     return ref.watch(materialesProvider).when(
           loading: () => const Padding(
               padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
@@ -179,7 +196,7 @@ class _ResultadosMateriales extends ConsumerWidget {
           data: (pagina) => pagina.items.isEmpty
               ? Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Text(textoCorto ? mensajeEscribeParaBuscar : mensajeSinMateriales,
+                  child: Text(mensajeListaVacia(filtro),
                       style: const TextStyle(color: Colores.textoSuave)))
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   TablaDatos(

@@ -84,12 +84,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('sin coincidencias muestra "No hay materiales disponibles con ese nombre"',
-      (tester) async {
+  testWidgets('al abrir sin "Más comunes" sugiere el filtro Todos', (tester) async {
     await abrirPaso(tester, ProductosFalso());
 
+    expect(find.text(mensajeSinMasComunes), findsOneWidget);
+  });
+
+  testWidgets('sin coincidencias en "Más comunes" sugiere el filtro Todos (opción A)',
+      (tester) async {
+    final productos = await abrirPaso(tester, ProductosFalso());
+
+    await escribir(tester, 'desengr');
+
+    expect(productos.ultimosFiltros!.soloMasComunes, isTrue);
+    expect(find.text(mensajeSinMaterialesComunes), findsOneWidget);
+  });
+
+  testWidgets('con "Todos" y sin coincidencias muestra el mensaje sin sugerencia', (tester) async {
+    final productos = await abrirPaso(tester, ProductosFalso());
+
+    await tester.tap(find.text('Todos').first);
+    await tester.pump(const Duration(seconds: 1));
     await escribir(tester, 'CD-500');
 
+    expect(productos.ultimosFiltros!.soloMasComunes, isFalse);
     expect(find.text(mensajeSinMateriales), findsOneWidget);
   });
 
