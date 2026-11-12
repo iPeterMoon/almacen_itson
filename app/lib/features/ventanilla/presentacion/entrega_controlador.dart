@@ -154,10 +154,20 @@ class EntregaController extends Notifier<EntregaState> {
     required double cantidad,
     required String unidad,
   }) async {
+    final existente = _buscarMaterial(material.codigo);
+    if (existente != null && existente.unidad != unidad) {
+      // No hay conversión de unidades en la app: solo se suma si la unidad es la misma.
+      throw ErrorNegocio(
+        'UNIDAD_DISTINTA',
+        'Este material ya está en la boleta en "${existente.unidad}". '
+        'Usa la misma unidad para sumar la cantidad, o cámbiala en "Materiales a entregar".',
+      );
+    }
+    // La periodicidad y el límite de zona se validan con el total que quedaría en la boleta.
     final alerta = await _repo.validarMaterial(
       solicitanteId: state.solicitante?.id,
       material: material,
-      cantidad: cantidad,
+      cantidad: (existente?.cantidad ?? 0) + cantidad,
       unidad: unidad,
     );
     if (alerta != null) return alerta;
@@ -174,11 +184,27 @@ class EntregaController extends Notifier<EntregaState> {
       _insertar(ItemMaterial(
           material: material, cantidad: cantidad, unidad: unidad, autorizacion: autorizacion));
 
+  ItemMaterial? _buscarMaterial(String codigo) {
+    for (final m in state.materiales) {
+      if (m.material.codigo == codigo) return m;
+    }
+    return null;
+  }
+
+  /// Si el material ya está en la boleta (misma unidad) se SUMA la cantidad; no se reemplaza.
   void _insertar(ItemMaterial nuevo) {
     final lista = [...state.materiales];
     final i = lista.indexWhere((m) => m.material.codigo == nuevo.material.codigo);
     if (i >= 0) {
-      lista[i] = nuevo;
+      final ex = lista[i];
+      lista[i] = ItemMaterial(
+        material: ex.material,
+        cantidad: ex.cantidad + nuevo.cantidad,
+        unidad: ex.unidad,
+        entregado: ex.entregado,
+        comentario: ex.comentario,
+        autorizacion: nuevo.autorizacion ?? ex.autorizacion,
+      );
     } else {
       lista.add(nuevo);
     }

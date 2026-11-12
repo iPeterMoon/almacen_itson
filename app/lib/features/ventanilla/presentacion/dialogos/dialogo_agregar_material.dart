@@ -24,7 +24,14 @@ class DialogoAgregarMaterial extends ConsumerStatefulWidget {
 class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial> {
   final _form = GlobalKey<FormState>();
   final _cantidad = TextEditingController(text: '1');
-  late String _unidad = widget.material.unidades.first;
+  // Si el material ya está en la boleta, se propone su misma unidad para poder sumar.
+  late String _unidad = ref
+          .read(entregaControllerProvider)
+          .materiales
+          .where((x) => x.material.codigo == widget.material.codigo)
+          .map((x) => x.unidad)
+          .firstOrNull ??
+      widget.material.unidades.first;
   bool _cargando = false;
   String? _error;
 
@@ -87,6 +94,11 @@ class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial>
   @override
   Widget build(BuildContext context) {
     final m = widget.material;
+    final existente = ref
+        .watch(entregaControllerProvider)
+        .materiales
+        .where((x) => x.material.codigo == m.codigo)
+        .firstOrNull;
     return Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
@@ -158,6 +170,14 @@ class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial>
                     ),
                   ],
                 ),
+                if (existente != null) ...[
+                  const SizedBox(height: 12),
+                  AvisoCaja(
+                    tipo: TipoAviso.info,
+                    mensaje:
+                        'Ya hay ${existente.cantidadTexto} en la boleta. La cantidad que agregues se sumará.',
+                  ),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   AvisoCaja(tipo: TipoAviso.error, mensaje: _error!),
