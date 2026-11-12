@@ -442,3 +442,114 @@ class SelectorCompacto<T> extends StatelessWidget {
     );
   }
 }
+
+/// Un dato con etiqueta pequeña arriba y valor abajo (ej. "Almacén" / "Dormitorios").
+class CampoDato {
+  const CampoDato(this.etiqueta, this.valor);
+  final String etiqueta;
+  final String valor;
+}
+
+/// Rejilla de campos "etiqueta / valor" con columnas del mismo ancho.
+/// El número de columnas depende del ancho disponible, así el texto nunca se aprieta:
+/// si no caben más columnas, los campos pasan a la siguiente línea.
+class RejillaCampos extends StatelessWidget {
+  const RejillaCampos({
+    super.key,
+    required this.campos,
+    this.anchoMinimoColumna = 170,
+    this.destacarPrimero = true,
+  });
+
+  final List<CampoDato> campos;
+  final double anchoMinimoColumna;
+  final bool destacarPrimero; // el primer valor va en negritas y un poco más grande
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, caja) {
+      const separacion = 16.0;
+      var columnas = ((caja.maxWidth + separacion) / (anchoMinimoColumna + separacion)).floor();
+      columnas = columnas.clamp(1, campos.length);
+      final ancho = (caja.maxWidth - separacion * (columnas - 1)) / columnas;
+      return Wrap(
+        spacing: separacion,
+        runSpacing: 12,
+        children: [
+          for (var i = 0; i < campos.length; i++)
+            SizedBox(
+              width: ancho,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(campos[i].etiqueta,
+                    style: const TextStyle(fontSize: 12, color: Colores.textoSuave)),
+                const SizedBox(height: 2),
+                Text(campos[i].valor,
+                    style: TextStyle(
+                        fontSize: (destacarPrimero && i == 0) ? 16 : 14.5,
+                        fontWeight: (destacarPrimero && i == 0) ? FontWeight.w700 : FontWeight.w400,
+                        color: Colores.texto)),
+              ]),
+            ),
+        ],
+      );
+    });
+  }
+}
+
+/// Contenedor con borde redondeado para una lista de fichas separadas por una línea.
+class ContenedorLista extends StatelessWidget {
+  const ContenedorLista({super.key, required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colores.borde),
+      ),
+      child: Column(children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const Divider(height: 1, thickness: 1, color: Colores.borde),
+          children[i],
+        ],
+      ]),
+    );
+  }
+}
+
+/// Ficha tocable con campos etiquetados (fila de las listas de selección).
+class FilaRegistro extends StatelessWidget {
+  const FilaRegistro({
+    super.key,
+    required this.campos,
+    this.indice = 0,
+    this.resaltada = false,
+    this.onTap,
+    this.trailing,
+  });
+
+  final List<CampoDato> campos;
+  final int indice;
+  final bool resaltada;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: resaltada ? Colores.infoFondo : (indice.isOdd ? Colores.filaAlterna : Colors.white),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Expanded(child: RejillaCampos(campos: campos)),
+            if (trailing != null) Padding(padding: const EdgeInsets.only(left: 12), child: trailing),
+          ]),
+        ),
+      ),
+    );
+  }
+}

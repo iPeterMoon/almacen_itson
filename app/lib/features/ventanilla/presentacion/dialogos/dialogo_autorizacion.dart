@@ -88,7 +88,7 @@ class _DialogoAutorizacionState extends ConsumerState<DialogoAutorizacion> {
               const SizedBox(height: 16),
               autorizadores.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (_, _) => const AvisoCaja(
+                error: (_, __) => const AvisoCaja(
                     tipo: TipoAviso.error, mensaje: 'No se pudo cargar la lista de autorizadores.'),
                 data: (lista) => CampoSelector<String>(
                   etiqueta: 'Solicitar autorización a',

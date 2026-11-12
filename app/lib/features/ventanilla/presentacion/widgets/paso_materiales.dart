@@ -139,7 +139,7 @@ class _FiltrosMateriales extends ConsumerWidget {
       const SizedBox(height: 16),
       opciones.when(
         loading: () => const LinearProgressIndicator(),
-        error: (_, _) => const AvisoCaja(
+        error: (_, __) => const AvisoCaja(
             tipo: TipoAviso.error, mensaje: 'No se pudieron cargar los filtros.'),
         data: (o) => Wrap(spacing: 12, runSpacing: 12, children: [
           selector('Categoría', filtro.categoria, o.categorias, notif.setCategoria),
@@ -199,20 +199,29 @@ class _ResultadosMateriales extends ConsumerWidget {
                   child: Text(mensajeListaVacia(filtro),
                       style: const TextStyle(color: Colores.textoSuave)))
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  TablaDatos(
-                    encabezados: const [
-                      'Código', 'Concepto', 'Alias', 'Categoría', 'Almacén', 'Existencia'
-                    ],
-                    flex: const [2, 3, 3, 3, 3, 3],
-                    filas: [
-                      for (final m in pagina.items)
-                        [m.codigo, m.concepto, m.alias, m.categoria, m.almacen, m.existenciaTexto]
-                    ],
-                    // Las filas ya agregadas a la boleta se resaltan.
-                    resaltada: (i) =>
-                        e.materiales.any((x) => x.material.codigo == pagina.items[i].codigo),
-                    onTap: (i) => mostrarDialogoAgregarMaterial(context, pagina.items[i]),
-                  ),
+                  ContenedorLista(children: [
+                    for (var i = 0; i < pagina.items.length; i++)
+                      Builder(builder: (context) {
+                        final m = pagina.items[i];
+                        final agregado = e.materiales.any((x) => x.material.codigo == m.codigo);
+                        return FilaRegistro(
+                          indice: i,
+                          resaltada: agregado,
+                          campos: [
+                            CampoDato('Alias', m.alias),
+                            CampoDato('Concepto', m.concepto),
+                            CampoDato('Código', m.codigo),
+                            CampoDato('Categoría', m.categoria),
+                            CampoDato('Almacén', m.almacen),
+                            CampoDato('Existencia', m.existenciaTexto),
+                          ],
+                          trailing: Icon(
+                              agregado ? Icons.check_circle : Icons.add_circle_outline,
+                              color: agregado ? Colores.exitoOscuro : Colores.primario),
+                          onTap: () => mostrarDialogoAgregarMaterial(context, m),
+                        );
+                      }),
+                  ]),
                   PaginadorTabla(
                     pagina: pagina.pagina,
                     totalPaginas: pagina.totalPaginas,
@@ -235,30 +244,36 @@ class _ResultadosActivos extends ConsumerWidget {
     return ref.watch(activosProvider).when(
           loading: () => const Padding(
               padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
-          error: (_, _) =>
+          error: (_, __) =>
               const AvisoCaja(tipo: TipoAviso.error, mensaje: 'No se pudo cargar los activos.'),
           data: (lista) => lista.isEmpty
               ? const Padding(
                   padding: EdgeInsets.all(8),
                   child: Text('No hay activos con ese criterio.',
                       style: TextStyle(color: Colores.textoSuave)))
-              : Column(children: [
+              : ContenedorLista(children: [
                   for (var i = 0; i < lista.length; i++)
-                    ListTile(
-                      minTileHeight: 64,
-                      tileColor: i.isOdd ? Colores.filaAlterna : null,
-                      title: Text('${lista[i].codigo} · ${lista[i].equipo}',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text('${lista[i].modelo} · Serie ${lista[i].serie}'),
-                      trailing: e.activos.any((a) => a.activo.codigo == lista[i].codigo)
-                          ? const Icon(Icons.check_circle, color: Colores.exitoOscuro)
-                          : const Icon(Icons.add_circle_outline, color: Colores.primario),
-                      onTap: () {
-                        c.agregarActivo(lista[i]);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('${lista[i].equipo} agregado (1 día).')));
-                      },
-                    ),
+                    Builder(builder: (context) {
+                      final a = lista[i];
+                      final agregado = e.activos.any((x) => x.activo.codigo == a.codigo);
+                      return FilaRegistro(
+                        indice: i,
+                        resaltada: agregado,
+                        campos: [
+                          CampoDato('Equipo', a.equipo),
+                          CampoDato('Código', a.codigo),
+                          CampoDato('Modelo', a.modelo),
+                          CampoDato('N° Serie', a.serie),
+                        ],
+                        trailing: Icon(agregado ? Icons.check_circle : Icons.add_circle_outline,
+                            color: agregado ? Colores.exitoOscuro : Colores.primario),
+                        onTap: () {
+                          c.agregarActivo(a);
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text('${a.equipo} agregado (1 día).')));
+                        },
+                      );
+                    }),
                 ]),
         );
   }

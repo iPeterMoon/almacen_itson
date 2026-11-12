@@ -38,14 +38,11 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
     final c = ref.read(entregaControllerProvider.notifier);
     if (nuevo.resumen != null && anterior?.resumen == null) {
       final accion = await mostrarDialogoResumen(context, nuevo.resumen!);
-      if (!mounted) return;
       c.reiniciar();
-      if (accion == AccionResumen.volver) _salir();
+      if (accion == AccionResumen.volver && mounted) _salir();
     }
     if (nuevo.stockInsuficiente != null && anterior?.stockInsuficiente == null) {
-      if (!mounted) return;
       final ajustar = await mostrarDialogoStock(context, nuevo.stockInsuficiente!);
-      if (!mounted) return;
       if (ajustar == true) {
         c.ajustarAStock();
       } else {

@@ -9,13 +9,8 @@ import '../entrega_controlador.dart';
 import '../validadores.dart';
 import 'dialogo_autorizacion.dart';
 
-Future<void> mostrarDialogoAgregarMaterial(
-  BuildContext context,
-  MaterialCatalogo material,
-) => showDialog<void>(
-  context: context,
-  builder: (_) => DialogoAgregarMaterial(material: material),
-);
+Future<void> mostrarDialogoAgregarMaterial(BuildContext context, MaterialCatalogo material) =>
+    showDialog<void>(context: context, builder: (_) => DialogoAgregarMaterial(material: material));
 
 /// Escenarios 7 (cantidad válida), 8, 9 y 10 (alertas del servidor).
 class DialogoAgregarMaterial extends ConsumerStatefulWidget {
@@ -23,17 +18,14 @@ class DialogoAgregarMaterial extends ConsumerStatefulWidget {
   final MaterialCatalogo material;
 
   @override
-  ConsumerState<DialogoAgregarMaterial> createState() =>
-      _DialogoAgregarMaterialState();
+  ConsumerState<DialogoAgregarMaterial> createState() => _DialogoAgregarMaterialState();
 }
 
-class _DialogoAgregarMaterialState
-    extends ConsumerState<DialogoAgregarMaterial> {
+class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial> {
   final _form = GlobalKey<FormState>();
   final _cantidad = TextEditingController(text: '1');
   // Si el material ya está en la boleta, se propone su misma unidad para poder sumar.
-  late String _unidad =
-      ref
+  late String _unidad = ref
           .read(entregaControllerProvider)
           .materiales
           .where((x) => x.material.codigo == widget.material.codigo)
@@ -49,8 +41,7 @@ class _DialogoAgregarMaterialState
     super.dispose();
   }
 
-  double? get _valor =>
-      double.tryParse(_cantidad.text.trim().replaceAll(',', '.'));
+  double? get _valor => double.tryParse(_cantidad.text.trim().replaceAll(',', '.'));
 
   void _ajustar(double delta) {
     final nuevo = (_valor ?? 0) + delta;
@@ -67,10 +58,7 @@ class _DialogoAgregarMaterialState
     });
     try {
       final alerta = await controlador.agregarMaterial(
-        material: widget.material,
-        cantidad: cantidad,
-        unidad: _unidad,
-      );
+          material: widget.material, cantidad: cantidad, unidad: _unidad);
       if (!mounted) return;
       if (alerta == null) {
         Navigator.pop(context);
@@ -80,38 +68,26 @@ class _DialogoAgregarMaterialState
       final autorizacion = await showDialog<Autorizacion>(
         context: context,
         builder: (_) => DialogoAutorizacion(
-          material: widget.material,
-          cantidad: cantidad,
-          unidad: _unidad,
-          alerta: alerta,
-        ),
+            material: widget.material, cantidad: cantidad, unidad: _unidad, alerta: alerta),
       );
       if (!mounted) return;
       if (autorizacion != null) {
         controlador.agregarMaterialAutorizado(
-          material: widget.material,
-          cantidad: cantidad,
-          unidad: _unidad,
-          autorizacion: autorizacion,
-        );
+            material: widget.material, cantidad: cantidad, unidad: _unidad, autorizacion: autorizacion);
         Navigator.pop(context);
       } else {
         setState(() => _cargando = false);
       }
     } on ErrorNegocio catch (e) {
-      if (mounted) {
-        setState(() {
-          _cargando = false;
-          _error = e.mensaje;
-        });
-      }
+      if (mounted) setState(() {
+        _cargando = false;
+        _error = e.mensaje;
+      });
     } catch (_) {
-      if (mounted){
-        setState(() {
-          _cargando = false;
-          _error = 'No se pudo conectar con el servidor.';
-        });
-      }
+      if (mounted) setState(() {
+        _cargando = false;
+        _error = 'No se pudo conectar con el servidor.';
+      });
     }
   }
 
@@ -141,43 +117,25 @@ class _DialogoAgregarMaterialState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Expanded(
-                      child: Text(
-                        'Agregar Material',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text(
-                          'Cantidad (en almacén)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                        Text(m.existenciaTexto),
-                      ],
-                    ),
+                        child: Text('Agregar Material',
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700))),
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      const Text('Cantidad (en almacén)',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      Text(m.existenciaTexto),
+                    ]),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: _Dato('Concepto', m.concepto)),
-                    Expanded(child: _Dato('Alias', m.alias)),
-                  ],
-                ),
+                Row(children: [
+                  Expanded(child: _Dato('Concepto', m.concepto)),
+                  Expanded(child: _Dato('Alias', m.alias)),
+                ]),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _Dato('Almacén', m.almacen)),
-                    Expanded(child: _Dato('Ubicación', m.ubicacion)),
-                  ],
-                ),
+                Row(children: [
+                  Expanded(child: _Dato('Almacén', m.almacen)),
+                  Expanded(child: _Dato('Ubicación', m.ubicacion)),
+                ]),
                 const SizedBox(height: 16),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,23 +143,19 @@ class _DialogoAgregarMaterialState
                     Expanded(
                       child: TextFormField(
                         controller: _cantidad,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         textAlign: TextAlign.center,
                         validator: validarCantidad,
                         decoration: InputDecoration(
                           labelText: 'Cantidad',
                           prefixIcon: IconButton(
-                            tooltip: 'Disminuir',
-                            onPressed: () => _ajustar(-1),
-                            icon: const Icon(Icons.remove),
-                          ),
+                              tooltip: 'Disminuir',
+                              onPressed: () => _ajustar(-1),
+                              icon: const Icon(Icons.remove)),
                           suffixIcon: IconButton(
-                            tooltip: 'Aumentar',
-                            onPressed: () => _ajustar(1),
-                            icon: const Icon(Icons.add),
-                          ),
+                              tooltip: 'Aumentar',
+                              onPressed: () => _ajustar(1),
+                              icon: const Icon(Icons.add)),
                         ),
                       ),
                     ),
@@ -210,12 +164,8 @@ class _DialogoAgregarMaterialState
                       child: CampoSelector<String>(
                         etiqueta: 'Unidad de medida',
                         valor: _unidad,
-                        items: [
-                          for (final u in m.unidades)
-                            DropdownMenuItem(value: u, child: Text(u)),
-                        ],
-                        onChanged: (v) =>
-                            setState(() => _unidad = v ?? _unidad),
+                        items: [for (final u in m.unidades) DropdownMenuItem(value: u, child: Text(u))],
+                        onChanged: (v) => setState(() => _unidad = v ?? _unidad),
                       ),
                     ),
                   ],
@@ -233,34 +183,22 @@ class _DialogoAgregarMaterialState
                   AvisoCaja(tipo: TipoAviso.error, mensaje: _error!),
                 ],
                 const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
+                Row(children: [
+                  Expanded(
                       child: OutlinedButton(
-                        onPressed: _cargando
-                            ? null
-                            : () => Navigator.pop(context),
-                        child: const Text('Cancelar'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                          onPressed: _cargando ? null : () => Navigator.pop(context),
+                          child: const Text('Cancelar'))),
+                  const SizedBox(width: 12),
+                  Expanded(
                       child: FilledButton(
-                        onPressed: _cargando ? null : _agregar,
-                        child: _cargando
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('Agregar'),
-                      ),
-                    ),
-                  ],
-                ),
+                          onPressed: _cargando ? null : _agregar,
+                          child: _cargando
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text('Agregar'))),
+                ]),
               ],
             ),
           ),
@@ -277,14 +215,11 @@ class _Dato extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        etiqueta,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-      ),
-      const SizedBox(height: 2),
-      Text(valor, style: const TextStyle(color: Colores.texto)),
-    ],
-  );
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(etiqueta, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+          const SizedBox(height: 2),
+          Text(valor, style: const TextStyle(color: Colores.texto)),
+        ],
+      );
 }

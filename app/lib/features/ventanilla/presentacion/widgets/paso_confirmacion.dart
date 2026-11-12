@@ -51,6 +51,15 @@ class _PasoConfirmacionState extends ConsumerState<PasoConfirmacion> {
     final c = ref.read(entregaControllerProvider.notifier);
     final almacenista = ref.watch(almacenistaActualProvider);
 
+    // "Autorizado por": quien se eligió en "Autorizó (Opcional)" del paso 1, más quienes
+    // autorizaron excepciones de materiales (periodicidad o límite de zona). Sin repetidos.
+    final catalogo = ref.watch(autorizadoresProvider).value ?? const [];
+    final autorizadores = <String>{
+      if (e.autorizoId != null)
+        ...catalogo.where((a) => a.id == e.autorizoId).map((a) => a.nombre),
+      ...e.autorizadoPor,
+    }.toList();
+
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
@@ -71,7 +80,7 @@ class _PasoConfirmacionState extends ConsumerState<PasoConfirmacion> {
               controlador: _recibe,
               alLimpiar: () => c.setFirmaRecibe(null),
             ),
-            if (e.autorizadoPor.isNotEmpty) ...[
+            if (autorizadores.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -82,7 +91,7 @@ class _PasoConfirmacionState extends ConsumerState<PasoConfirmacion> {
                   const Text('Autorizado por',
                       style: TextStyle(color: Colores.textoSuave, fontSize: 13)),
                   const SizedBox(height: 4),
-                  Text(e.autorizadoPor.join(', '),
+                  Text(autorizadores.join(', '),
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                 ]),
               ),
