@@ -142,7 +142,8 @@ export class BoletasService {
 
   // Devuelve la validación en camelCase para que la app no dependa de los nombres de PostgreSQL.
   async validarMaterial(token: string, dto: ValidarMaterialDto) {
-    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('validar_material', {
+    const cliente = this.supabase.clienteDeUsuario(token);
+    const { data, error } = await cliente.rpc('validar_material', {
       p_producto_id: dto.productoId,
       p_cantidad: dto.cantidad,
       p_presentacion_id: dto.presentacionId,
@@ -154,8 +155,9 @@ export class BoletasService {
 
     const fila = data?.[0];
     if (!fila) throw new Error('La base no devolvió la validación del material.');
+    const disponible = Number(fila.disponible);
     return {
-      disponible: Number(fila.disponible),
+      disponible,
       ultimaEntrega: fila.ultima_entrega,
       proximaEntrega: fila.proxima_entrega,
       diasFaltantes: fila.dias_faltantes,
@@ -163,9 +165,39 @@ export class BoletasService {
       limiteCadaDias: fila.limite_cada_dias,
       entregadoPeriodo: Number(fila.entregado_periodo),
       stockSuficiente: fila.stock_suficiente,
+      // HU6-E6: si no alcanza, la mayor cantidad que sí se puede entregar (null si alcanza).
+      cantidadSugerida: fila.stock_suficiente
+        ? null
+        : await this.cantidadSugerida(cliente, dto, disponible),
       excedePeriodicidad: fila.excede_periodicidad,
       excedeLimite: fila.excede_limite,
     };
+  }
+
+  // HU6-E6: convierte lo disponible (unidad base) a la presentación que capturó el almacenista.
+  // esto solo sugiere un valor para la pantalla.
+  private async cantidadSugerida(
+    cliente: ReturnType<SupabaseService['clienteDeUsuario']>,
+    dto: ValidarMaterialDto,
+    disponible: number,
+  ): Promise<number> {
+    if (!dto.presentacionId) return disponible;
+
+    const { data, error } = await cliente
+      .from('presentaciones_producto')
+      .select('factor_a_base')
+      .eq('id', dto.presentacionId)
+      .eq('producto_id', dto.productoId)
+      .maybeSingle();
+    if (error) throw this.errorDeBase(error);
+    if (!data) {
+      throw new ErrorNegocio(
+        'PRESENTACION_INVALIDA',
+        'La presentación no corresponde al producto.',
+      );
+    }
+    // Se redondea hacia abajo a 3 decimales para nunca ofrecer más de lo que hay.
+    return Math.floor((disponible / Number(data.factor_a_base)) * 1000) / 1000;
   }
 
   // Traduce el DTO de la API al JSON que espera crear_boleta. La base decide el estado

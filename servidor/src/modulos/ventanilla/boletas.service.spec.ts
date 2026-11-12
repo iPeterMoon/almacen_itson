@@ -269,6 +269,7 @@ describe('BoletasService', () => {
         limiteCadaDias: 3,
         entregadoPeriodo: 0,
         stockSuficiente: true,
+        cantidadSugerida: null,
         excedePeriodicidad: false,
         excedeLimite: false,
       });
@@ -434,6 +435,80 @@ describe('BoletasService', () => {
       expect(resultado.limiteCantidad).toBeNull();
       expect(resultado.limiteCadaDias).toBeNull();
       expect(resultado.excedeLimite).toBe(false);
+    });
+    // Simula rpc('validar_material') con stock insuficiente y la consulta
+    // from(...).select(...).eq(...).eq(...).maybeSingle() de la presentación.
+    function clienteConStockInsuficiente(disponible: number, factor: number) {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, disponible, stock_suficiente: false }],
+        error: null,
+      });
+      const maybeSingle = jest.fn().mockResolvedValue({
+        data: { factor_a_base: factor },
+        error: null,
+      });
+      const eqProducto = jest.fn().mockReturnValue({ maybeSingle });
+      const eqId = jest.fn().mockReturnValue({ eq: eqProducto });
+      const select = jest.fn().mockReturnValue({ eq: eqId });
+      const from = jest.fn().mockReturnValue({ select });
+      return { rpc, from } as Partial<ClienteFalso>;
+    }
+
+    it('sugiere la cantidad disponible cuando no alcanza y no hay presentación', async () => {
+      // HU6-E6: se piden 10 y el campus solo tiene 4.
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, disponible: 4, stock_suficiente: false }],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', { productoId: 12, cantidad: 10 });
+
+      expect(resultado.stockSuficiente).toBe(false);
+      expect(resultado.cantidadSugerida).toBe(4);
+    });
+
+    it('convierte lo disponible a la presentación elegida al sugerir el ajuste', async () => {
+      // Hay 4 litros y se piden 20 medios litros (factor 0.5): caben 8 medios litros.
+      const cliente = clienteConStockInsuficiente(4, 0.5);
+      const servicio = crearServicio(cliente);
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 20,
+        presentacionId: 4,
+      });
+
+      expect(resultado.cantidadSugerida).toBe(8);
+      expect(cliente.from).toHaveBeenCalledWith('presentaciones_producto');
+    });
+
+    it('redondea hacia abajo la cantidad sugerida para no ofrecer de más', async () => {
+      // 5 litros entre 3.7854 litros por galón son 1.3208... galones: se ofrece 1.32.
+      const servicio = crearServicio(clienteConStockInsuficiente(5, 3.7854));
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 2,
+        presentacionId: 9,
+      });
+
+      expect(resultado.cantidadSugerida).toBe(1.32);
+    });
+    it('trata presentacionId null como si no hubiera presentación', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, disponible: 4, stock_suficiente: false }],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 10,
+        presentacionId: null as unknown as undefined,
+      });
+
+      expect(resultado.cantidadSugerida).toBe(4);
     });
   });
 
