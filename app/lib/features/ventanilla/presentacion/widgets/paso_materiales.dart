@@ -174,7 +174,7 @@ class _ResultadosMateriales extends ConsumerWidget {
                     encabezados: const [
                       'Código', 'Concepto', 'Alias', 'Categoría', 'Almacén', 'Existencia'
                     ],
-                    flex: const [2, 3, 3, 2, 3, 2],
+                    flex: const [2, 3, 3, 3, 3, 3],
                     filas: [
                       for (final m in pagina.items)
                         [m.codigo, m.concepto, m.alias, m.categoria, m.almacen, m.existenciaTexto]

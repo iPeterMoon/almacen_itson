@@ -138,7 +138,8 @@ class FilaInfo extends StatelessWidget {
 }
 
 /// Tabla con encabezado y filas alternadas (formato del prototipo).
-/// En pantallas angostas se desplaza horizontalmente en lugar de apretar las columnas.
+/// SIEMPRE se ve completa, sin desplazamiento horizontal: las columnas se reparten el ancho
+/// disponible y el texto largo baja a otra línea. En pantallas angostas la letra se reduce un poco.
 class TablaDatos extends StatelessWidget {
   const TablaDatos({
     super.key,
@@ -148,7 +149,6 @@ class TablaDatos extends StatelessWidget {
     this.onTap,
     this.resaltada,
     this.primeraNegrita = false,
-    this.anchoMinimo = 620,
   });
 
   final List<String> encabezados;
@@ -157,20 +157,22 @@ class TablaDatos extends StatelessWidget {
   final void Function(int fila)? onTap;
   final bool Function(int fila)? resaltada;
   final bool primeraNegrita;
-  final double anchoMinimo;
 
-  Widget _fila(List<String> celdas, {Color? color, bool encabezado = false}) => Container(
+  Widget _fila(List<String> celdas, bool compacto, {Color? color, bool encabezado = false}) =>
+      Container(
         color: color,
         constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(children: [
+        padding: EdgeInsets.symmetric(horizontal: compacto ? 8 : 12, vertical: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           for (var k = 0; k < celdas.length; k++)
             Expanded(
               flex: flex[k],
               child: Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.only(right: 6),
                 child: Text(celdas[k],
+                    softWrap: true,
                     style: TextStyle(
+                        fontSize: compacto ? 12.5 : 14,
                         color: Colores.texto,
                         fontWeight: (encabezado || (k == 0 && primeraNegrita))
                             ? FontWeight.w700
@@ -189,26 +191,21 @@ class TablaDatos extends StatelessWidget {
         border: Border.all(color: Colores.borde),
       ),
       child: LayoutBuilder(builder: (context, caja) {
-        final ancho = caja.maxWidth < anchoMinimo ? anchoMinimo : caja.maxWidth;
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: ancho,
-            child: Column(children: [
-              _fila(encabezados, color: Colores.encabezadoTabla, encabezado: true),
-              for (var i = 0; i < filas.length; i++)
-                InkWell(
-                  onTap: onTap == null ? null : () => onTap!(i),
-                  child: _fila(
-                    filas[i],
-                    color: (resaltada?.call(i) ?? false)
-                        ? Colores.infoFondo
-                        : (i.isOdd ? Colores.filaAlterna : Colors.white),
-                  ),
-                ),
-            ]),
-          ),
-        );
+        final compacto = caja.maxWidth < 600;
+        return Column(children: [
+          _fila(encabezados, compacto, color: Colores.encabezadoTabla, encabezado: true),
+          for (var i = 0; i < filas.length; i++)
+            InkWell(
+              onTap: onTap == null ? null : () => onTap!(i),
+              child: _fila(
+                filas[i],
+                compacto,
+                color: (resaltada?.call(i) ?? false)
+                    ? Colores.infoFondo
+                    : (i.isOdd ? Colores.filaAlterna : Colors.white),
+              ),
+            ),
+        ]);
       }),
     );
   }

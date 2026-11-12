@@ -30,7 +30,7 @@ class PasoRevision extends ConsumerWidget {
                       child: Text('Sin materiales.', style: TextStyle(color: Colores.textoSuave)))
                   : _TablaRevision(
                       encabezados: const ['Entregado', 'Material', 'Cantidad', 'Almacén', 'Ubicación', 'Acciones'],
-                      flex: const [2, 3, 3, 3, 3, 3],
+                      flex: const [3, 3, 3, 3, 3, 4],
                       filas: [
                         for (final it in e.materiales)
                           [
@@ -66,7 +66,7 @@ class PasoRevision extends ConsumerWidget {
                 titulo: 'Activos',
                 child: _TablaRevision(
                   encabezados: const ['Entregado', 'Activo', 'Equipo', 'Modelo', 'N° Serie', 'Acciones'],
-                  flex: const [2, 2, 3, 3, 3, 3],
+                  flex: const [3, 2, 3, 3, 3, 4],
                   filas: [
                     for (final it in e.activos)
                       [
@@ -133,19 +133,18 @@ class _SubTarjeta extends StatelessWidget {
       );
 }
 
-/// Tabla sin borde: encabezado en gris y filas alternadas. Se desplaza si la pantalla es angosta.
+/// Tabla sin borde: encabezado en gris y filas alternadas.
+/// Se ve completa sin desplazamiento horizontal (las columnas se reparten el ancho disponible).
 class _TablaRevision extends StatelessWidget {
   const _TablaRevision({
     required this.encabezados,
     required this.flex,
     required this.filas,
-    this.anchoMinimo = 600,
   });
 
   final List<String> encabezados;
   final List<int> flex;
   final List<List<Widget>> filas;
-  final double anchoMinimo;
 
   Widget _fila(List<Widget> celdas, {Color? color}) => Container(
         color: color,
@@ -166,26 +165,26 @@ class _TablaRevision extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, caja) {
-      final ancho = caja.maxWidth < anchoMinimo ? anchoMinimo : caja.maxWidth;
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: ancho,
-          child: Column(children: [
-            _fila([
-              for (final h in encabezados)
-                Text(h,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600, color: Colores.textoSuave)),
-            ]),
-            for (var i = 0; i < filas.length; i++)
-              _fila(
-                [for (final w in filas[i]) DefaultTextStyle.merge(style: const TextStyle(fontSize: 14), child: w)],
-                color: i.isEven ? Colores.filaAlterna : null,
-              ),
-          ]),
-        ),
-      );
+      final compacto = caja.maxWidth < 600;
+      final tamano = compacto ? 12.5 : 14.0;
+      return Column(children: [
+        _fila([
+          for (final h in encabezados)
+            Text(h,
+                style: TextStyle(
+                    fontSize: compacto ? 11.5 : 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colores.textoSuave)),
+        ]),
+        for (var i = 0; i < filas.length; i++)
+          _fila(
+            [
+              for (final w in filas[i])
+                DefaultTextStyle.merge(style: TextStyle(fontSize: tamano), child: w)
+            ],
+            color: i.isEven ? Colores.filaAlterna : null,
+          ),
+      ]);
     });
   }
 }
@@ -196,21 +195,25 @@ class _BotonComentario extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(48, 40),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          foregroundColor: Colores.primario,
-          side: const BorderSide(color: Colores.borde),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  Widget build(BuildContext context) => Badge(
+        // Punto verde cuando ya tiene comentario (antes era un ícono dentro del botón y desbordaba).
+        isLabelVisible: comentado,
+        smallSize: 10,
+        backgroundColor: Colores.exitoOscuro,
+        child: OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(48, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            foregroundColor: Colores.primario,
+            side: const BorderSide(color: Colores.borde),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          // Si la columna es angosta el texto se reduce en lugar de desbordarse.
+          child: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('Comentario', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          ),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (comentado) ...[
-            const Icon(Icons.check_circle_outline, size: 16),
-            const SizedBox(width: 4),
-          ],
-          const Text('Comentario', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-        ]),
       );
 }
