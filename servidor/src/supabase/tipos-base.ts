@@ -1712,6 +1712,7 @@ export type Database = {
           p_desplazar?: number;
           p_limite?: number;
           p_solo_con_existencia?: boolean;
+          p_solo_mas_comunes?: boolean;
           p_texto?: string;
           p_tipo?: string;
           p_unidad_id?: number;

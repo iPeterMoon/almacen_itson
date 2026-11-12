@@ -184,6 +184,35 @@ caso("HU6 Bus", "Supervisor jefe suma la existencia de sus campus (26)", JEFE,
 caso("Seg", "Sin sesión no se usa la búsqueda", "anon",
      "select * from buscar_productos(p_solo_con_existencia=>true)", espera="permission denied")
 
+# ---------- HU6 (AI-62): filtro "Más comunes" ----------
+# Ningún producto está marcado todavía. Se marcan CD-123 (con existencia) y luego
+# CD-500 (sin existencia) para ver el filtro solo y combinado con la existencia.
+caso("HU6 Fil", "Sin el parámetro nuevo devuelve todos (3)", CEN,
+     "select count(*) = 3 from buscar_productos()", contiene="t")
+caso("HU6 Fil", "Sin productos marcados, 'Más comunes' no devuelve nada", CEN,
+     "select count(*) from buscar_productos(p_solo_mas_comunes=>true)", contiene="0")
+admin("update productos set mas_comunes = true where codigo = 'CD-123'")
+caso("HU6 Fil", "'Más comunes' devuelve solo los marcados", CEN,
+     "select string_agg(codigo, ',') = 'CD-123' from buscar_productos(p_solo_mas_comunes=>true)", contiene="t")
+caso("HU6 Fil", "Con p_solo_mas_comunes=false se comporta igual (3)", CEN,
+     "select count(*) = 3 from buscar_productos(p_solo_mas_comunes=>false)", contiene="t")
+admin("update productos set mas_comunes = true where codigo = 'CD-500'")
+caso("HU6 Fil", "Los marcados salen primero, ordenados por nombre", CEN,
+     "select string_agg(codigo, ',') from buscar_productos(p_solo_mas_comunes=>true)", contiene="CD-123,CD-500")
+caso("HU6 Fil", "'Más comunes' con existencia oculta los marcados en 0", CEN,
+     "select string_agg(codigo, ',') = 'CD-123' from "
+     "buscar_productos(p_solo_mas_comunes=>true, p_solo_con_existencia=>true)", contiene="t")
+caso("HU6 Fil", "'Más comunes' se combina con el texto", CEN,
+     "select string_agg(codigo, ',') = 'CD-500' from buscar_productos('papel', p_solo_mas_comunes=>true)",
+     contiene="t")
+caso("HU6 Fil", "'Más comunes' se combina con categoría", CEN,
+     f"select string_agg(codigo, ',') = 'CD-500' from buscar_productos(p_categoria_id=>{PAP}, p_solo_mas_comunes=>true)",
+     contiene="t")
+caso("HU6 Fil", "Sin texto y sin filtros lista todo con existencia", CEN,
+     "select string_agg(codigo, ',') = 'CD-123' from buscar_productos(p_solo_con_existencia=>true)", contiene="t")
+caso("Seg", "Sin sesión no se usa el filtro de más comunes", "anon",
+     "select * from buscar_productos(p_solo_mas_comunes=>true)", espera="permission denied")
+
 # ---------- Personal, zona y supervisor (mínimo Épica 5) ----------
 admin(f"""
 insert into auth.users values ('{SUP}');
