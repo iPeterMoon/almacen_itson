@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errores/error_negocio.dart';
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
+import '../../datos/ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
 import '../dialogos/dialogo_agregar_material.dart';
 import '../dialogos/dialogo_lista_materiales.dart';
 import '../entrega_controlador.dart';
@@ -152,22 +154,33 @@ class _FiltrosMateriales extends ConsumerWidget {
   }
 }
 
+// Mensajes de la búsqueda de materiales (AI-30).
+const mensajeEscribeParaBuscar = 'Escribe al menos 2 caracteres para buscar';
+const mensajeSinMateriales = 'No hay materiales disponibles con ese nombre';
+const mensajeErrorCatalogo = 'No se pudo cargar el catálogo.';
+
 class _ResultadosMateriales extends ConsumerWidget {
   const _ResultadosMateriales();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final e = ref.watch(entregaControllerProvider);
+    // Con la API, menos de 2 caracteres no consulta y la lista llega vacía: se pide
+    // escribir más (aunque esté seleccionado "Más comunes", que es de AI-62).
+    final textoCorto =
+        ref.watch(filtroMaterialesProvider).consulta.trim().length < minimoCaracteresBusqueda;
     return ref.watch(materialesProvider).when(
           loading: () => const Padding(
               padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
-          error: (_, _) =>
-              const AvisoCaja(tipo: TipoAviso.error, mensaje: 'No se pudo cargar el catálogo.'),
+          // Si el servidor mandó un mensaje (por ejemplo, la sesión expiró), se muestra ese.
+          error: (error, _) => AvisoCaja(
+              tipo: TipoAviso.error,
+              mensaje: error is ErrorNegocio ? error.mensaje : mensajeErrorCatalogo),
           data: (pagina) => pagina.items.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('No hay materiales con ese criterio.',
-                      style: TextStyle(color: Colores.textoSuave)))
+              ? Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(textoCorto ? mensajeEscribeParaBuscar : mensajeSinMateriales,
+                      style: const TextStyle(color: Colores.textoSuave)))
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   TablaDatos(
                     encabezados: const [
