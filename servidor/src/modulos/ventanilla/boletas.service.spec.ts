@@ -310,6 +310,53 @@ describe('BoletasService', () => {
       expect(resultado.diasFaltantes).toBeNull();
       expect(resultado.ultimaEntrega).toBe('2026-11-05T15:00:00+00:00');
     });
+    it('devuelve límite, entregado y excede cuando se supera el límite (HU6-E10)', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            ...VALIDACION_MATERIAL,
+            limite_cantidad: 3,
+            limite_cada_dias: 3,
+            entregado_periodo: 1,
+            excede_limite: true,
+          },
+        ],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 3,
+        trabajadorId: 15,
+        zonaId: 3,
+      });
+
+      expect(resultado).toMatchObject({
+        excedeLimite: true,
+        excedePeriodicidad: false,
+        limiteCantidad: 3,
+        entregadoPeriodo: 1,
+      });
+    });
+
+    it('devuelve el límite en null si la zona no lo configura para el producto', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, limite_cantidad: null, limite_cada_dias: null }],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 1,
+        zonaId: 3,
+      });
+
+      expect(resultado.limiteCantidad).toBeNull();
+      expect(resultado.limiteCadaDias).toBeNull();
+      expect(resultado.excedeLimite).toBe(false);
+    });
   });
 
   describe('resolverAutorizacion', () => {
