@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../datos/ventanilla_repositorio_api_test.dart' show ProductosFalso, pinol;
+import '../datos/ventanilla_repositorio_api_test.dart' show CatalogosFalso, ProductosFalso, pinol;
 
 // Abre el paso 2 de Denise con el repositorio de la API y un servidor falso, en
 // la tableta vertical del prototipo (800 px lógicos de ancho).
@@ -20,7 +20,9 @@ Future<ProductosFalso> abrirPaso(WidgetTester tester, ProductosFalso productos) 
     // un error del servidor se muestra de inmediato en lugar de volver a cargar.
     retry: (_, _) => null,
     overrides: [
-      ventanillaRepositorioProvider.overrideWithValue(VentanillaRepositorioApi(productos)),
+      ventanillaRepositorioProvider.overrideWithValue(
+        VentanillaRepositorioApi(productos, catalogos: CatalogosFalso()),
+      ),
     ],
   );
   addTearDown(contenedor.dispose);
@@ -40,21 +42,32 @@ Future<void> escribir(WidgetTester tester, String texto) async {
 }
 
 void main() {
-  testWidgets('al abrir pide escribir al menos 2 caracteres y no consulta', (tester) async {
+  testWidgets('al abrir lista los "Más comunes" sin texto (AI-62)', (tester) async {
     final productos = await abrirPaso(tester, ProductosFalso(productos: [pinol]));
 
-    expect(find.text(mensajeEscribeParaBuscar), findsOneWidget);
-    expect(productos.llamadas, isEmpty);
+    expect(productos.llamadas.single.texto, '');
+    expect(productos.ultimosFiltros!.soloMasComunes, isTrue);
+    expect(find.text('CD-123'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('los desplegables muestran las categorías y almacenes de la API', (tester) async {
+    await abrirPaso(tester, ProductosFalso(productos: [pinol]));
+
+    await tester.tap(find.text('Todos').first);
+    await tester.pump(const Duration(seconds: 1));
+
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('con 1 carácter sigue pidiendo escribir más', (tester) async {
     final productos = await abrirPaso(tester, ProductosFalso(productos: [pinol]));
 
+    final alAbrir = productos.llamadas.length;
     await escribir(tester, 'p');
 
     expect(find.text(mensajeEscribeParaBuscar), findsOneWidget);
-    expect(productos.llamadas, isEmpty);
+    expect(productos.llamadas.length, alAbrir, reason: 'con 1 carácter no se consulta');
   });
 
   testWidgets('al escribir muestra los materiales con su almacén y existencia', (tester) async {
@@ -62,7 +75,7 @@ void main() {
 
     await escribir(tester, 'pinol');
 
-    expect(productos.llamadas.single.texto, 'pinol');
+    expect(productos.llamadas.last.texto, 'pinol');
     expect(find.text('CD-123'), findsOneWidget);
     expect(find.text('Limpiador multiusos'), findsOneWidget);
     expect(find.text('Almacén 1, Almacén 2'), findsOneWidget);

@@ -1,7 +1,8 @@
 import 'package:almacen_itson/core/errores/error_negocio.dart';
+import 'package:almacen_itson/features/catalogo_inventario/datos/catalogos.dart';
+import 'package:almacen_itson/features/catalogo_inventario/datos/catalogos_repository.dart';
 import 'package:almacen_itson/features/catalogo_inventario/datos/producto_resumen.dart';
 import 'package:almacen_itson/features/catalogo_inventario/datos/productos_repository.dart';
-import 'package:almacen_itson/features/ventanilla/datos/modelos.dart';
 import 'package:almacen_itson/features/ventanilla/datos/ventanilla_repositorio_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -41,6 +42,38 @@ class ProductosFalso implements ProductosRepository {
 
 final pinol = ProductoResumen.fromJson(filaPinol);
 
+// Catálogos falsos: responden lo indicado y cuentan cuántas veces se consultan.
+class CatalogosFalso implements CatalogosRepository {
+  CatalogosFalso({this.categorias = categoriasPrueba, this.almacenes = almacenesPrueba, this.error});
+
+  final List<Categoria> categorias;
+  final List<Almacen> almacenes;
+  ErrorNegocio? error;
+  var consultas = 0;
+
+  @override
+  Future<List<Categoria>> listarCategorias() async {
+    consultas++;
+    if (error != null) throw error!;
+    return categorias;
+  }
+
+  @override
+  Future<List<Almacen>> listarAlmacenes() async {
+    if (error != null) throw error!;
+    return almacenes;
+  }
+}
+
+const categoriasPrueba = [Categoria(id: 3, nombre: 'Bolsas'), Categoria(id: 1, nombre: 'Líquido')];
+const almacenesPrueba = [
+  Almacen(id: 5, nombre: 'Almacén 1', campusId: 2, campus: 'Centro'),
+  Almacen(id: 4, nombre: 'Almacén 2', campusId: 2, campus: 'Centro'),
+];
+
+VentanillaRepositorioApi crearApi(ProductosFalso productos, {CatalogosFalso? catalogos}) =>
+    VentanillaRepositorioApi(productos, catalogos: catalogos ?? CatalogosFalso());
+
 UbicacionProducto ubicacion(String almacen, String? descripcion) => UbicacionProducto(
       campusId: 2,
       almacenId: 1,
@@ -55,7 +88,7 @@ void main() {
     test('llama a la API con el texto recortado, la página y el tamaño de página', () async {
       final productos = ProductosFalso(productos: [pinol]);
 
-      final pagina = await VentanillaRepositorioApi(productos)
+      final pagina = await crearApi(productos)
           .buscarMateriales(consulta: '  pinol ', pagina: 1, porPagina: 8);
 
       expect(productos.llamadas.single, (texto: 'pinol', pagina: 1, limite: 8));
@@ -64,37 +97,73 @@ void main() {
       expect(pagina.porPagina, 8);
     });
 
-    test('con menos de 2 caracteres no llama al servidor y devuelve una página vacía', () async {
+    test('sin texto lista lo que cumple los filtros (al abrir: "Más comunes")', () async {
       final productos = ProductosFalso(productos: [pinol]);
-      final repositorio = VentanillaRepositorioApi(productos);
 
-      final vacia = await repositorio.buscarMateriales(consulta: '');
-      final unaLetra = await repositorio.buscarMateriales(consulta: '  a  ', soloComunes: true);
+      final pagina = await crearApi(productos).buscarMateriales(consulta: '  ', soloComunes: true);
 
-      expect(productos.llamadas, isEmpty);
-      expect(vacia.items, isEmpty);
-      expect(vacia.total, 0);
-      expect(unaLetra.items, isEmpty);
+      expect(productos.llamadas.single.texto, '');
+      expect(productos.ultimosFiltros!.soloMasComunes, isTrue);
+      expect(pagina.items.single.codigo, 'CD-123');
     });
 
-    test('ignora los filtros hasta AI-62', () async {
+    test('con 1 carácter no llama al servidor y devuelve una página vacía', () async {
       final productos = ProductosFalso(productos: [pinol]);
 
-      final pagina = await VentanillaRepositorioApi(productos).buscarMateriales(
+      final unaLetra = await crearApi(productos).buscarMateriales(consulta: '  a  ', soloComunes: true);
+
+      expect(productos.llamadas, isEmpty);
+      expect(unaLetra.items, isEmpty);
+      expect(unaLetra.total, 0);
+    });
+
+    test('convierte los nombres de la pantalla en los ids y códigos de la API', () async {
+      final productos = ProductosFalso(productos: [pinol]);
+
+      await crearApi(productos).buscarMateriales(
         consulta: 'pinol',
-        categoria: 'Papel',
+        categoria: 'Líquido',
         tipo: 'Mantenimiento',
-        almacen: 'Otro',
+        almacen: 'Almacén 2',
         soloComunes: true,
       );
 
       expect(productos.llamadas.single.texto, 'pinol');
-      expect(pagina.items, hasLength(1));
+      expect(productos.ultimosFiltros, (
+        categoriaId: 1,
+        tipo: 'MANTENIMIENTO',
+        almacenId: 4,
+        soloMasComunes: true,
+      ));
+    });
+
+    test('"Todos" sin filtros no manda ninguno ni carga los catálogos', () async {
+      final productos = ProductosFalso(productos: [pinol]);
+      final catalogos = CatalogosFalso();
+
+      await crearApi(productos, catalogos: catalogos).buscarMateriales();
+
+      expect(productos.ultimosFiltros, (
+        categoriaId: null,
+        tipo: null,
+        almacenId: null,
+        soloMasComunes: false,
+      ));
+      expect(catalogos.consultas, 0);
+    });
+
+    test('un nombre que ya no existe en los catálogos no filtra', () async {
+      final productos = ProductosFalso(productos: [pinol]);
+
+      await crearApi(productos).buscarMateriales(categoria: 'Ya no existe', almacen: 'Tampoco');
+
+      expect(productos.ultimosFiltros!.categoriaId, isNull);
+      expect(productos.ultimosFiltros!.almacenId, isNull);
     });
 
     test('sin coincidencias devuelve una página vacía con total 0', () async {
       final pagina =
-          await VentanillaRepositorioApi(ProductosFalso()).buscarMateriales(consulta: 'CD-500');
+          await crearApi(ProductosFalso()).buscarMateriales(consulta: 'CD-500');
 
       expect(pagina.items, isEmpty);
       expect(pagina.total, 0);
@@ -104,7 +173,7 @@ void main() {
     test('el total cuenta solo lo recibido, sin ofrecer otra página (AI-63)', () async {
       final ocho = List.filled(8, pinol);
 
-      final pagina = await VentanillaRepositorioApi(ProductosFalso(productos: ocho))
+      final pagina = await crearApi(ProductosFalso(productos: ocho))
           .buscarMateriales(consulta: 'cd', pagina: 1, porPagina: 8);
 
       expect(pagina.total, 8);
@@ -115,7 +184,7 @@ void main() {
       const error = ErrorNegocio('NO_AUTENTICADO', 'Falta el token de sesión.', estadoHttp: 401);
 
       await expectLater(
-        VentanillaRepositorioApi(ProductosFalso(error: error)).buscarMateriales(consulta: 'pinol'),
+        crearApi(ProductosFalso(error: error)).buscarMateriales(consulta: 'pinol'),
         throwsA(same(error)),
       );
     });
@@ -176,11 +245,69 @@ void main() {
     });
   });
 
+  group('opcionesFiltros (AI-62)', () {
+    test('trae categorías y almacenes de la API y los tipos fijos', () async {
+      final opciones = await crearApi(ProductosFalso()).opcionesFiltros();
+
+      expect(opciones.categorias, ['Bolsas', 'Líquido']);
+      expect(opciones.almacenes, ['Almacén 1', 'Almacén 2']);
+      expect(opciones.tipos, ['Servicios Generales', 'Mantenimiento']);
+    });
+
+    test('distingue por campus los almacenes con el mismo nombre (supervisor jefe)', () async {
+      final catalogos = CatalogosFalso(almacenes: const [
+        Almacen(id: 5, nombre: 'Almacén 1', campusId: 2, campus: 'Centro'),
+        Almacen(id: 7, nombre: 'Principal', campusId: 1, campus: 'Náinari'),
+        Almacen(id: 9, nombre: 'Principal', campusId: 3, campus: 'Guaymas'),
+      ]);
+      final productos = ProductosFalso();
+      final api = crearApi(productos, catalogos: catalogos);
+
+      final opciones = await api.opcionesFiltros();
+      await api.buscarMateriales(almacen: 'Principal (Guaymas)');
+
+      expect(opciones.almacenes, ['Almacén 1', 'Principal (Náinari)', 'Principal (Guaymas)']);
+      expect(productos.ultimosFiltros!.almacenId, 9);
+    });
+
+    test('carga los catálogos una sola vez', () async {
+      final catalogos = CatalogosFalso();
+      final api = crearApi(ProductosFalso(), catalogos: catalogos);
+
+      await api.opcionesFiltros();
+      await api.buscarMateriales(categoria: 'Líquido');
+      await api.opcionesFiltros();
+
+      expect(catalogos.consultas, 1);
+    });
+
+    test('si falla, deja pasar el error y lo reintenta en la siguiente llamada', () async {
+      final catalogos = CatalogosFalso(
+        error: const ErrorNegocio(ErrorNegocio.codigoSinConexion, ErrorNegocio.mensajeSinConexion),
+      );
+      final api = crearApi(ProductosFalso(), catalogos: catalogos);
+
+      await expectLater(
+        api.opcionesFiltros(),
+        throwsA(isA<ErrorNegocio>().having((e) => e.codigo, 'codigo', ErrorNegocio.codigoSinConexion)),
+      );
+      catalogos.error = null;
+
+      expect((await api.opcionesFiltros()).categorias, ['Bolsas', 'Líquido']);
+      expect(catalogos.consultas, 2);
+    });
+  });
+
+  test('codigoDeTipo traduce las etiquetas de la pantalla', () {
+    expect(codigoDeTipo('Servicios Generales'), 'SERVICIOS_GENERALES');
+    expect(codigoDeTipo('Mantenimiento'), 'MANTENIMIENTO');
+    expect(codigoDeTipo('Otro'), isNull);
+  });
+
   test('los demás métodos siguen en el repositorio simulado', () async {
-    final repositorio = VentanillaRepositorioApi(ProductosFalso());
+    final repositorio = crearApi(ProductosFalso());
 
     expect((await repositorio.listarAutorizadores()), isNotEmpty);
     expect((await repositorio.buscarSolicitantes('Rosa')).items.single.nombre, 'Rosa Molina');
-    expect(await repositorio.opcionesFiltros(), isA<OpcionesFiltros>());
   });
 }
