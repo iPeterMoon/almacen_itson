@@ -16,6 +16,9 @@ class Colores {
   static const peligro = Color(0xFFB91C1C);
   static const peligroFondo = Color(0xFFFEE2E2);
   static const infoFondo = Color(0xFFEFF6FF);
+  static const deshabilitado = Color(0xFF9CA3AF);
+  static const encabezadoTabla = Color(0xFFF1F5F9);
+  static const paginaActual = Color(0xFFE8EEF7);
 }
 
 class Tema {

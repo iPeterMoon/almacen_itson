@@ -4,22 +4,24 @@ import 'modelos.dart';
 /// Contrato que usa la pantalla. La implementación real llamará a la API NestJS con dio.
 ///
 /// SUPUESTOS DE ENDPOINTS (confirmar con backend en /docs):
-///   GET  /api/v1/ventanilla/solicitantes?q=
+///   GET  /api/v1/ventanilla/solicitantes?q=&pagina=&porPagina=   -> { items, total }
 ///   GET  /api/v1/ventanilla/autorizadores
-///   GET  /api/v1/inventario/materiales?q=&categoria=
+///   GET  /api/v1/inventario/materiales?q=&categoria=&tipo=&almacen=&comunes=&pagina=&porPagina=   -> { items, total }
 ///   GET  /api/v1/inventario/activos?q=
 ///   POST /api/v1/ventanilla/materiales/validar   -> alerta de periodicidad / límite de zona
 ///   POST /api/v1/ventanilla/entregas             -> folio y resumen (descuenta stock)
 abstract class VentanillaRepositorio {
-  Future<List<Solicitante>> buscarSolicitantes(String consulta);
+  Future<Pagina<Solicitante>> buscarSolicitantes(String consulta, {int pagina = 1, int porPagina = 5});
   Future<List<Autorizador>> listarAutorizadores();
   Future<OpcionesFiltros> opcionesFiltros();
-  Future<List<MaterialCatalogo>> buscarMateriales({
+  Future<Pagina<MaterialCatalogo>> buscarMateriales({
     String consulta = '',
     String? categoria,
     String? tipo,
     String? almacen,
     bool soloComunes = false,
+    int pagina = 1,
+    int porPagina = 5,
   });
   Future<List<ActivoCatalogo>> buscarActivos(String consulta);
 
@@ -46,6 +48,12 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
     Solicitante(id: '3', nombre: 'Ana Lizbeth', dependencia: 'Mantenimiento', tipo: 'Compañía', zona: 'Polideportivo', areaTrabajo: 'Mantenimiento', areaTrabajo2: 'Polideportivo'),
     Solicitante(id: '4', nombre: 'Nayeli Solis', dependencia: 'Servicios Generales', tipo: 'ITSON', zona: 'Tutoria', areaTrabajo: 'Servicios', areaTrabajo2: 'Tutoria'),
     Solicitante(id: '5', nombre: 'Rosa Molina', dependencia: 'Maxi Servicios', tipo: 'ITSON', zona: 'Video conferencias', areaTrabajo: 'Servicios', areaTrabajo2: 'Video conferencias'),
+    Solicitante(id: '6', nombre: 'Luis Parra', dependencia: 'Mantenimiento', tipo: 'ITSON', zona: 'Gimnasio', areaTrabajo: 'Mantenimiento', areaTrabajo2: 'Gimnasio'),
+    Solicitante(id: '7', nombre: 'Carmen Soto', dependencia: 'Servicios Generales', tipo: 'Compañía', zona: 'Biblioteca', areaTrabajo: 'Servicios', areaTrabajo2: 'Biblioteca'),
+    Solicitante(id: '8', nombre: 'Jorge Ibarra', dependencia: 'Maxi Servicios', tipo: 'ITSON', zona: 'Cafetería', areaTrabajo: 'Servicios', areaTrabajo2: 'Cafetería'),
+    Solicitante(id: '9', nombre: 'Daniela Ochoa', dependencia: 'Mantenimiento', tipo: 'ITSON', zona: 'Laboratorios', areaTrabajo: 'Mantenimiento', areaTrabajo2: 'Laboratorios'),
+    Solicitante(id: '10', nombre: 'Ramón Acosta', dependencia: 'Servicios Generales', tipo: 'ITSON', zona: 'Estacionamiento', areaTrabajo: 'Servicios', areaTrabajo2: 'Estacionamiento'),
+    Solicitante(id: '11', nombre: 'Sofía Valdez', dependencia: 'Maxi Servicios', tipo: 'Compañía', zona: 'Auditorio', areaTrabajo: 'Servicios', areaTrabajo2: 'Auditorio'),
   ];
 
   static const _autorizadores = [
@@ -63,6 +71,10 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
     MaterialCatalogo(codigo: 'CD-124', concepto: 'Limpiador aromático', alias: 'Fabuloso', tipo: 'Servicios Generales', esComun: true, categoria: 'Líquido', almacen: 'Servicios Generales', ubicacion: 'Estante 1', existencia: 12, unidadBase: 'galones', unidades: _litros),
     MaterialCatalogo(codigo: 'CD-125', concepto: 'Cloro', alias: 'Hipoclorito', tipo: 'Servicios Generales', esComun: true, categoria: 'Líquido', almacen: 'Dormitorios', ubicacion: '-', existencia: 18, unidadBase: 'L', unidades: _litros),
     MaterialCatalogo(codigo: 'CD-130', concepto: 'Guantes de látex', alias: 'Guantes', tipo: 'Mantenimiento', esComun: true, categoria: 'Pieza', almacen: 'Mantenimiento', ubicacion: 'Estante 3', existencia: 4, unidadBase: 'piezas', unidades: ['Piezas', 'Cajas']),
+    MaterialCatalogo(codigo: 'CD-126', concepto: 'Jabón líquido', alias: 'Jabón manos', tipo: 'Servicios Generales', esComun: true, categoria: 'Líquido', almacen: 'Dormitorios', ubicacion: 'Estante 1', existencia: 8, unidadBase: 'L', unidades: _litros),
+    MaterialCatalogo(codigo: 'CD-127', concepto: 'Desengrasante', alias: 'Industrial', tipo: 'Mantenimiento', esComun: false, categoria: 'Líquido', almacen: 'Mantenimiento', ubicacion: 'Estante 4', existencia: 20, unidadBase: 'L', unidades: _litros),
+    MaterialCatalogo(codigo: 'CD-131', concepto: 'Escoba industrial', alias: 'Escoba', tipo: 'Servicios Generales', esComun: true, categoria: 'Pieza', almacen: 'Servicios Generales', ubicacion: 'Estante 5', existencia: 15, unidadBase: 'piezas', unidades: ['Piezas', 'Cajas']),
+    MaterialCatalogo(codigo: 'CD-132', concepto: 'Trapeador', alias: 'Mechudo', tipo: 'Servicios Generales', esComun: false, categoria: 'Pieza', almacen: 'Servicios Generales', ubicacion: 'Estante 5', existencia: 10, unidadBase: 'piezas', unidades: ['Piezas', 'Cajas']),
   ];
 
   static const _activos = [
@@ -72,11 +84,18 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
 
   Future<void> _espera() => Future<void>.delayed(const Duration(milliseconds: 250));
 
+  Pagina<T> _paginar<T>(List<T> todos, int pagina, int porPagina) {
+    final inicio = (pagina - 1) * porPagina;
+    final items = inicio >= todos.length ? <T>[] : todos.skip(inicio).take(porPagina).toList();
+    return Pagina(items: items, total: todos.length, pagina: pagina, porPagina: porPagina);
+  }
+
   @override
-  Future<List<Solicitante>> buscarSolicitantes(String consulta) async {
+  Future<Pagina<Solicitante>> buscarSolicitantes(String consulta, {int pagina = 1, int porPagina = 5}) async {
     await _espera();
     final q = consulta.trim().toLowerCase();
-    return _solicitantes.where((s) => s.nombre.toLowerCase().contains(q)).toList();
+    final todos = _solicitantes.where((s) => s.nombre.toLowerCase().contains(q)).toList();
+    return _paginar(todos, pagina, porPagina);
   }
 
   @override
@@ -97,16 +116,18 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
   }
 
   @override
-  Future<List<MaterialCatalogo>> buscarMateriales({
+  Future<Pagina<MaterialCatalogo>> buscarMateriales({
     String consulta = '',
     String? categoria,
     String? tipo,
     String? almacen,
     bool soloComunes = false,
+    int pagina = 1,
+    int porPagina = 5,
   }) async {
     await _espera();
     final q = consulta.trim().toLowerCase();
-    return _materiales
+    final todos = _materiales
         .where((m) =>
             (categoria == null || m.categoria == categoria) &&
             (tipo == null || m.tipo == tipo) &&
@@ -116,6 +137,7 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
                 m.concepto.toLowerCase().contains(q) ||
                 m.alias.toLowerCase().contains(q)))
         .toList();
+    return _paginar(todos, pagina, porPagina);
   }
 
   @override

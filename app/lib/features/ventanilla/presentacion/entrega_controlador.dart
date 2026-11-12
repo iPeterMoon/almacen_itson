@@ -132,6 +132,9 @@ class EntregaController extends Notifier<EntregaState> {
   void seleccionarSolicitante(Solicitante s) =>
       state = state.copyWith(solicitante: s, sinRegistro: false);
 
+  /// Permite quitar la selección para elegir a otro trabajador (o a ninguno).
+  void deseleccionarSolicitante() => state = state.copyWith(solicitante: null);
+
   void usarSinRegistro(bool valor) => state = state.copyWith(
         sinRegistro: valor,
         solicitante: valor ? null : _sin,
@@ -340,9 +343,40 @@ class ConsultaNotifier extends Notifier<String> {
 
 final consultaSolicitantesProvider =
     NotifierProvider<ConsultaNotifier, String>(ConsultaNotifier.new);
-final solicitantesProvider = FutureProvider.autoDispose<List<Solicitante>>((ref) {
+const registrosPorPagina = 8;
+
+/// Página actual de cada tabla. Al cambiar la búsqueda o los filtros vuelve a la página 1.
+class PaginaSolicitantesNotifier extends Notifier<int> {
+  @override
+  int build() {
+    ref.watch(consultaSolicitantesProvider);
+    return 1;
+  }
+
+  void set(int pagina) => state = pagina;
+}
+
+class PaginaMaterialesNotifier extends Notifier<int> {
+  @override
+  int build() {
+    ref.watch(filtroMaterialesProvider);
+    return 1;
+  }
+
+  void set(int pagina) => state = pagina;
+}
+
+final paginaSolicitantesProvider =
+    NotifierProvider<PaginaSolicitantesNotifier, int>(PaginaSolicitantesNotifier.new);
+final paginaMaterialesProvider =
+    NotifierProvider<PaginaMaterialesNotifier, int>(PaginaMaterialesNotifier.new);
+
+final solicitantesProvider = FutureProvider.autoDispose<Pagina<Solicitante>>((ref) {
   final q = ref.watch(consultaSolicitantesProvider);
-  return ref.watch(ventanillaRepositorioProvider).buscarSolicitantes(q);
+  final p = ref.watch(paginaSolicitantesProvider);
+  return ref
+      .watch(ventanillaRepositorioProvider)
+      .buscarSolicitantes(q, pagina: p, porPagina: registrosPorPagina);
 });
 
 final autorizadoresProvider = FutureProvider<List<Autorizador>>(
@@ -357,7 +391,7 @@ class FiltroMateriales {
     this.categoria,
     this.tipo,
     this.almacen,
-    this.soloComunes = false,
+    this.soloComunes = true, // el prototipo abre con "Más comunes" seleccionado
   });
 
   final String consulta;
@@ -403,14 +437,17 @@ final filtroMaterialesProvider =
 final opcionesFiltrosProvider = FutureProvider<OpcionesFiltros>(
     (ref) => ref.watch(ventanillaRepositorioProvider).opcionesFiltros());
 
-final materialesProvider = FutureProvider.autoDispose<List<MaterialCatalogo>>((ref) {
+final materialesProvider = FutureProvider.autoDispose<Pagina<MaterialCatalogo>>((ref) {
   final f = ref.watch(filtroMaterialesProvider);
+  final p = ref.watch(paginaMaterialesProvider);
   return ref.watch(ventanillaRepositorioProvider).buscarMateriales(
         consulta: f.consulta,
         categoria: f.categoria,
         tipo: f.tipo,
         almacen: f.almacen,
         soloComunes: f.soloComunes,
+        pagina: p,
+        porPagina: registrosPorPagina,
       );
 });
 

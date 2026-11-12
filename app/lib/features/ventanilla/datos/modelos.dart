@@ -310,3 +310,14 @@ class OpcionesFiltros {
   final List<String> tipos;
   final List<String> almacenes;
 }
+
+/// Una página de resultados. SUPUESTO: el servidor acepta ?pagina=&porPagina= y responde { items, total }.
+class Pagina<T> {
+  const Pagina({required this.items, required this.total, required this.pagina, required this.porPagina});
+  final List<T> items;
+  final int total; // total de registros que cumplen el filtro (todas las páginas)
+  final int pagina; // empieza en 1
+  final int porPagina;
+
+  int get totalPaginas => total == 0 ? 1 : (total + porPagina - 1) ~/ porPagina;
+}
