@@ -27,7 +27,9 @@ export class ProductosController {
       'Búsqueda parcial sin distinguir mayúsculas. Solo devuelve productos con existencia ' +
       'mayor a 0 en los campus del usuario (un producto sin existencia no se puede entregar). ' +
       'La existencia suma todos los campus que el usuario puede ver. Ordena primero los ' +
-      '"Más comunes" y luego por nombre. Una lista vacía significa que no hay coincidencias.',
+      '"Más comunes" y luego por nombre. Una lista vacía significa que no hay coincidencias. ' +
+      'Cada producto trae sus ubicaciones con existencia (almacén, ubicación y cantidad), ' +
+      'ordenadas por almacén.',
   })
   @ApiOkResponse({
     description: 'Página de productos.',
@@ -46,6 +48,24 @@ export class ProductosController {
             existencia: 19,
             ultimaEntrada: '2026-11-10T18:00:00.000Z',
             ultimaSalida: null,
+            ubicaciones: [
+              {
+                campusId: 2,
+                almacenId: 5,
+                almacen: 'Almacén 1',
+                ubicacionId: 9,
+                ubicacion: 'E1F1',
+                cantidad: 15,
+              },
+              {
+                campusId: 2,
+                almacenId: 6,
+                almacen: 'Almacén 2',
+                ubicacionId: 10,
+                ubicacion: null,
+                cantidad: 4,
+              },
+            ],
           },
         ],
         pagina: 1,
