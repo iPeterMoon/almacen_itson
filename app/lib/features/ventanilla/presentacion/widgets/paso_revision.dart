@@ -139,13 +139,11 @@ class _TablaRevision extends StatelessWidget {
     required this.encabezados,
     required this.flex,
     required this.filas,
-    this.anchoMinimo = 600,
   });
 
   final List<String> encabezados;
   final List<int> flex;
   final List<List<Widget>> filas;
-  final double anchoMinimo;
 
   Widget _fila(List<Widget> celdas, {Color? color}) => Container(
         color: color,
@@ -166,6 +164,7 @@ class _TablaRevision extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, caja) {
+      const anchoMinimo = 600.0;
       final ancho = caja.maxWidth < anchoMinimo ? anchoMinimo : caja.maxWidth;
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
