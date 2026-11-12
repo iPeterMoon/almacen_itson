@@ -235,6 +235,138 @@ describe('BoletasService', () => {
         alertas: [alerta],
       });
     });
+
+    // HU6 E2: solicitante que no está en el registro de personal.
+    it('envía el solicitante sin registro con su nombre y unidad', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', {
+        materiales: [{ productoId: 12, cantidad: 0.5 }],
+        solicitanteNombre: 'Rosa Molina',
+        solicitanteUnidad: 'Navojoa',
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_solicitante_nombre: 'Rosa Molina',
+          p_solicitante_unidad: 'Navojoa',
+          p_trabajador_id: undefined,
+        }),
+      );
+    });
+
+    // HU6 E3: el número de solicitud se vincula cuando se captura.
+    it('envía el número de solicitud cuando se captura', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', {
+        materiales: [{ productoId: 12, cantidad: 1 }],
+        numeroSolicitud: 'OT-9981',
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({ p_numero_solicitud: 'OT-9981' }),
+      );
+    });
+
+    // HU6 E4: labor imprevista sin número de solicitud.
+    it('omite el número de solicitud cuando no se captura', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 1 }] });
+
+      const parametros = rpc.mock.calls[0][1] as { p_numero_solicitud?: string };
+      expect(parametros.p_numero_solicitud).toBeUndefined();
+    });
+
+    // HU6 E5: comentario por material en la revisión.
+    it('envía el comentario de cada material', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', {
+        materiales: [{ productoId: 12, cantidad: 1, comentario: 'Para el baño del edificio 2' }],
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_materiales: [expect.objectContaining({ comentario: 'Para el baño del edificio 2' })],
+        }),
+      );
+    });
+
+    // HU6 E1: sin las dos firmas la base no entrega.
+    it('traduce FIRMAS_REQUERIDAS cuando falta una firma', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'FIRMAS_REQUERIDAS: Deben firmar quien recibe y quien entrega.' },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 1 }] }),
+      ).rejects.toMatchObject({
+        codigo: 'FIRMAS_REQUERIDAS',
+        estadoHttp: HttpStatus.UNPROCESSABLE_ENTITY,
+      });
+    });
+
+    it('deja como error interno un fallo que no es de negocio', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'permission denied for function crear_boleta' },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 1 }] }),
+      ).rejects.not.toBeInstanceOf(ErrorNegocio);
+    });
+
+    // HU8: una boleta puede llevar solo herramientas y ningún material.
+    it('crea una boleta solo con herramientas y sin materiales', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', { herramientas: [{ activoId: 8, diasPrestamo: 3 }] });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_materiales: [],
+          p_herramientas: [{ activo_id: 8, dias_prestamo: 3 }],
+        }),
+      );
+    });
+
+    it('falla si la base no devuelve la boleta creada', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 1 }] }),
+      ).rejects.toThrow('La base no devolvió la boleta creada.');
+    });
+
+    it('usa un arreglo vacío de alertas cuando la base no las devuelve', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ boleta_id: 7, folio: 'BOL-2026-000007', estado: 'ENTREGADA' }],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.crear('token', {
+        materiales: [{ productoId: 12, cantidad: 1 }],
+      });
+
+      expect(resultado.alertas).toEqual([]);
+    });
   });
 
   describe('validarMaterial', () => {
@@ -510,6 +642,95 @@ describe('BoletasService', () => {
 
       expect(resultado.cantidadSugerida).toBe(4);
     });
+
+    it('traduce los errores de la base al validar el material', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'PRODUCTO_NO_REGISTRADO: Producto no registrado.' },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.validarMaterial('token', { productoId: 12, cantidad: 1 }),
+      ).rejects.toMatchObject({
+        codigo: 'PRODUCTO_NO_REGISTRADO',
+        estadoHttp: HttpStatus.NOT_FOUND,
+      });
+    });
+
+    it('envía el campus cuando se especifica', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_MATERIAL], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.validarMaterial('token', { productoId: 12, cantidad: 1, campusId: 2 });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'validar_material',
+        expect.objectContaining({ p_campus_id: 2 }),
+      );
+    });
+
+    // Solo se sugiere un ajuste cuando falta stock; si alcanza no se consulta nada.
+    it('no consulta la presentación ni sugiere ajuste cuando alcanza el stock', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, stock_suficiente: true }],
+        error: null,
+      });
+      const from = jest.fn();
+      const servicio = crearServicio({ rpc, from });
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 1,
+        presentacionId: 4,
+      });
+
+      expect(resultado.cantidadSugerida).toBeNull();
+      expect(from).not.toHaveBeenCalled();
+    });
+
+    // Igual que el caso de stock insuficiente, pero deja controlar la respuesta
+    // de la consulta de la presentación (éxito, error o fila inexistente).
+    function clienteConRespuestaDePresentacion(respuesta: { data: unknown; error: unknown }) {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, disponible: 4, stock_suficiente: false }],
+        error: null,
+      });
+      const maybeSingle = jest.fn().mockResolvedValue(respuesta);
+      const eqProducto = jest.fn().mockReturnValue({ maybeSingle });
+      const eqId = jest.fn().mockReturnValue({ eq: eqProducto });
+      const select = jest.fn().mockReturnValue({ eq: eqId });
+      const from = jest.fn().mockReturnValue({ select });
+      return { rpc, from } as Partial<ClienteFalso>;
+    }
+
+    // HU6 E6: si la consulta de la presentación falla, el error no se oculta.
+    it('propaga el error al consultar la presentación para el ajuste', async () => {
+      const servicio = crearServicio(
+        clienteConRespuestaDePresentacion({
+          data: null,
+          error: { message: 'permission denied for table presentaciones_producto' },
+        }),
+      );
+
+      await expect(
+        servicio.validarMaterial('token', { productoId: 12, cantidad: 10, presentacionId: 4 }),
+      ).rejects.toThrow('permission denied for table presentaciones_producto');
+    });
+
+    // HU6 E6: la presentación elegida debe pertenecer al producto.
+    it('rechaza con PRESENTACION_INVALIDA si la presentación no es del producto', async () => {
+      const servicio = crearServicio(
+        clienteConRespuestaDePresentacion({ data: null, error: null }),
+      );
+
+      await expect(
+        servicio.validarMaterial('token', { productoId: 12, cantidad: 10, presentacionId: 4 }),
+      ).rejects.toMatchObject({
+        codigo: 'PRESENTACION_INVALIDA',
+        estadoHttp: HttpStatus.UNPROCESSABLE_ENTITY,
+      });
+    });
   });
 
   describe('resolverAutorizacion', () => {
@@ -528,6 +749,39 @@ describe('BoletasService', () => {
         p_comentario: 'Urgencia',
       });
       expect(resultado).toEqual({ boletaId: 7, estado: 'AUTORIZADA' });
+    });
+
+    it('devuelve RECHAZADA cuando el supervisor rechaza', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: 'RECHAZADA', error: null });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.resolverAutorizacion('token', 7, {
+        autorizar: false,
+        comentario: 'No procede',
+      });
+
+      expect(resultado).toEqual({ boletaId: 7, estado: 'RECHAZADA' });
+    });
+
+    it('traduce SIN_PERMISO cuando no es el supervisor asignado', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'SIN_PERMISO: La autorización fue solicitada a otro supervisor.' },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.resolverAutorizacion('token', 7, { autorizar: true }),
+      ).rejects.toMatchObject({ codigo: 'SIN_PERMISO', estadoHttp: HttpStatus.FORBIDDEN });
+    });
+
+    it('falla si la base no devuelve el estado', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: null, error: null });
+      const servicio = crearServicio({ rpc });
+
+      await expect(servicio.resolverAutorizacion('token', 7, { autorizar: true })).rejects.toThrow(
+        'La base no devolvió el estado de la boleta.',
+      );
     });
   });
 
@@ -551,6 +805,36 @@ describe('BoletasService', () => {
         folio: 'BOL-2026-000007',
         estado: 'ENTREGADA',
       });
+    });
+
+    it('traduce BOLETA_NO_AUTORIZADA si aún no se autoriza', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'BOLETA_NO_AUTORIZADA: La boleta está pendiente_autorizacion.' },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.confirmarEntrega('token', 7, {
+          firmaRecibe: '2/firma-recibe.png',
+          firmaEntrega: '2/firma-entrega.png',
+        }),
+      ).rejects.toMatchObject({
+        codigo: 'BOLETA_NO_AUTORIZADA',
+        estadoHttp: HttpStatus.CONFLICT,
+      });
+    });
+
+    it('falla si la base no devuelve el folio', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: null, error: null });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.confirmarEntrega('token', 7, {
+          firmaRecibe: '2/firma-recibe.png',
+          firmaEntrega: '2/firma-entrega.png',
+        }),
+      ).rejects.toThrow('La base no devolvió el folio de la boleta.');
     });
   });
 
@@ -611,6 +895,64 @@ describe('BoletasService', () => {
         estadoHttp: HttpStatus.NOT_FOUND,
       });
     });
+
+    // PostgREST entrega la relación única como objeto, pero algunas versiones la
+    // devuelven como arreglo; el detalle normaliza la autorización a un objeto.
+    it('normaliza la autorización cuando llega como arreglo', async () => {
+      const fila = {
+        ...BOLETA_DETALLE,
+        autorizaciones: [
+          {
+            id: 5,
+            supervisor_id: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
+            estado: 'AUTORIZADA',
+            comentario: 'Urgencia',
+            solicitado_en: '2026-11-10T17:00:00.000Z',
+            resuelto_en: '2026-11-10T17:30:00.000Z',
+          },
+        ],
+      };
+      const maybeSingle = jest.fn().mockResolvedValue({ data: fila, error: null });
+      const eq = jest.fn().mockReturnValue({ maybeSingle });
+      const select = jest.fn().mockReturnValue({ eq });
+      const from = jest.fn().mockReturnValue({ select });
+      const servicio = crearServicio({ from });
+
+      const resultado = await servicio.obtener('token', 7);
+
+      expect(resultado.autorizacion).toMatchObject({ id: 5, estado: 'AUTORIZADA' });
+    });
+
+    it('traduce los errores de la base al obtener', async () => {
+      const servicio = crearServicio(
+        clienteConDetalle(null, { message: 'SIN_PERMISO: No puedes consultar ese campus.' }),
+      );
+
+      await expect(servicio.obtener('token', 7)).rejects.toMatchObject({
+        codigo: 'SIN_PERMISO',
+        estadoHttp: HttpStatus.FORBIDDEN,
+      });
+    });
+
+    it('devuelve listas vacías cuando la boleta no trae materiales ni herramientas', async () => {
+      const fila = {
+        ...BOLETA_DETALLE,
+        boletas_materiales: null,
+        boletas_herramientas: null,
+        autorizaciones: [],
+      };
+      const maybeSingle = jest.fn().mockResolvedValue({ data: fila, error: null });
+      const eq = jest.fn().mockReturnValue({ maybeSingle });
+      const select = jest.fn().mockReturnValue({ eq });
+      const from = jest.fn().mockReturnValue({ select });
+      const servicio = crearServicio({ from });
+
+      const resultado = await servicio.obtener('token', 7);
+
+      expect(resultado.materiales).toEqual([]);
+      expect(resultado.herramientas).toEqual([]);
+      expect(resultado.autorizacion).toBeNull();
+    });
   });
 
   describe('listar', () => {
@@ -655,6 +997,75 @@ describe('BoletasService', () => {
         limite: 20,
       });
     });
+
+    // Imita el constructor de consultas de PostgREST: cada filtro devuelve la misma
+    // consulta y range() resuelve con la respuesta indicada.
+    function consultaDeListado(respuesta: { data: unknown; error: unknown; count: number | null }) {
+      const consulta = {
+        select: jest.fn(),
+        eq: jest.fn(),
+        ilike: jest.fn(),
+        gte: jest.fn(),
+        lte: jest.fn(),
+        order: jest.fn(),
+        range: jest.fn().mockResolvedValue(respuesta),
+      };
+      for (const metodo of ['select', 'eq', 'ilike', 'gte', 'lte', 'order'] as const) {
+        consulta[metodo].mockReturnValue(consulta);
+      }
+      return consulta;
+    }
+
+    it('aplica los filtros recibidos y pagina', async () => {
+      const consulta = consultaDeListado({ data: [], error: null, count: 0 });
+      const from = jest.fn().mockReturnValue(consulta);
+      const servicio = crearServicio({ from });
+
+      const resultado = await servicio.listar('token', {
+        estado: 'ENTREGADA',
+        folio: 'BOL-2026',
+        trabajadorId: 15,
+        desde: '2026-11-01T00:00:00.000Z',
+        hasta: '2026-11-30T23:59:59.999Z',
+        pagina: 2,
+        limite: 10,
+      });
+
+      expect(consulta.eq.mock.calls).toEqual([
+        ['estado', 'ENTREGADA'],
+        ['trabajador_id', 15],
+      ]);
+      expect(consulta.ilike).toHaveBeenCalledWith('folio', '%BOL-2026%');
+      expect(consulta.gte).toHaveBeenCalledWith('creado_en', '2026-11-01T00:00:00.000Z');
+      expect(consulta.lte).toHaveBeenCalledWith('creado_en', '2026-11-30T23:59:59.999Z');
+      expect(consulta.range).toHaveBeenCalledWith(10, 19);
+      expect(resultado).toEqual({ datos: [], total: 0, pagina: 2, limite: 10 });
+    });
+
+    it('traduce los errores de la base al listar', async () => {
+      const consulta = consultaDeListado({
+        data: null,
+        error: { message: 'SIN_PERMISO: No puedes consultar ese campus.' },
+        count: null,
+      });
+      const from = jest.fn().mockReturnValue(consulta);
+      const servicio = crearServicio({ from });
+
+      await expect(servicio.listar('token', {})).rejects.toMatchObject({
+        codigo: 'SIN_PERMISO',
+        estadoHttp: HttpStatus.FORBIDDEN,
+      });
+    });
+
+    it('devuelve una página vacía cuando la base no trae filas', async () => {
+      const consulta = consultaDeListado({ data: null, error: null, count: null });
+      const from = jest.fn().mockReturnValue(consulta);
+      const servicio = crearServicio({ from });
+
+      const resultado = await servicio.listar('token', {});
+
+      expect(resultado).toEqual({ datos: [], total: 0, pagina: 1, limite: 20 });
+    });
   });
 
   describe('subirFirma', () => {
@@ -697,6 +1108,100 @@ describe('BoletasService', () => {
           tipo: 'ENTREGA',
         }),
       ).rejects.toBeInstanceOf(ErrorNegocio);
+    });
+
+    it('rechaza una cadena que no es base64 válida', async () => {
+      const servicio = crearServicio({ storage: { from: jest.fn() } });
+
+      await expect(
+        servicio.subirFirma('token', usuario, { imagenBase64: 'no es base64!!', tipo: 'RECIBE' }),
+      ).rejects.toMatchObject({ codigo: 'FIRMA_INVALIDA' });
+    });
+
+    it('rechaza una firma que decodifica vacía', async () => {
+      const servicio = crearServicio({ storage: { from: jest.fn() } });
+
+      await expect(
+        servicio.subirFirma('token', usuario, { imagenBase64: 'A', tipo: 'RECIBE' }),
+      ).rejects.toMatchObject({ codigo: 'FIRMA_INVALIDA' });
+    });
+
+    it('detecta un JPG por su contenido', async () => {
+      const upload = jest.fn().mockResolvedValue({ data: { path: 'x' }, error: null });
+      const from = jest.fn().mockReturnValue({ upload });
+      const servicio = crearServicio({ storage: { from } });
+      const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]).toString('base64');
+
+      const resultado = await servicio.subirFirma('token', usuario, {
+        imagenBase64: jpg,
+        tipo: 'ENTREGA',
+      });
+
+      expect(upload).toHaveBeenCalledWith(
+        expect.stringMatching(/^3\/[0-9a-f-]+-firma-entrega\.jpg$/),
+        expect.any(Buffer),
+        { contentType: 'image/jpeg', upsert: false },
+      );
+      expect(resultado.ruta).toMatch(/^3\/[0-9a-f-]+-firma-entrega\.jpg$/);
+    });
+
+    it('detecta un WebP por su contenido', async () => {
+      const upload = jest.fn().mockResolvedValue({ data: { path: 'x' }, error: null });
+      const from = jest.fn().mockReturnValue({ upload });
+      const servicio = crearServicio({ storage: { from } });
+      const webp = Buffer.concat([
+        Buffer.from('RIFF'),
+        Buffer.alloc(4),
+        Buffer.from('WEBP'),
+      ]).toString('base64');
+
+      const resultado = await servicio.subirFirma('token', usuario, {
+        imagenBase64: webp,
+        tipo: 'RECIBE',
+      });
+
+      expect(upload).toHaveBeenCalledWith(
+        expect.stringMatching(/^3\/[0-9a-f-]+-firma-recibe\.webp$/),
+        expect.any(Buffer),
+        { contentType: 'image/webp', upsert: false },
+      );
+      expect(resultado.ruta).toMatch(/\.webp$/);
+    });
+
+    it('rechaza una firma de más de 500 KB', async () => {
+      const servicio = crearServicio({ storage: { from: jest.fn() } });
+      const grande = Buffer.alloc(512 * 1024 + 1).toString('base64');
+
+      await expect(
+        servicio.subirFirma('token', usuario, { imagenBase64: grande, tipo: 'RECIBE' }),
+      ).rejects.toMatchObject({ codigo: 'FIRMA_INVALIDA' });
+    });
+
+    it('rechaza si no se puede determinar el campus', async () => {
+      const servicio = crearServicio({ storage: { from: jest.fn() } });
+      const sinCampus: UsuarioAutenticado = { ...usuario, campusId: 0 };
+
+      await expect(
+        servicio.subirFirma('token', sinCampus, {
+          imagenBase64: `data:image/png;base64,${png}`,
+          tipo: 'RECIBE',
+        }),
+      ).rejects.toMatchObject({ codigo: 'CAMPUS_INVALIDO' });
+    });
+
+    it('traduce el error de subida a FIRMA_NO_SUBIDA', async () => {
+      const upload = jest
+        .fn()
+        .mockResolvedValue({ data: null, error: { message: 'Bucket not found' } });
+      const from = jest.fn().mockReturnValue({ upload });
+      const servicio = crearServicio({ storage: { from } });
+
+      await expect(
+        servicio.subirFirma('token', usuario, {
+          imagenBase64: `data:image/png;base64,${png}`,
+          tipo: 'RECIBE',
+        }),
+      ).rejects.toMatchObject({ codigo: 'FIRMA_NO_SUBIDA' });
     });
   });
 });
