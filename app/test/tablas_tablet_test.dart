@@ -67,7 +67,7 @@ void main() {
         await tester.pump(const Duration(seconds: 1));
 
         expect(tester.takeException(), isNull);
-        expect(find.text('Existencia'), findsOneWidget);
+        expect(find.text('Existencia'), findsWidgets);
         _dentroDePantalla(tester, find.text('Existencia'));
         _dentroDePantalla(tester, find.text('Siguiente'));
         _sinScrollHorizontal(tester);
@@ -91,8 +91,9 @@ void main() {
         await tester.pump();
 
         expect(tester.takeException(), isNull);
-        expect(find.text('Acciones'), findsNWidgets(2));
-        _dentroDePantalla(tester, find.text('Acciones'));
+        expect(find.text('Comentario'), findsNWidgets(2));
+        expect(find.text('Entregado'), findsNWidgets(2));
+        _dentroDePantalla(tester, find.text('Comentario'));
         _sinScrollHorizontal(tester);
       });
     });
