@@ -81,8 +81,27 @@ El archivo se versiona en Git y no se edita a mano. Regénéralo después de cad
    ```bash
    cd app
    flutter pub get
-   flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1
+   flutter run                # sin API_URL usa datos simulados
    ```
+
+## Probar la app con la API en local
+
+Con Docker Desktop abierto y el emulador encendido:
+
+```bash
+npx supabase start
+npx supabase db reset        # carga supabase/seed_desarrollo.sql (usuario y productos de prueba)
+```
+
+En `servidor/.env`: `SUPABASE_URL=http://127.0.0.1:54321` y `SUPABASE_ANON_KEY` = `PUBLISHABLE_KEY` de
+`npx supabase status -o env`.
+
+```bash
+cd servidor && npm run start:dev    # terminal 1
+cd app && flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1 --dart-define=API_TOKEN=$(bash ../scripts/token-dev.sh)   # terminal 2
+```
+
+El token vence en 1 hora; si vence, vuelve a correr `flutter run`.
 
 ## Pruebas de la base de datos
 
