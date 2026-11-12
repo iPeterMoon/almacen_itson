@@ -195,7 +195,7 @@ describe('BoletasService', () => {
         excedeLimite: false,
       });
     });
-        it('marca stockSuficiente en false y conserva lo disponible cuando no alcanza', async () => {
+    it('marca stockSuficiente en false y conserva lo disponible cuando no alcanza', async () => {
       // Escenario HU6-E6: se piden 10 y el campus solo tiene 4.
       const rpc = jest.fn().mockResolvedValue({
         data: [{ ...VALIDACION_MATERIAL, disponible: 4, stock_suficiente: false }],
@@ -228,6 +228,87 @@ describe('BoletasService', () => {
       await expect(
         servicio.validarMaterial('token', { productoId: 12, cantidad: 1 }),
       ).rejects.toThrow('La base no devolvió la validación del material.');
+    });
+    it('devuelve fechas y días faltantes cuando se excede la periodicidad (HU6-E8)', async () => {
+      // El cloro se entrega cada 5 días y el trabajador lo recibió hace 2.
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            ...VALIDACION_MATERIAL,
+            ultima_entrega: '2026-11-09T15:00:00+00:00',
+            proxima_entrega: '2026-11-14T15:00:00+00:00',
+            dias_faltantes: 3,
+            limite_cada_dias: 5,
+            excede_periodicidad: true,
+          },
+        ],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 1,
+        trabajadorId: 15,
+        zonaId: 3,
+      });
+
+      expect(resultado).toMatchObject({
+        excedePeriodicidad: true,
+        ultimaEntrega: '2026-11-09T15:00:00+00:00',
+        proximaEntrega: '2026-11-14T15:00:00+00:00',
+        diasFaltantes: 3,
+        limiteCadaDias: 5,
+      });
+    });
+
+    it('no marca periodicidad si el trabajador nunca recibió el insumo (HU6-E9)', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_MATERIAL, limite_cada_dias: 5 }],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 1,
+        trabajadorId: 15,
+        zonaId: 3,
+      });
+
+      expect(resultado.excedePeriodicidad).toBe(false);
+      expect(resultado.ultimaEntrega).toBeNull();
+      expect(resultado.proximaEntrega).toBeNull();
+      expect(resultado.diasFaltantes).toBeNull();
+    });
+
+    it('no marca periodicidad si ya pasó el plazo entre entregas (HU6-E9)', async () => {
+      // Intervalo de 5 días y última entrega hace 6.
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            ...VALIDACION_MATERIAL,
+            ultima_entrega: '2026-11-05T15:00:00+00:00',
+            proxima_entrega: '2026-11-10T15:00:00+00:00',
+            dias_faltantes: null,
+            limite_cada_dias: 5,
+            excede_periodicidad: false,
+          },
+        ],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 1,
+        trabajadorId: 15,
+        zonaId: 3,
+      });
+
+      expect(resultado.excedePeriodicidad).toBe(false);
+      expect(resultado.diasFaltantes).toBeNull();
+      expect(resultado.ultimaEntrega).toBe('2026-11-05T15:00:00+00:00');
     });
   });
 
