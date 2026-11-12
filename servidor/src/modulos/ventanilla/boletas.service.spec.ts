@@ -157,6 +157,84 @@ describe('BoletasService', () => {
         estadoHttp: HttpStatus.CONFLICT,
       });
     });
+    it('rechaza con MOTIVO_EXCEPCION_REQUERIDO si se excede sin capturar motivo', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: {
+          message: 'MOTIVO_EXCEPCION_REQUERIDO: Cloro excede la periodicidad; captura el motivo.',
+        },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 1 }] }),
+      ).rejects.toMatchObject({
+        codigo: 'MOTIVO_EXCEPCION_REQUERIDO',
+        estadoHttp: HttpStatus.UNPROCESSABLE_ENTITY,
+      });
+    });
+
+    it('rechaza con AUTORIZADOR_REQUERIDO si falta el supervisor', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'AUTORIZADOR_REQUERIDO: Selecciona el supervisor que autorizará.' },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', {
+          materiales: [{ productoId: 12, cantidad: 1, motivoExcepcion: 'Evento' }],
+        }),
+      ).rejects.toMatchObject({
+        codigo: 'AUTORIZADOR_REQUERIDO',
+        estadoHttp: HttpStatus.UNPROCESSABLE_ENTITY,
+      });
+    });
+
+    it('devuelve PENDIENTE_AUTORIZACION con las alertas cuando hay excepción', async () => {
+      const alerta = {
+        producto_id: 12,
+        producto: 'Cloro concentrado',
+        excede_periodicidad: true,
+        excede_limite: false,
+        ultima_entrega: '2026-11-09T15:00:00+00:00',
+        dias_faltantes: 3,
+        limite: 2,
+        entregado_periodo: 0,
+      };
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            boleta_id: 8,
+            folio: 'BOL-2026-000008',
+            estado: 'PENDIENTE_AUTORIZACION',
+            alertas: [alerta],
+          },
+        ],
+        error: null,
+      });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.crear('token', {
+        materiales: [{ productoId: 12, cantidad: 1, motivoExcepcion: 'Producto dañado' }],
+        trabajadorId: 15,
+        supervisorId: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_materiales: [expect.objectContaining({ motivo_excepcion: 'Producto dañado' })],
+          p_supervisor_id: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
+        }),
+      );
+      expect(resultado).toEqual({
+        boletaId: 8,
+        folio: 'BOL-2026-000008',
+        estado: 'PENDIENTE_AUTORIZACION',
+        alertas: [alerta],
+      });
+    });
   });
 
   describe('validarMaterial', () => {
