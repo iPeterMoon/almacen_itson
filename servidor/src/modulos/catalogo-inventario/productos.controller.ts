@@ -22,14 +22,17 @@ export class ProductosController {
   // Sin @Roles: cualquier usuario autenticado consulta; RLS limita la existencia a sus campus.
   @Get()
   @ApiOperation({
-    summary: 'Busca materiales con existencia por código, nombre estándar o alias',
+    summary: 'Busca materiales con existencia por texto y filtros',
     description:
-      'Búsqueda parcial sin distinguir mayúsculas. Solo devuelve productos con existencia ' +
-      'mayor a 0 en los campus del usuario (un producto sin existencia no se puede entregar). ' +
-      'La existencia suma todos los campus que el usuario puede ver. Ordena primero los ' +
-      '"Más comunes" y luego por nombre. Una lista vacía significa que no hay coincidencias. ' +
-      'Cada producto trae sus ubicaciones con existencia (almacén, ubicación y cantidad), ' +
-      'ordenadas por almacén.',
+      'Texto opcional: búsqueda parcial por código, nombre estándar o alias, sin distinguir ' +
+      'mayúsculas. Filtros opcionales: categoría, tipo (incluye los de tipo AMBOS), almacén y ' +
+      '"Más comunes"; todos se combinan entre sí y con el texto. Sin texto ni filtros lista ' +
+      'todos los productos. Solo devuelve productos con existencia mayor a 0 en los campus del ' +
+      'usuario (un producto sin existencia no se puede entregar). La existencia suma todos los ' +
+      'campus que el usuario puede ver; con filtro de almacén cuenta solo ese almacén. Ordena ' +
+      'primero los "Más comunes" y luego por nombre. Una lista vacía significa que no hay ' +
+      'coincidencias. Cada producto trae sus ubicaciones con existencia (almacén, ubicación y ' +
+      'cantidad), ordenadas por almacén; con filtro de almacén, solo las de ese almacén.',
   })
   @ApiOkResponse({
     description: 'Página de productos.',

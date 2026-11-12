@@ -15,11 +15,13 @@ function crearConsultaVista(respuesta: Respuesta) {
     select: jest.fn(),
     in: jest.fn(),
     gt: jest.fn(),
+    eq: jest.fn(),
     order: jest.fn(),
   };
   consulta.select.mockReturnValue(consulta);
   consulta.in.mockReturnValue(consulta);
   consulta.gt.mockReturnValue(consulta);
+  consulta.eq.mockReturnValue(consulta);
   consulta.order.mockReturnValueOnce(consulta).mockResolvedValueOnce(respuesta);
   return consulta;
 }
@@ -86,6 +88,7 @@ describe('ProductosService', () => {
         p_limite: 8,
         p_desplazar: 0,
         p_solo_con_existencia: true,
+        p_solo_mas_comunes: false,
       });
       expect(resultado).toEqual({
         datos: [
@@ -187,6 +190,74 @@ describe('ProductosService', () => {
       await expect(servicio.buscar('token', { texto: 'pinol' })).rejects.not.toBeInstanceOf(
         ErrorNegocio,
       );
+    });
+  });
+
+  describe('filtros (AI-62)', () => {
+    it('pasa a la función la categoría, el tipo, el almacén y "Más comunes"', async () => {
+      const { servicio, rpc } = crearServicio({ data: [], error: null });
+
+      await servicio.buscar('token', {
+        categoriaId: 1,
+        tipo: 'MANTENIMIENTO',
+        almacenId: 5,
+        soloMasComunes: true,
+      });
+
+      expect(rpc).toHaveBeenCalledWith('buscar_productos', {
+        p_texto: undefined,
+        p_categoria_id: 1,
+        p_tipo: 'MANTENIMIENTO',
+        p_almacen_id: 5,
+        p_limite: 8,
+        p_desplazar: 0,
+        p_solo_con_existencia: true,
+        p_solo_mas_comunes: true,
+      });
+    });
+
+    it('sin texto ni filtros pide todos los productos con existencia', async () => {
+      const { servicio, rpc } = crearServicio({ data: [], error: null });
+
+      await servicio.buscar('token', {});
+
+      const [, parametros] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+      expect(parametros).toMatchObject({ p_solo_con_existencia: true, p_solo_mas_comunes: false });
+      expect(parametros.p_texto).toBeUndefined();
+      expect(parametros.p_categoria_id).toBeUndefined();
+      expect(parametros.p_tipo).toBeUndefined();
+      expect(parametros.p_almacen_id).toBeUndefined();
+    });
+
+    it('combina el texto con "Más comunes" (opción A)', async () => {
+      const { servicio, rpc } = crearServicio({ data: [], error: null });
+
+      await servicio.buscar('token', { texto: 'cloro', soloMasComunes: true });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'buscar_productos',
+        expect.objectContaining({ p_texto: 'cloro', p_solo_mas_comunes: true }),
+      );
+    });
+
+    it('con filtro de almacén solo trae las ubicaciones de ese almacén', async () => {
+      const { servicio, vista } = crearServicio(
+        { data: [FILA], error: null },
+        { data: [UBICACION_A2], error: null },
+      );
+
+      const { datos } = await servicio.buscar('token', { almacenId: 6 });
+
+      expect(vista.eq).toHaveBeenCalledWith('almacen_id', 6);
+      expect(datos[0].ubicaciones.map((u) => u.almacen)).toEqual(['Almacén 2']);
+    });
+
+    it('sin filtro de almacén trae las ubicaciones de todos los almacenes', async () => {
+      const { servicio, vista } = crearServicio({ data: [FILA], error: null });
+
+      await servicio.buscar('token', { texto: 'pinol' });
+
+      expect(vista.eq).not.toHaveBeenCalled();
     });
   });
 
