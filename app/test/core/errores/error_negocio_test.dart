@@ -24,6 +24,19 @@ void main() {
       expect(error.estadoHttp, 409);
     });
 
+    test('lee los datos opcionales del error y los deja vacíos si no vienen', () {
+      final conDatos = ErrorNegocio.fromJson({
+        'codigo': 'STOCK_INSUFICIENTE',
+        'mensaje': 'Existencia insuficiente.',
+        'datos': {'disponible': 4, 'unidad': 'L'},
+      });
+      final sinDatos = ErrorNegocio.fromJson({'codigo': 'SIN_PERMISO', 'mensaje': 'No.'});
+
+      expect(conDatos.datos, {'disponible': 4, 'unidad': 'L'});
+      expect(sinDatos.datos, isEmpty);
+      expect(const ErrorNegocio('X', 'Y').datos, isEmpty);
+    });
+
     test('un cuerpo sin código o mensaje se trata como error inesperado', () {
       final error = ErrorNegocio.fromJson({'message': 'Internal'});
 

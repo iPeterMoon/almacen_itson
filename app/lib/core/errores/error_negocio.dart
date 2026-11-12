@@ -2,10 +2,12 @@ import 'package:dio/dio.dart';
 
 // Error que la pantalla puede mostrar tal cual. El servidor ya convierte el
 // "CODIGO: mensaje" de las funciones de la base en el cuerpo
-// { "codigo": "...", "mensaje": "..." }; aquí se lee ese cuerpo. Las pantallas
-// muestran [mensaje] y pueden reaccionar según [codigo].
+// { "codigo": "...", "mensaje": "...", "datos": {...} }; aquí se lee ese cuerpo.
+// Las pantallas muestran [mensaje] y pueden reaccionar según [codigo].
+// SUPUESTO: el campo opcional "datos" trae detalles del error (por ejemplo, el
+// stock disponible en STOCK_INSUFICIENTE); si no viene, queda vacío.
 class ErrorNegocio implements Exception {
-  const ErrorNegocio(this.codigo, this.mensaje, {this.estadoHttp});
+  const ErrorNegocio(this.codigo, this.mensaje, {this.estadoHttp, this.datos = const {}});
 
   // Códigos que genera la app cuando no hay respuesta del servidor.
   static const codigoSinConexion = 'SIN_CONEXION';
@@ -18,14 +20,20 @@ class ErrorNegocio implements Exception {
   final String codigo;
   final String mensaje;
   final int? estadoHttp;
+  final Map<String, dynamic> datos;
 
-  // Lee { codigo, mensaje }. Si el cuerpo no trae esa forma, se trata como
-  // error inesperado en lugar de mostrar texto técnico al usuario.
+  // Lee { codigo, mensaje, datos }. Si el cuerpo no trae código y mensaje, se trata
+  // como error inesperado en lugar de mostrar texto técnico al usuario.
   factory ErrorNegocio.fromJson(Map<String, dynamic> json, {int? estadoHttp}) {
     final codigo = json['codigo'];
     final mensaje = json['mensaje'];
     if (codigo is String && codigo.isNotEmpty && mensaje is String && mensaje.isNotEmpty) {
-      return ErrorNegocio(codigo, mensaje, estadoHttp: estadoHttp);
+      return ErrorNegocio(
+        codigo,
+        mensaje,
+        estadoHttp: estadoHttp,
+        datos: (json['datos'] as Map?)?.cast<String, dynamic>() ?? const {},
+      );
     }
     return ErrorNegocio(codigoInesperado, mensajeInesperado, estadoHttp: estadoHttp);
   }
