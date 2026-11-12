@@ -221,5 +221,24 @@ describe('EntregasService', () => {
 
       await expect(servicio.listar('token', {})).rejects.not.toBeInstanceOf(ErrorNegocio);
     });
+
+    it('devuelve una página vacía cuando la vista no trae filas', async () => {
+      const { servicio } = crearServicio(crearConsulta({ data: null, error: null, count: null }));
+
+      const resultado = await servicio.listar('token', {});
+
+      expect(resultado).toEqual({ datos: [], total: 0, pagina: 1, limite: 20 });
+    });
+
+    it('trata la cantidad reingresada nula como cero', async () => {
+      const sinReingreso = { ...FILA, cantidad_reingresada: null };
+      const { servicio } = crearServicio(
+        crearConsulta({ data: [sinReingreso], error: null, count: 1 }),
+      );
+
+      const { datos } = await servicio.listar('token', {});
+
+      expect(datos[0].cantidadReingresada).toBe(0);
+    });
   });
 });
