@@ -37,7 +37,8 @@ void main() {
       expect(peticion.queryParameters, {'texto': 'pinol'});
       expect(peticion.headers['Authorization'], 'Bearer token-usuario');
       expect(resultado.datos.single.codigo, 'CD-123');
-      expect(resultado.datos.single.existencia, 12.0);
+      expect(resultado.datos.single.existencia, 16.0);
+      expect(resultado.datos.single.ubicaciones.first.almacen, 'Almacén 1');
       expect(resultado.limite, 8);
     });
 
