@@ -7,7 +7,7 @@
 -- Para probar la búsqueda de materiales de ventanilla (AI-30, AI-62) con la API:
 --   Usuario: almacenista.centro@almacenes.test (ALMACENISTA, campus Centro)
 --   Contraseña de desarrollo: Almacen-Dev-2026
---   Token:   bash scripts/token-dev.sh
+--   Token para probar la API directo: bash scripts/token-dev.sh
 --
 -- Productos (existencia en Centro):
 --   CD-123 Limpiador multiusos / Pinol  Líquido  Serv. Generales  Más comunes  16 L (Almacén 1 E1F1: 12, Almacén 2: 4)

@@ -143,14 +143,17 @@ cuatro materiales con existencia, tres trabajadores, dos zonas con su límite y 
 y firmas de ejemplo en el bucket. Es idempotente (se puede correr varias veces).
 
 ```bash
-# Supabase local (npx supabase start): la base queda en el puerto 54322
-psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-     -v ON_ERROR_STOP=1 -f supabase/seeds/entrega_demo.sql
+# Desde la raíz del repo, en Git Bash. No necesitas psql instalado:
+docker exec -i supabase_db_almacen_itson \
+  psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/seeds/entrega_demo.sql
 ```
+
+Si el contenedor tiene otro nombre, encuéntralo con
+`docker ps --filter name=supabase_db --format '{{.Names}}'`.
 
 Los usuarios demo son `almacen.nainari@itson.mx` y `supervisor.nainari@itson.mx`
 (contraseña `demo1234`). El encabezado del archivo explica cómo simular la entrega desde
-`psql`.
+la base local.
 
 ## Pruebas de la base de datos
 

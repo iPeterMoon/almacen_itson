@@ -8,9 +8,9 @@
 -- Es idempotente: se puede correr varias veces sin duplicar ni romper nada.
 -- No toca los datos que ya existan (solo agrega lo que falte).
 --
--- Uso contra Supabase local (puerto 54322):
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---        -v ON_ERROR_STOP=1 -f supabase/seeds/entrega_demo.sql
+-- Uso contra Supabase local (no requiere psql instalado; desde la raíz del repo):
+--   docker exec -i supabase_db_almacen_itson \
+--        psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/seeds/entrega_demo.sql
 --
 -- Uso contra el contenedor de pruebas (stub, puerto 54329):
 --   docker exec -i almacenes-pruebas psql -U postgres -d almacenes \
@@ -40,30 +40,42 @@ declare
 begin
   for v_user in
     select value from jsonb_array_elements('[
-      {"id":"5eed0000-0000-4000-8000-000000000001","email":"almacen.nainari@itson.mx",
+      {"id":"5eed0000-0000-4000-8000-000000000003","email":"almacen.nainari@itson.mx",
        "nombre":"Almacén Náinari (demo)","rol":"ALMACENISTA"},
-      {"id":"5eed0000-0000-4000-8000-000000000002","email":"supervisor.nainari@itson.mx",
+      {"id":"5eed0000-0000-4000-8000-000000000004","email":"supervisor.nainari@itson.mx",
        "nombre":"Supervisión Náinari (demo)","rol":"SUPERVISOR"}
     ]'::jsonb)
   loop
-    insert into auth.users (id, email)
-    values ((v_user->>'id')::uuid, v_user->>'email')
-    on conflict (id) do nothing;
+    -- En Supabase real el usuario se crea completo, igual que en
+    -- seed_desarrollo.sql. En el stub de pruebas solo existen id y email.
+    if v_login then
+      insert into auth.users (
+        instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+        confirmation_token, recovery_token, email_change_token_new, email_change)
+      values (
+        '00000000-0000-0000-0000-000000000000', (v_user->>'id')::uuid,
+        'authenticated', 'authenticated', v_user->>'email',
+        extensions.crypt('demo1234', extensions.gen_salt('bf')), now(),
+        '{"provider": "email", "providers": ["email"]}', '{}', now(), now(),
+        '', '', '', '')
+      on conflict (id) do nothing;
+    else
+      insert into auth.users (id, email)
+      values ((v_user->>'id')::uuid, v_user->>'email')
+      on conflict (id) do nothing;
+    end if;
 
-    if v_login and v_ident then
-      update auth.users
-         set encrypted_password = extensions.crypt('demo1234', extensions.gen_salt('bf')),
-             email_confirmed_at = coalesce(email_confirmed_at, now()),
-             aud = 'authenticated',
-             role = 'authenticated'
-       where id = (v_user->>'id')::uuid;
-
+    if v_ident then
       insert into auth.identities
-        (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+        (user_id, provider_id, identity_data, provider, created_at, updated_at)
       values
-        (v_user->>'id', (v_user->>'id')::uuid,
-         jsonb_build_object('sub', v_user->>'id', 'email', v_user->>'email'),
-         'email', now(), now(), now())
+        ((v_user->>'id')::uuid, v_user->>'id',
+         jsonb_build_object(
+           'sub', v_user->>'id',
+           'email', v_user->>'email',
+           'email_verified', true),
+         'email', now(), now())
       on conflict do nothing;
     end if;
 
@@ -89,7 +101,7 @@ on conflict do nothing;
 insert into public.productos
   (codigo, nombre_estandar, alias, unidad_base_id, categoria_id, tipo, manejo_seguro, mas_comunes, creado_por)
 select v.codigo, v.nombre, v.alias, um.id, cat.id, v.tipo, v.manejo, v.mas_comunes,
-       '5eed0000-0000-4000-8000-000000000001'
+       '5eed0000-0000-4000-8000-000000000003'
   from (values
     ('CLO-001', 'Cloro concentrado',            'Cloro',   'L',     'Líquido', 'SERVICIOS_GENERALES', 'Usar guantes y ventilación', true),
     ('JAB-001', 'Jabón líquido para manos',     'Jabón',   'L',     'Líquido', 'AMBOS',               null,                         true),
@@ -144,7 +156,7 @@ do update set cantidad = excluded.cantidad, actualizado_en = now();
 -- ---------------------------------------------------------------------
 insert into public.trabajadores (nombre, tipo, compania, dependencia, puesto, campus_id, creado_por)
 select v.nombre, v.tipo, v.compania, v.dependencia, v.puesto, c.id,
-       '5eed0000-0000-4000-8000-000000000001'
+       '5eed0000-0000-4000-8000-000000000003'
   from (values
     ('Juan Pérez Soto',    'ITSON',    null,             'SERVICIOS_GENERALES', 'Intendencia'),
     ('María Sánchez Ruiz', 'COMPANIA', 'Maxi Servicios', 'SERVICIOS_GENERALES', 'Aseo'),
@@ -203,7 +215,12 @@ select 'firmas', c.id::text || '/' || f.nombre
   from public.campus c
   cross join (values ('recibe-demo.png'), ('entrega-demo.png')) as f(nombre)
  where c.clave = 'NAI'
-on conflict (bucket_id, name) do nothing;
+   and not exists (
+     select 1
+       from storage.objects o
+      where o.bucket_id = 'firmas'
+        and o.name = c.id::text || '/' || f.nombre
+   );
 
 -- ---------------------------------------------------------------------
 -- 9. Herramientas (opcional; HU8): dos activos disponibles en Náinari
@@ -211,7 +228,7 @@ on conflict (bucket_id, name) do nothing;
 insert into public.activos
   (codigo, nombre, marca, modelo, numero_serie, valor, ubicacion_id, creado_por)
 select v.codigo, v.nombre, v.marca, v.modelo, v.serie, v.valor, u.id,
-       '5eed0000-0000-4000-8000-000000000001'
+       '5eed0000-0000-4000-8000-000000000003'
   from (values
     ('TAL-001', 'Taladro inalámbrico',   'DeWalt', 'DCD771', 'SN-TAL-001', 2500.00),
     ('JGO-001', 'Juego de desarmadores', 'Urrea',  'J-40',   'SN-JGO-001', 450.00)
@@ -229,7 +246,7 @@ select v.codigo, v.nombre, v.marca, v.modelo, v.serie, v.valor, u.id,
 insert into public.historial_estados_activo
   (activo_id, estado_anterior, estado_nuevo, motivo, creado_por)
 select a.id, null, 'DISPONIBLE', 'Alta del activo (seed demo)',
-       '5eed0000-0000-4000-8000-000000000001'
+       '5eed0000-0000-4000-8000-000000000003'
   from public.activos a
  where a.codigo in ('TAL-001', 'JGO-001')
    and not exists (
@@ -240,7 +257,7 @@ select a.id, null, 'DISPONIBLE', 'Alta del activo (seed demo)',
 -- ---------------------------------------------------------------------
 select 'Usuarios demo'        as dato, count(*)::text as total
   from public.usuarios
- where id in ('5eed0000-0000-4000-8000-000000000001', '5eed0000-0000-4000-8000-000000000002')
+ where id in ('5eed0000-0000-4000-8000-000000000003', '5eed0000-0000-4000-8000-000000000004')
 union all
 select 'Materiales', count(*)::text from public.productos
  where codigo in ('CLO-001', 'JAB-001', 'PAP-001', 'BOL-001')
@@ -268,7 +285,7 @@ select 'Existencias demo', count(*)::text
 --
 -- Desde psql, imitando a la app (rol authenticated + token del usuario):
 --   set role authenticated;
---   set request.jwt.claim.sub = '5eed0000-0000-4000-8000-000000000001';
+--   set request.jwt.claim.sub = '5eed0000-0000-4000-8000-000000000003';
 --
 --   -- 1) Revisar el material (HU6 E6/E8/E10): stock, periodicidad y límite
 --   select * from public.validar_material(
@@ -291,6 +308,6 @@ select 'Existencias demo', count(*)::text
 -- Para ver el caso de autorización (HU6 E8/E10), repite la entrega del cloro
 -- dentro de los 5 días: la base la rechaza pidiendo el motivo (agrega
 -- "motivo_excepcion" al material) y el supervisor
--- (p_supervisor_id => '5eed0000-0000-4000-8000-000000000002'); con ambos la
+-- (p_supervisor_id => '5eed0000-0000-4000-8000-000000000004'); con ambos la
 -- boleta queda en estado PENDIENTE_AUTORIZACION.
 -- =====================================================================
