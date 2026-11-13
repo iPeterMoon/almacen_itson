@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -31,7 +41,9 @@ export class BoletasController {
   ) {}
 
   // Validación previa: no crea la boleta, solo devuelve alertas para que el almacenista decida.
+  // Responde 200 (no 201) en esta ruta, la de autorización y la de entrega porque no crean recursos.
   @Post('validar-material')
+  @HttpCode(HttpStatus.OK)
   @Roles(Rol.Almacenista, Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
   @ApiOperation({
     summary: 'Valida existencia, periodicidad y límite de zona de un material',
@@ -115,6 +127,7 @@ export class BoletasController {
 
   // La base vuelve a validar que sea el supervisor asignado, un jefe o un administrador.
   @Post(':id/autorizacion')
+  @HttpCode(HttpStatus.OK)
   @Roles(Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
   @ApiOperation({
     summary: 'Autoriza o rechaza una boleta pendiente',
@@ -137,6 +150,7 @@ export class BoletasController {
 
   // Se separa de la creación porque algunas boletas necesitan autorización antes de entregarse.
   @Post(':id/entrega')
+  @HttpCode(HttpStatus.OK)
   @Roles(Rol.Almacenista, Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
   @ApiOperation({
     summary: 'Confirma la entrega de una boleta autorizada',
