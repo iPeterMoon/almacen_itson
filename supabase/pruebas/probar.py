@@ -213,6 +213,28 @@ caso("HU6 Fil", "Sin texto y sin filtros lista todo con existencia", CEN,
 caso("Seg", "Sin sesión no se usa el filtro de más comunes", "anon",
      "select * from buscar_productos(p_solo_mas_comunes=>true)", espera="permission denied")
 
+# ---------- HU6 (AI-63): total de resultados para paginar ----------
+# En este punto hay 3 productos (CD-001, CD-123, CD-500); solo CD-123 tiene existencia.
+caso("HU6 Pag", "El total no depende del límite: 3 con límite 1", CEN,
+     "select count(*)||'|'||min(total_resultados) from buscar_productos(p_limite=>1)", contiene="1|3")
+caso("HU6 Pag", "Cada fila de la página trae el mismo total", CEN,
+     "select count(distinct total_resultados)||'|'||min(total_resultados) from buscar_productos()", contiene="1|3")
+caso("HU6 Pag", "La página 2 conserva el total", CEN,
+     "select codigo||'|'||total_resultados from buscar_productos(p_limite=>1, p_desplazar=>1)", contiene="|3")
+caso("HU6 Pag", "La página 2 trae el siguiente producto, no el primero", CEN,
+     "select (select codigo from buscar_productos(p_limite=>1)) <> "
+     "(select codigo from buscar_productos(p_limite=>1, p_desplazar=>1))", contiene="t")
+caso("HU6 Pag", "El total respeta el filtro de existencia (1)", CEN,
+     "select total_resultados from buscar_productos(p_solo_con_existencia=>true)", contiene="1")
+caso("HU6 Pag", "El total respeta el texto (papel: 1)", CEN,
+     "select total_resultados from buscar_productos('papel')", contiene="1")
+caso("HU6 Pag", "El total respeta 'Más comunes' (2)", CEN,
+     "select min(total_resultados)||'|'||count(*) from buscar_productos(p_solo_mas_comunes=>true)", contiene="2|2")
+caso("HU6 Pag", "Una página fuera de rango no trae filas", CEN,
+     "select count(*) from buscar_productos(p_limite=>8, p_desplazar=>8)", contiene="0")
+caso("HU6 Pag", "Náinari cuenta solo lo que tiene existencia en su campus (1)", NAI,
+     "select total_resultados from buscar_productos(p_solo_con_existencia=>true)", contiene="1")
+
 # ---------- Personal, zona y supervisor (mínimo Épica 5) ----------
 admin(f"""
 insert into auth.users values ('{SUP}');

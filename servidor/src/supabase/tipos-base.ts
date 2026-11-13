@@ -1726,6 +1726,7 @@ export type Database = {
           nombre_estandar: string;
           producto_id: number;
           tipo: string;
+          total_resultados: number;
           ultima_entrada: string;
           ultima_salida: string;
           unidad: string;
