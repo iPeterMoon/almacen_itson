@@ -1,10 +1,14 @@
 import { HttpStatus } from '@nestjs/common';
 
 export class ErrorNegocio extends Error {
+  // `datos` es opcional: detalles estructurados para que la app reaccione sin leer el texto
+  // (por ejemplo, la existencia disponible en STOCK_INSUFICIENTE). Para pasarlo sin cambiar
+  // el estado HTTP, usa `undefined` en el tercer parámetro.
   constructor(
     readonly codigo: string,
     mensaje: string,
     readonly estadoHttp: HttpStatus = estadoHttpDeCodigo(codigo),
+    readonly datos?: Record<string, unknown>,
   ) {
     super(mensaje);
     this.name = 'ErrorNegocio';

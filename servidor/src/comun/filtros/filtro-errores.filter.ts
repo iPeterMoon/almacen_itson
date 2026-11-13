@@ -13,6 +13,7 @@ export interface CuerpoError {
   codigo: string;
   mensaje: string;
   detalles?: string[];
+  datos?: Record<string, unknown>;
 }
 
 const CODIGO_POR_ESTADO: Record<number, string> = {
@@ -37,7 +38,9 @@ export class FiltroErrores implements ExceptionFilter {
 
   private traducir(error: unknown): { estado: number; cuerpo: CuerpoError } {
     if (error instanceof ErrorNegocio) {
-      return { estado: error.estadoHttp, cuerpo: { codigo: error.codigo, mensaje: error.message } };
+      const cuerpo: CuerpoError = { codigo: error.codigo, mensaje: error.message };
+      if (error.datos) cuerpo.datos = error.datos;
+      return { estado: error.estadoHttp, cuerpo };
     }
 
     if (error instanceof HttpException) {
