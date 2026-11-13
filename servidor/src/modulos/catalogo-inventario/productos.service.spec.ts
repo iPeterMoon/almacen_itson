@@ -51,6 +51,7 @@ const FILA = {
   existencia: '19.000',
   ultima_entrada: '2026-11-10T18:00:00.000Z',
   ultima_salida: null,
+  total_resultados: 1,
 };
 
 // Filas con la forma de vista_existencias_por_ubicacion.
@@ -124,6 +125,7 @@ describe('ProductosService', () => {
             ],
           },
         ],
+        total: 1,
         pagina: 1,
         limite: 8,
       });
@@ -157,7 +159,7 @@ describe('ProductosService', () => {
 
       const resultado = await servicio.buscar('token', { texto: 'zzzz' });
 
-      expect(resultado).toEqual({ datos: [], pagina: 1, limite: 8 });
+      expect(resultado).toEqual({ datos: [], total: 0, pagina: 1, limite: 8 });
       expect(from).not.toHaveBeenCalled();
     });
 
@@ -190,6 +192,32 @@ describe('ProductosService', () => {
       await expect(servicio.buscar('token', { texto: 'pinol' })).rejects.not.toBeInstanceOf(
         ErrorNegocio,
       );
+    });
+  });
+
+  describe('total (AI-63)', () => {
+    it('toma el total de la base, aunque la página traiga menos filas', async () => {
+      const { servicio } = crearServicio({
+        data: [
+          { ...FILA, total_resultados: '12' },
+          { ...FILA, producto_id: 13, codigo: 'CD-125', total_resultados: '12' },
+        ],
+        error: null,
+      });
+
+      const resultado = await servicio.buscar('token', { pagina: 2, limite: 2 });
+
+      expect(resultado.datos).toHaveLength(2);
+      expect(resultado.total).toBe(12);
+      expect(resultado).toMatchObject({ pagina: 2, limite: 2 });
+    });
+
+    it('una página fuera de rango devuelve total 0', async () => {
+      const { servicio } = crearServicio({ data: [], error: null });
+
+      const resultado = await servicio.buscar('token', { pagina: 9 });
+
+      expect(resultado).toEqual({ datos: [], total: 0, pagina: 9, limite: 8 });
     });
   });
 

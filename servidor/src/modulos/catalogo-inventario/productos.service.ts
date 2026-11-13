@@ -61,6 +61,10 @@ export class ProductosService {
         ...aProducto(fila),
         ubicaciones: ubicaciones.get(fila.producto_id) ?? [],
       })),
+      // Cuántos productos cumplen la búsqueda en todas las páginas (AI-63). Cada fila
+      // trae el mismo valor; una página vacía (sin coincidencias o fuera de rango) no
+      // trae filas, y entonces el total es 0.
+      total: filas.length > 0 ? Number(filas[0].total_resultados) : 0,
       pagina,
       limite,
     };

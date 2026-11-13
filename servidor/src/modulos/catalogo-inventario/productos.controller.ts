@@ -35,7 +35,8 @@ export class ProductosController {
       'cantidad), ordenadas por almacén; con filtro de almacén, solo las de ese almacén.',
   })
   @ApiOkResponse({
-    description: 'Página de productos.',
+    description:
+      'Página de productos. total = cuántos productos cumplen la búsqueda en todas las páginas.',
     schema: {
       example: {
         datos: [
@@ -71,6 +72,7 @@ export class ProductosController {
             ],
           },
         ],
+        total: 1,
         pagina: 1,
         limite: 8,
       },
