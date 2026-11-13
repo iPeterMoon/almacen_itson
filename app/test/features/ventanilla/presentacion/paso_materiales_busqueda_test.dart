@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../datos/ventanilla_repositorio_api_test.dart' show CatalogosFalso, ProductosFalso, pinol;
+import '../datos/ventanilla_repositorio_api_test.dart' show ActivosFalso, BoletasFalso, CatalogosFalso, ProductosFalso, SupervisoresFalso, TrabajadoresFalso, pinol;
 
 // Abre el paso 2 de Denise con el repositorio de la API y un servidor falso, en
 // la tableta vertical del prototipo (800 px lógicos de ancho).
@@ -21,7 +21,14 @@ Future<ProductosFalso> abrirPaso(WidgetTester tester, ProductosFalso productos) 
     retry: (_, _) => null,
     overrides: [
       ventanillaRepositorioProvider.overrideWithValue(
-        VentanillaRepositorioApi(productos, catalogos: CatalogosFalso()),
+        VentanillaRepositorioApi(
+          productos,
+          catalogos: CatalogosFalso(),
+          boletas: BoletasFalso(),
+          trabajadores: TrabajadoresFalso(),
+          supervisores: SupervisoresFalso(),
+          activos: ActivosFalso(),
+        ),
       ),
     ],
   );

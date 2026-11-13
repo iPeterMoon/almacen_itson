@@ -27,7 +27,7 @@ abstract class VentanillaRepositorio {
 
   /// Devuelve null si no hay restricción; si la hay, la alerta a mostrar.
   Future<AlertaRestriccion?> validarMaterial({
-    String? solicitanteId,
+    Solicitante? solicitante,
     required MaterialCatalogo material,
     required double cantidad,
     required String unidad,
@@ -151,7 +151,7 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
 
   @override
   Future<AlertaRestriccion?> validarMaterial({
-    String? solicitanteId,
+    Solicitante? solicitante,
     required MaterialCatalogo material,
     required double cantidad,
     required String unidad,

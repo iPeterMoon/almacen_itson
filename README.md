@@ -51,6 +51,18 @@ La búsqueda de materiales para la boleta se expone en `servidor/src/modulos/cat
 | ------ | ----------------------------- | ------------------------------------------------------------------------ |
 | `GET`  | `/api/v1/catalogo/productos`  | Busca por código, nombre o alias (`texto`, 2 a 100 caracteres) solo productos con existencia en los campus del usuario; `limite` 8 por defecto, máximo 50 |
 
+## API de listas para la boleta
+
+Las listas de selección del flujo de ventanilla. Todas son de solo lectura y la base (RLS) las
+limita a los campus del usuario. Las búsquedas aceptan `texto` (2 a 100 caracteres: letras,
+números, espacios y `. - / # '`), `pagina` y `limite` (8 por defecto, máximo 50).
+
+| Método | Ruta                          | Qué hace                                                              |
+| ------ | ----------------------------- | --------------------------------------------------------------------- |
+| `GET`  | `/api/v1/trabajadores`        | Solicitantes registrados con sus zonas (ventanilla)                    |
+| `GET`  | `/api/v1/usuarios/supervisores` | Supervisores que pueden autorizar una excepción (usuarios y roles)    |
+| `GET`  | `/api/v1/activos`             | Herramientas por código, nombre o serie; `estado=DISPONIBLE` para prestar (préstamos) |
+
 ## Tipos de Supabase
 
 `servidor/src/supabase/tipos-base.ts` se genera desde el esquema `public` de la base local:
@@ -72,7 +84,7 @@ El archivo se versiona en Git y no se edita a mano. Regénéralo después de cad
    ```bash
    cd servidor
    npm ci
-   cp .env.example .env      # y llena SUPABASE_URL y SUPABASE_ANON_KEY
+   cp .env.example .env      # y llena SUPABASE_URL y SUPABASE_ANON_KEY (ver "Elegir la base de datos")
    npm run start:dev         # http://localhost:3000/api/v1/salud y /docs
    ```
 
@@ -84,7 +96,44 @@ El archivo se versiona en Git y no se edita a mano. Regénéralo después de cad
    flutter run                # sin API_URL usa datos simulados
    ```
 
-## Configurar la base de datos local
+## Elegir la base de datos
+
+El servidor puede usar una de dos bases. Solo cambia `servidor/.env`; la app y el servidor
+funcionan igual con cualquiera.
+
+| Opción | Cuándo conviene | Requisitos |
+| ------ | --------------- | ---------- |
+| **A. Base de pruebas en la nube** | Probar rápido la app con la API, sin instalar nada más | Internet |
+| **B. Base local** | Cambiar migraciones o datos, o probar sin afectar a nadie | Docker Desktop (la primera descarga tarda) |
+
+### Opción A: base de pruebas en la nube
+
+Proyecto de Supabase `almacenes-itson-pruebas`, compartido por el equipo y **solo con datos de
+prueba** (no captures datos reales). Ya tiene las 15 migraciones, `seed.sql`,
+`seed_desarrollo.sql` y `seeds/entrega_demo.sql`.
+
+En `servidor/.env`:
+
+```env
+SUPABASE_URL=https://ficapmexnfysnxhsfgzp.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_BgnzhpLVs6a9OmSNRYDusg_7MuFfZis
+```
+
+La clave es la publicable: está hecha para usarse fuera del servidor y los permisos los pone
+RLS. Usuarios para entrar:
+
+| Usuario | Contraseña | Rol y campus |
+| ------- | ---------- | ------------ |
+| `almacen.nainari@itson.mx` | `demo1234` | Almacenista, Náinari (escenario de ventanilla) |
+| `supervisor.nainari@itson.mx` | `demo1234` | Supervisor, Náinari |
+| `almacenista.centro@almacenes.test` | `Almacen-Dev-2026` | Almacenista, Centro (productos para paginar) |
+
+Como es compartida, lo que registres (boletas, préstamos, existencias que bajan) lo ven los
+demás y no se borra. Si los datos de ventanilla ya no sirven para probar, avisa en el equipo.
+Cuando alguien agregue una migración en `supabase/migrations/`, también hay que aplicarla a este
+proyecto; si no, el servidor puede fallar con columnas o funciones que no existen.
+
+### Opción B: base local
 
 La base de desarrollo corre en Docker con Supabase CLI. Desde la raíz del repo:
 
@@ -123,9 +172,10 @@ Para detener los servicios usa `npx supabase stop`; para reiniciar la base desde
 
 ## Probar la app con la API en local
 
-Requisitos: Docker Desktop abierto, un emulador Android encendido (ver [INSTALACION.md](INSTALACION.md),
-paso 3) y **Git Bash** (los comandos de abajo no funcionan en PowerShell). Abre las terminales en la raíz del repo.
-Configura primero la base local (ver [Configurar la base de datos local](#configurar-la-base-de-datos-local)).
+Requisitos: un emulador Android encendido (ver [INSTALACION.md](INSTALACION.md), paso 3) y
+**Git Bash** (los comandos de abajo no funcionan en PowerShell). Abre las terminales en la raíz del repo.
+Configura primero `servidor/.env` con una de las dos bases (ver [Elegir la base de datos](#elegir-la-base-de-datos));
+con la base local, Docker Desktop debe estar abierto.
 
 ```bash
 cd servidor && npm run start:dev    # terminal 1

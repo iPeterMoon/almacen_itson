@@ -1,12 +1,22 @@
+import 'dart:typed_data';
+
 import 'package:almacen_itson/core/errores/error_negocio.dart';
 import 'package:almacen_itson/features/catalogo_inventario/datos/catalogos.dart';
 import 'package:almacen_itson/features/catalogo_inventario/datos/catalogos_repository.dart';
 import 'package:almacen_itson/features/catalogo_inventario/datos/producto_resumen.dart';
 import 'package:almacen_itson/features/catalogo_inventario/datos/productos_repository.dart';
+import 'package:almacen_itson/features/ventanilla/datos/boletas_repositorio.dart';
+import 'package:almacen_itson/features/ventanilla/datos/modelos.dart';
+import 'package:almacen_itson/features/ventanilla/datos/trabajadores_repositorio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/ventanilla_repositorio_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../catalogo_inventario/datos/producto_resumen_test.dart' show filaPinol;
+import 'boletas_falso.dart';
+import 'listas_falsas.dart';
+
+export 'boletas_falso.dart';
+export 'listas_falsas.dart';
 
 // Repositorio de productos falso: registra cada búsqueda y responde lo indicado.
 class ProductosFalso implements ProductosRepository {
@@ -78,8 +88,22 @@ const almacenesPrueba = [
   Almacen(id: 4, nombre: 'Almacén 2', campusId: 2, campus: 'Centro'),
 ];
 
-VentanillaRepositorioApi crearApi(ProductosFalso productos, {CatalogosFalso? catalogos}) =>
-    VentanillaRepositorioApi(productos, catalogos: catalogos ?? CatalogosFalso());
+VentanillaRepositorioApi crearApi(
+  ProductosFalso productos, {
+  CatalogosFalso? catalogos,
+  BoletasFalso? boletas,
+  TrabajadoresFalso? trabajadores,
+  ActivosFalso? activos,
+}) =>
+    VentanillaRepositorioApi(
+      productos,
+      catalogos: catalogos ?? CatalogosFalso(),
+      boletas: boletas ?? BoletasFalso(),
+      trabajadores: trabajadores ?? TrabajadoresFalso(),
+      supervisores: SupervisoresFalso(),
+      activos: activos ?? ActivosFalso(),
+      entregadoPor: () => 'Alicia García',
+    );
 
 UbicacionProducto ubicacion(String almacen, String? descripcion) => UbicacionProducto(
       campusId: 2,
@@ -330,10 +354,323 @@ void main() {
     expect(codigoDeTipo('Otro'), isNull);
   });
 
-  test('los demás métodos siguen en el repositorio simulado', () async {
-    final repositorio = crearApi(ProductosFalso());
+  group('buscarSolicitantes', () {
+    test('convierte los trabajadores de la API en solicitantes', () async {
+      final trabajadores = TrabajadoresFalso(total: 12);
 
-    expect((await repositorio.listarAutorizadores()), isNotEmpty);
-    expect((await repositorio.buscarSolicitantes('Rosa')).items.single.nombre, 'Rosa Molina');
+      final pagina = await crearApi(ProductosFalso(), trabajadores: trabajadores)
+          .buscarSolicitantes(' juan ', pagina: 2, porPagina: 8);
+
+      expect(trabajadores.ultimaConsulta, (texto: 'juan', pagina: 2, limite: 8));
+      expect(pagina.total, 12);
+      final s = pagina.items.single;
+      expect(s.id, '1');
+      expect(s.nombre, 'Juan Pérez Soto');
+      expect(s.dependencia, 'Servicios Generales');
+      expect(s.tipo, 'ITSON');
+      expect(s.zona, 'Edificio 1800 - Planta baja');
+      expect(s.zonaId, 7);
+    });
+
+    test('con 1 carácter no llama al servidor', () async {
+      final trabajadores = TrabajadoresFalso();
+
+      final pagina = await crearApi(ProductosFalso(), trabajadores: trabajadores)
+          .buscarSolicitantes('j');
+
+      expect(pagina.items, isEmpty);
+      expect(trabajadores.llamadas, 0);
+    });
+
+    test('con varias zonas no se elige ninguna y muestra todas', () {
+      final s = aSolicitante(const Trabajador(
+        id: 2,
+        nombre: 'María Sánchez',
+        tipo: 'COMPANIA',
+        compania: 'Maxi Servicios',
+        dependencia: 'MANTENIMIENTO',
+        zonas: [ZonaTrabajador(id: 1, nombre: 'A'), ZonaTrabajador(id: 2, nombre: 'B')],
+      ));
+
+      expect(s.tipo, 'Maxi Servicios');
+      expect(s.zona, 'A, B');
+      expect(s.areaTrabajo2, 'B');
+      expect(s.zonaId, isNull);
+    });
+  });
+
+  test('listarAutorizadores devuelve los supervisores con su UUID', () async {
+    final lista = await crearApi(ProductosFalso()).listarAutorizadores();
+
+    expect(lista.single.id, supervisorDemo.id);
+    expect(lista.single.nombre, 'Supervisión Náinari');
+  });
+
+  test('buscarActivos pide solo los disponibles y guarda el id del activo', () async {
+    final activos = ActivosFalso();
+
+    final lista = await crearApi(ProductosFalso(), activos: activos).buscarActivos('tal');
+
+    expect(activos.ultimaConsulta, (texto: 'tal', estado: 'DISPONIBLE', limite: 20));
+    expect(lista.single.activoId, 3);
+    expect(lista.single.equipo, 'Taladro inalámbrico');
+    expect(lista.single.serie, 'SN-TAL-001');
+  });
+
+  group('validarMaterial', () {
+    final material = aMaterialCatalogo(pinol);
+
+    Future<AlertaRestriccion?> validar(BoletasFalso boletas, {double cantidad = 2}) =>
+        crearApi(ProductosFalso(), boletas: boletas)
+            .validarMaterial(material: material, cantidad: cantidad, unidad: 'L');
+
+    test('manda el id del producto y la cantidad; sin restricción no hay alerta', () async {
+      final boletas = BoletasFalso();
+
+      expect(await validar(boletas), isNull);
+      expect(boletas.validaciones.single,
+          (productoId: 1, cantidad: 2.0, trabajadorId: null, zonaId: null));
+    });
+
+    test('con un trabajador registrado manda su id y su zona', () async {
+      final boletas = BoletasFalso();
+
+      await crearApi(ProductosFalso(), boletas: boletas).validarMaterial(
+        solicitante: aSolicitante(juanPerez),
+        material: material,
+        cantidad: 2,
+        unidad: 'L',
+      );
+
+      expect(boletas.validaciones.single,
+          (productoId: 1, cantidad: 2.0, trabajadorId: 1, zonaId: 7));
+    });
+
+    test('sin existencia suficiente lanza STOCK_INSUFICIENTE con lo disponible', () async {
+      final boletas = BoletasFalso(
+        validacion: const ValidacionMaterial(
+          disponible: 3,
+          cantidadSugerida: 3,
+          stockSuficiente: false,
+          excedePeriodicidad: false,
+          excedeLimite: false,
+        ),
+      );
+
+      await expectLater(
+        validar(boletas, cantidad: 5),
+        throwsA(isA<ErrorNegocio>()
+            .having((e) => e.codigo, 'codigo', 'STOCK_INSUFICIENTE')
+            .having((e) => e.mensaje, 'mensaje', contains('hay 3 L'))),
+      );
+    });
+
+    test('periodicidad no cumplida devuelve la alerta con fechas en Hermosillo', () async {
+      final boletas = BoletasFalso(
+        validacion: const ValidacionMaterial(
+          disponible: 16,
+          stockSuficiente: true,
+          excedePeriodicidad: true,
+          excedeLimite: false,
+          ultimaEntrega: '2026-10-17T15:57:00Z',
+          proximaEntrega: '2026-10-20T15:57:00Z',
+          diasFaltantes: 2,
+          limiteCantidad: 0.5,
+          limiteCadaDias: 3,
+        ),
+      );
+
+      final alerta = (await validar(boletas))!;
+
+      expect(alerta.tipo, TipoAlerta.periodicidad);
+      expect(alerta.regla, '0.5 L cada 3 días');
+      expect(alerta.ultimaEntrega, '08:57 a.m. 17/10/2026');
+      expect(alerta.proximaEntrega, '20/10/2026');
+      expect(alerta.diasFaltantes, 2);
+    });
+
+    test('límite de la zona devuelve lo entregado y lo solicitado', () async {
+      final boletas = BoletasFalso(
+        validacion: const ValidacionMaterial(
+          disponible: 16,
+          stockSuficiente: true,
+          excedePeriodicidad: false,
+          excedeLimite: true,
+          limiteCantidad: 3,
+          limiteCadaDias: 7,
+          entregadoPeriodo: 1,
+        ),
+      );
+
+      final alerta = (await validar(boletas))!;
+
+      expect(alerta.tipo, TipoAlerta.limiteZona);
+      expect(alerta.regla, 'Máximo 3 L cada 7 días');
+      expect(alerta.entregado, '1 L');
+      expect(alerta.solicitado, '2 L');
+    });
+  });
+
+  group('registrarEntrega', () {
+    final firma = Uint8List.fromList([1, 2, 3]);
+    SolicitudEntrega solicitud({
+      List<ItemActivo> activos = const [],
+      Autorizacion? autorizacion,
+    }) =>
+        SolicitudEntrega(
+          nombreSinRegistro: 'Rosa Molina',
+          unidadSinRegistro: 'Navojoa',
+          numeroSolicitud: ' OT-9981 ',
+          autorizoNombre: 'Leonel Lares',
+          materiales: [
+            ItemMaterial(
+              material: aMaterialCatalogo(pinol),
+              cantidad: 2,
+              unidad: 'L',
+              comentario: 'Baño 2',
+              autorizacion: autorizacion,
+            ),
+          ],
+          activos: activos,
+          firmaEntrega: firma,
+          firmaRecibe: firma,
+        );
+
+    test('sube las dos firmas, crea la boleta y arma el resumen', () async {
+      final boletas = BoletasFalso();
+
+      final resumen = await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud());
+
+      expect(boletas.firmas, containsAll([TipoFirma.recibe, TipoFirma.entrega]));
+      expect(boletas.cuerpoCreado, {
+        'materiales': [
+          {'productoId': 1, 'cantidad': 2.0, 'comentario': 'Baño 2'},
+        ],
+        'solicitanteNombre': 'Rosa Molina',
+        'solicitanteUnidad': 'Navojoa',
+        'numeroSolicitud': 'OT-9981',
+        'autorizoNombre': 'Leonel Lares',
+        'firmaRecibe': '2/firma-recibe.png',
+        'firmaEntrega': '2/firma-entrega.png',
+      });
+      expect(resumen.folio, 'BOL-2026-000007');
+      expect(resumen.recibidoPor, 'Rosa Molina');
+      expect(resumen.entregadoPor, 'Alicia García');
+      expect(resumen.fechaHora, '08:57 a.m. 17/10/2026');
+      expect(resumen.materiales.single.detalle, '2 L');
+    });
+
+    test('si falla leer la fecha, la boleta creada no se reporta como error', () async {
+      final boletas = BoletasFalso(errorAlLeerFecha: Exception('timeout'));
+
+      final resumen = await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud());
+
+      expect(resumen.folio, 'BOL-2026-000007');
+      expect(resumen.fechaHora, isNotEmpty);
+    });
+
+    test('manda la cantidad redondeada a 3 decimales', () async {
+      final boletas = BoletasFalso();
+      final s = solicitud();
+      final conSuma = SolicitudEntrega(
+        nombreSinRegistro: s.nombreSinRegistro,
+        unidadSinRegistro: s.unidadSinRegistro,
+        materiales: [s.materiales.single.copyWith(cantidad: 0.1 + 0.2)],
+        activos: const [],
+        firmaEntrega: firma,
+        firmaRecibe: firma,
+      );
+
+      await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(conSuma);
+
+      expect((boletas.cuerpoCreado!['materiales'] as List).single['cantidad'], 0.3);
+    });
+
+    SolicitudEntrega deJuan({List<ItemActivo> activos = const []}) => SolicitudEntrega(
+          solicitanteId: '1',
+          solicitante: aSolicitante(juanPerez),
+          materiales: solicitud().materiales,
+          activos: activos,
+          firmaEntrega: firma,
+          firmaRecibe: firma,
+        );
+
+    test('un trabajador registrado se manda con su id y su zona, sin nombre ni unidad', () async {
+      final boletas = BoletasFalso();
+
+      final resumen =
+          await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(deJuan());
+
+      expect(boletas.cuerpoCreado!['trabajadorId'], 1);
+      expect(boletas.cuerpoCreado!['zonaId'], 7);
+      expect(boletas.cuerpoCreado!.containsKey('solicitanteNombre'), isFalse);
+      expect(boletas.cuerpoCreado!.containsKey('solicitanteUnidad'), isFalse);
+      expect(resumen.recibidoPor, 'Juan Pérez Soto');
+      expect(resumen.area, 'Servicios Generales');
+    });
+
+    test('manda el motivo de la excepción y el supervisor elegido', () async {
+      final boletas = BoletasFalso();
+      const uuid = '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f';
+
+      await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud(
+        autorizacion: const Autorizacion(
+            autorizadorId: uuid, autorizadorNombre: 'Leonel', motivo: 'Otro', detalleOtro: 'Fuga'),
+      ));
+
+      expect((boletas.cuerpoCreado!['materiales'] as List).single['motivoExcepcion'], 'Otro: Fuga');
+      expect(boletas.cuerpoCreado!['supervisorId'], uuid);
+    });
+
+    test('las herramientas se mandan con su id y días, y salen en el resumen', () async {
+      final boletas = BoletasFalso();
+      final activo = aActivoCatalogo(taladro);
+
+      final resumen = await crearApi(ProductosFalso(), boletas: boletas)
+          .registrarEntrega(deJuan(activos: [ItemActivo(activo: activo, dias: 3)]));
+
+      expect(boletas.cuerpoCreado!['herramientas'], [
+        {'activoId': 3, 'diasPrestamo': 3},
+      ]);
+      expect(resumen.activos.single.codigo, 'TAL-001');
+      expect(resumen.activos.single.extra, 'SN-TAL-001');
+    });
+
+    test('una herramienta sin id del servidor se rechaza antes de subir las firmas', () async {
+      final boletas = BoletasFalso();
+      const activo = ActivoCatalogo(
+          codigo: '912391', equipo: 'Rotomartillo', modelo: 'GBH', serie: 'K1', almacen: '', ubicacion: '');
+
+      await expectLater(
+        crearApi(ProductosFalso(), boletas: boletas)
+            .registrarEntrega(deJuan(activos: [const ItemActivo(activo: activo)])),
+        throwsA(isA<ErrorNegocio>().having((e) => e.codigo, 'codigo', 'ACTIVO_NO_ENCONTRADO')),
+      );
+      expect(boletas.firmas, isEmpty);
+    });
+
+    test('una boleta pendiente de autorización regresa su folio marcado como pendiente', () async {
+      final boletas = BoletasFalso(
+        creada: const BoletaCreada(boletaId: 8, folio: 'BOL-2026-000008', estado: 'PENDIENTE_AUTORIZACION'),
+      );
+
+      final resumen =
+          await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud());
+
+      expect(resumen.folio, 'BOL-2026-000008');
+      expect(resumen.autorizacionPendiente, isTrue);
+      expect(resumen.fechaHora, 'Pendiente de autorización');
+    });
+
+    test('los errores del servidor salen tal cual', () async {
+      final boletas = BoletasFalso(
+        errorAlCrear: const ErrorNegocio('STOCK_INSUFICIENTE', 'Limpiador: solicitado 2, disponible 1.'),
+      );
+
+      await expectLater(
+        crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud()),
+        throwsA(isA<ErrorNegocio>().having((e) => e.codigo, 'codigo', 'STOCK_INSUFICIENTE')),
+      );
+    });
   });
 }

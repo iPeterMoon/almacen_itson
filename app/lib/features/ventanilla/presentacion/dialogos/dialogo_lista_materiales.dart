@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
+import '../../../../core/errores/error_negocio.dart';
 import '../entrega_controlador.dart';
+import 'dialogo_autorizacion.dart';
 
 Future<void> mostrarDialogoListaMateriales(BuildContext context) =>
     showDialog<void>(context: context, builder: (_) => const DialogoListaMateriales());
@@ -61,6 +63,30 @@ class DialogoListaMateriales extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+// Al subir la cantidad el servidor vuelve a validar: si ahora rompe la periodicidad
+// o el límite de la zona se piden motivo y autorización, como al agregar.
+Future<void> _cambiarCantidad(
+    BuildContext context, EntregaController c, ItemMaterial item, double cantidad) async {
+  final mensajero = ScaffoldMessenger.of(context);
+  try {
+    final alerta = await c.cambiarCantidad(item.material.codigo, cantidad);
+    if (alerta == null || !context.mounted) return;
+    final autorizacion = await showDialog<Autorizacion>(
+      context: context,
+      builder: (_) => DialogoAutorizacion(
+          material: item.material, cantidad: cantidad, unidad: item.unidad, alerta: alerta),
+    );
+    if (autorizacion != null) {
+      c.cambiarCantidadAutorizada(item.material.codigo, cantidad, autorizacion);
+    }
+  } on ErrorNegocio catch (e) {
+    mensajero.showSnackBar(SnackBar(content: Text(e.mensaje)));
+  } catch (_) {
+    mensajero.showSnackBar(
+        const SnackBar(content: Text('No se pudo conectar con el servidor.')));
   }
 }
 
@@ -121,8 +147,8 @@ class _FilaMaterial extends StatelessWidget {
           ),
           _Cantidad(
             texto: formatearCantidad(item.cantidad),
-            onMenos: () => c.cambiarCantidad(m.codigo, item.cantidad - 1),
-            onMas: () => c.cambiarCantidad(m.codigo, item.cantidad + 1),
+            onMenos: () => _cambiarCantidad(context, c, item, item.cantidad - 1),
+            onMas: () => _cambiarCantidad(context, c, item, item.cantidad + 1),
           ),
           SizedBox(
             width: 150,

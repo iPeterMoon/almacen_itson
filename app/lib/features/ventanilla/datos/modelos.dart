@@ -6,6 +6,10 @@ import 'dart:typed_data';
 
 String formatearCantidad(double c) => c % 1 == 0 ? c.toInt().toString() : c.toString();
 
+// Redondea a 3 decimales, los que acepta el servidor. Sumar doubles deja restos
+// (0.1 + 0.2 = 0.30000000000000004) que el servidor rechazaría con un 400.
+double redondearCantidad(double c) => (c * 1000).roundToDouble() / 1000;
+
 class Solicitante {
   const Solicitante({
     required this.id,
@@ -15,9 +19,14 @@ class Solicitante {
     required this.zona,
     this.areaTrabajo,
     this.areaTrabajo2,
+    this.zonaId,
   });
 
+  // Id del trabajador en el servidor, como texto (el simulado usa "1", "2"...).
   final String id;
+  // Zona de la entrega cuando el trabajador tiene solo una; con varias, la base
+  // necesita que se elija y por ahora se deja en null.
+  final int? zonaId;
   final String nombre;
   final String dependencia;
   final String tipo;
@@ -58,8 +67,12 @@ class MaterialCatalogo {
     required this.unidadBase,
     required this.unidades,
     this.esComun = false,
+    this.productoId,
   });
 
+  // Id del producto en el servidor. Solo lo traen los materiales de la API; el
+  // repositorio simulado no lo usa.
+  final int? productoId;
   final String codigo;
   final String concepto;
   final String alias;
@@ -97,8 +110,11 @@ class ActivoCatalogo {
     required this.serie,
     required this.almacen,
     required this.ubicacion,
+    this.activoId,
   });
 
+  // Id del activo en el servidor; el repositorio simulado no lo usa.
+  final int? activoId;
   final String codigo;
   final String equipo;
   final String modelo;
@@ -171,14 +187,20 @@ class ItemMaterial {
 
   String get cantidadTexto => '${formatearCantidad(cantidad)} $unidad';
 
-  ItemMaterial copyWith({double? cantidad, String? unidad, bool? entregado, String? comentario}) =>
+  ItemMaterial copyWith({
+    double? cantidad,
+    String? unidad,
+    bool? entregado,
+    String? comentario,
+    Autorizacion? autorizacion,
+  }) =>
       ItemMaterial(
         material: material,
         cantidad: cantidad ?? this.cantidad,
         unidad: unidad ?? this.unidad,
         entregado: entregado ?? this.entregado,
         comentario: comentario ?? this.comentario,
-        autorizacion: autorizacion,
+        autorizacion: autorizacion ?? this.autorizacion,
       );
 
   Map<String, dynamic> toJson() => {
@@ -221,9 +243,11 @@ class ItemActivo {
 class SolicitudEntrega {
   const SolicitudEntrega({
     this.solicitanteId,
+    this.solicitante,
     this.nombreSinRegistro,
     this.unidadSinRegistro,
     this.autorizoId,
+    this.autorizoNombre,
     this.numeroSolicitud,
     required this.materiales,
     required this.activos,
@@ -232,9 +256,13 @@ class SolicitudEntrega {
   });
 
   final String? solicitanteId;
+  // El solicitante registrado completo (nombre y dependencia para el resumen).
+  final Solicitante? solicitante;
   final String? nombreSinRegistro;
   final String? unidadSinRegistro;
   final String? autorizoId;
+  // Nombre de quien autorizó (campo "Autorizó (Opcional)"); el servidor guarda el nombre.
+  final String? autorizoNombre;
   final String? numeroSolicitud;
   final List<ItemMaterial> materiales;
   final List<ItemActivo> activos;
@@ -275,8 +303,12 @@ class ResumenEntrega {
     required this.entregadoPor,
     required this.materiales,
     required this.activos,
+    this.autorizacionPendiente = false,
   });
 
+  // true si algún material excedió periodicidad o límite: la boleta quedó
+  // registrada con su folio pero el material no ha salido hasta que la autoricen.
+  final bool autorizacionPendiente;
   final String folio;
   final String recibidoPor;
   final String area;

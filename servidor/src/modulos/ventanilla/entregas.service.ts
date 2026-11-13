@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { rangoDePagina } from '../../comun/dto/paginacion.dto';
 import { parsearErrorBase } from '../../comun/errores/error-negocio';
 import { SupabaseService } from '../../supabase/supabase.service';
 import type { Database } from '../../supabase/tipos-base';
@@ -36,7 +37,7 @@ export class EntregasService {
     const { data, error, count } = await consulta
       .order('entregado_en', { ascending: false })
       .order('boleta_material_id', { ascending: false })
-      .range((pagina - 1) * limite, pagina * limite - 1);
+      .range(...rangoDePagina(pagina, limite));
 
     if (error) throw parsearErrorBase(error.message) ?? new Error(error.message);
 

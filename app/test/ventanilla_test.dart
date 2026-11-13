@@ -99,4 +99,82 @@ void main() {
       expect(contenedor.read(entregaControllerProvider).materiales.first.cantidad, 1);
     });
   });
+
+  group('Revalidación de materiales', () {
+    test('las cantidades se redondean a 3 decimales al sumar', () async {
+      final contenedor = ProviderContainer();
+      addTearDown(contenedor.dispose);
+      final c = contenedor.read(entregaControllerProvider.notifier);
+      final m = (await VentanillaRepositorioSimulado().buscarMateriales(consulta: 'Guantes')).items.first;
+
+      await c.agregarMaterial(material: m, cantidad: 0.1, unidad: 'Piezas');
+      await c.agregarMaterial(material: m, cantidad: 0.2, unidad: 'Piezas');
+
+      expect(contenedor.read(entregaControllerProvider).materiales.first.cantidad, 0.3);
+    });
+
+    test('subir la cantidad por encima del límite pide autorización y no la cambia', () async {
+      final repo = _RepoConLimite(limite: 2);
+      final contenedor = ProviderContainer(
+          overrides: [ventanillaRepositorioProvider.overrideWithValue(repo)]);
+      addTearDown(contenedor.dispose);
+      final c = contenedor.read(entregaControllerProvider.notifier);
+      final m = (await repo.buscarMateriales(consulta: 'Guantes')).items.first;
+      await c.agregarMaterial(material: m, cantidad: 2, unidad: 'Piezas');
+
+      expect(await c.cambiarCantidad(m.codigo, 3), isNotNull);
+      expect(contenedor.read(entregaControllerProvider).materiales.first.cantidad, 2);
+
+      c.cambiarCantidadAutorizada(m.codigo, 3, _autorizacion);
+      final item = contenedor.read(entregaControllerProvider).materiales.first;
+      expect(item.cantidad, 3);
+      expect(item.autorizacion, isNotNull);
+
+      // Bajar la cantidad no consulta al servidor.
+      final llamadas = repo.validaciones;
+      expect(await c.cambiarCantidad(m.codigo, 1), isNull);
+      expect(repo.validaciones, llamadas);
+    });
+
+    test('al cambiar de solicitante devuelve los materiales que ahora necesitan autorización',
+        () async {
+      final repo = _RepoConLimite(limite: 5);
+      final contenedor = ProviderContainer(
+          overrides: [ventanillaRepositorioProvider.overrideWithValue(repo)]);
+      addTearDown(contenedor.dispose);
+      final c = contenedor.read(entregaControllerProvider.notifier);
+      final m = (await repo.buscarMateriales(consulta: 'Guantes')).items.first;
+      await c.agregarMaterial(material: m, cantidad: 3, unidad: 'Piezas');
+
+      expect(await c.revalidarMateriales(), isEmpty);
+      repo.limite = 2; // otro solicitante con un límite menor
+      final pendientes = await c.revalidarMateriales();
+      expect(pendientes.single.$1.material.codigo, m.codigo);
+
+      c.autorizarMaterial(m.codigo, _autorizacion);
+      expect(await c.revalidarMateriales(), isEmpty);
+    });
+  });
+}
+
+const _autorizacion =
+    Autorizacion(autorizadorId: 'a1', autorizadorNombre: 'Leonel Lares', motivo: 'Evento');
+
+// Simulado que pide autorización cuando la cantidad pasa de [limite].
+class _RepoConLimite extends VentanillaRepositorioSimulado {
+  _RepoConLimite({required this.limite});
+  double limite;
+  int validaciones = 0;
+
+  @override
+  Future<AlertaRestriccion?> validarMaterial({
+    Solicitante? solicitante,
+    required MaterialCatalogo material,
+    required double cantidad,
+    required String unidad,
+  }) async {
+    validaciones++;
+    if (cantidad <= limite) return null;
+    return const AlertaRestriccion(tipo: TipoAlerta.limiteZona, titulo: 'Límite', regla: 'Máximo');
+  }
 }

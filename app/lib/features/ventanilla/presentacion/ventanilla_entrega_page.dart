@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/errores/error_negocio.dart';
+import '../datos/modelos.dart';
+import 'dialogos/dialogo_autorizacion.dart';
 import 'dialogos/dialogo_stock_y_resumen.dart';
 import 'entrega_controlador.dart';
 import 'widgets/indicador_pasos.dart';
@@ -24,6 +27,48 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
     super.initState();
     // Cada vez que se abre la pantalla se empieza una boleta limpia.
     Future.microtask(() => ref.read(entregaControllerProvider.notifier).reiniciar());
+  }
+
+  bool _revalidando = false;
+
+  // Al salir del paso 1 con materiales ya agregados (se regresó a cambiar el
+  // solicitante) se vuelven a validar con el nuevo solicitante. Los que ahora
+  // rompen una regla piden motivo y autorización; si se cancela, se quitan.
+  Future<void> _siguiente() async {
+    final c = ref.read(entregaControllerProvider.notifier);
+    final e = ref.read(entregaControllerProvider);
+    if (e.paso != 0 || e.materiales.isEmpty) {
+      c.avanzar();
+      return;
+    }
+    final mensajero = ScaffoldMessenger.of(context);
+    setState(() => _revalidando = true);
+    try {
+      final pendientes = await c.revalidarMateriales();
+      for (final (item, alerta) in pendientes) {
+        if (!mounted) return;
+        final autorizacion = await showDialog<Autorizacion>(
+          context: context,
+          builder: (_) => DialogoAutorizacion(
+              material: item.material, cantidad: item.cantidad, unidad: item.unidad, alerta: alerta),
+        );
+        if (autorizacion != null) {
+          c.autorizarMaterial(item.material.codigo, autorizacion);
+        } else {
+          c.quitarMaterial(item.material.codigo);
+          mensajero.showSnackBar(SnackBar(
+              content: Text('Se quitó ${item.material.concepto}: requiere autorización.')));
+        }
+      }
+      c.avanzar();
+    } on ErrorNegocio catch (err) {
+      mensajero.showSnackBar(SnackBar(content: Text(err.mensaje)));
+    } catch (_) {
+      mensajero.showSnackBar(
+          const SnackBar(content: Text('No se pudo conectar con el servidor.')));
+    } finally {
+      if (mounted) setState(() => _revalidando = false);
+    }
   }
 
   void _salir() {
@@ -97,7 +142,7 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
                       ),
                       if (e.paso < 3)
                         FilledButton(
-                          onPressed: e.puedeAvanzar() ? c.avanzar : null,
+                          onPressed: e.puedeAvanzar() && !_revalidando ? _siguiente : null,
                           child: const Text('Siguiente'),
                         )
                       else
