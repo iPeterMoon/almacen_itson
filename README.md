@@ -84,26 +84,73 @@ El archivo se versiona en Git y no se edita a mano. Regénéralo después de cad
    flutter run                # sin API_URL usa datos simulados
    ```
 
+## Configurar la base de datos local
+
+La base de desarrollo corre en Docker con Supabase CLI. Desde la raíz del repo:
+
+```bash
+npx supabase start      # levanta PostgreSQL 17, API, Studio y storage
+npx supabase db reset   # aplica las migraciones y carga los datos de desarrollo
+```
+
+`db reset` ejecuta `supabase/seed.sql` y `supabase/seed_desarrollo.sql` (ver `[db.seed]` en
+`supabase/config.toml`). Para agregar el escenario de entrega en ventanilla, corre además
+`supabase/seeds/entrega_demo.sql` (ver [Datos de ejemplo para ventanilla](#datos-de-ejemplo-para-ventanilla)).
+
+Servicios locales:
+
+| Servicio     | URL / conexión                                              |
+| ------------ | ----------------------------------------------------------- |
+| API Supabase | `http://127.0.0.1:54321`                                    |
+| PostgreSQL   | `postgresql://postgres:postgres@127.0.0.1:54322/postgres`   |
+| Studio       | `http://127.0.0.1:54323`                                    |
+
+Copia las claves al servidor:
+
+```bash
+npx supabase status -o env    # muestra PUBLISHABLE_KEY y SECRET_KEY
+```
+
+En `servidor/.env`:
+
+```env
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=<PUBLISHABLE_KEY>
+```
+
+Para detener los servicios usa `npx supabase stop`; para reiniciar la base desde cero,
+`npx supabase db reset`.
+
 ## Probar la app con la API en local
 
 Requisitos: Docker Desktop abierto, un emulador Android encendido (ver [INSTALACION.md](INSTALACION.md),
 paso 3) y **Git Bash** (los comandos de abajo no funcionan en PowerShell). Abre las terminales en la raíz del repo.
-
-```bash
-npx supabase start
-npx supabase db reset        # borra tu base local y carga usuario y productos de prueba
-```
-
-En `servidor/.env`: `SUPABASE_URL=http://127.0.0.1:54321` y `SUPABASE_ANON_KEY` = el valor de
-`PUBLISHABLE_KEY` (empieza con `sb_publishable_`) de `npx supabase status -o env`.
+Configura primero la base local (ver [Configurar la base de datos local](#configurar-la-base-de-datos-local)).
 
 ```bash
 cd servidor && npm run start:dev    # terminal 1
-cd app && flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1 --dart-define=API_TOKEN=$(bash ../scripts/token-dev.sh)   # terminal 2
+cd app && flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1   # terminal 2
 ```
 
 La primera compilación de Android puede tardar 10 minutos o más; el aviso "SDK XML version 4" no es
-un error. El token vence en 1 hora; si vence, vuelve a correr `flutter run`.
+un error. Inicia sesión con `almacen.nainari@itson.mx` / `demo1234`.
+
+## Datos de ejemplo para ventanilla
+
+`supabase/seeds/entrega_demo.sql` carga un escenario completo para probar la entrega de
+material (HU6) contra la base local: un almacenista y un supervisor con acceso a la app,
+cuatro materiales con existencia, tres trabajadores, dos zonas con su límite y periodicidad,
+y firmas de ejemplo en el bucket. Es idempotente (se puede correr varias veces).
+
+```bash
+# Supabase local (npx supabase start): la base queda en el puerto 54322
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+     -v ON_ERROR_STOP=1 -f supabase/seeds/entrega_demo.sql
+```
+
+Los usuarios demo son `almacen.nainari@itson.mx` y `supervisor.nainari@itson.mx`
+(contraseña `demo1234`). El encabezado del archivo explica cómo simular la entrega desde
+`psql`.
 
 ## Pruebas de la base de datos
 
