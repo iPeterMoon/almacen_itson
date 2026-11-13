@@ -17,6 +17,9 @@ const String urlApiCompilada = String.fromEnvironment('API_URL');
 List<Override> proveedoresSegunEntorno({String urlApi = urlApiCompilada}) {
   return [
     proveedorObtenerToken.overrideWith((ref) => ref.watch(proveedorTokenSesion)),
+    proveedorAlPerderSesion.overrideWith(
+      (ref) => () => ref.read(controladorSesionProvider.notifier).cerrarSesion(),
+    ),
     if (urlApi.trim().isNotEmpty)
       ventanillaRepositorioProvider.overrideWith((ref) => ref.watch(ventanillaRepositorioApiProvider)),
   ];

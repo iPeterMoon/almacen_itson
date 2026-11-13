@@ -6,12 +6,16 @@ import '../config/configuracion_api.dart';
 // Devuelve el token de sesión actual, o null si no hay sesión.
 typedef ObtenerToken = Future<String?> Function();
 
+// Se llama cuando el servidor rechaza el token (401): la sesión ya no sirve.
+typedef AlPerderSesion = void Function();
+
 // Cliente HTTP único de la app. Agrega "Authorization: Bearer <token>" a cada
 // petición cuando hay sesión. La app solo habla con el servidor NestJS, nunca
 // con Supabase. [adaptador] solo se pasa en las pruebas, para no salir a la red.
 Dio crearClienteApi({
   required String urlBase,
   required ObtenerToken obtenerToken,
+  AlPerderSesion? alPerderSesion,
   HttpClientAdapter? adaptador,
 }) {
   final dio = Dio(
@@ -33,20 +37,28 @@ Dio crearClienteApi({
         }
         handler.next(opciones);
       },
+      onError: (error, handler) {
+        if (error.response?.statusCode == 401) alPerderSesion?.call();
+        handler.next(error);
+      },
     ),
   );
   return dio;
 }
 
-// Supuesto: todavía no existe el inicio de sesión. Mientras tanto no hay token y
-// el servidor responde 401. La funcionalidad de autenticación sobrescribirá este
-// proveedor con uno que lea el token guardado (y lo renueve al vencer).
+// Token por defecto: sin sesión no se manda la cabecera. arranque.dart lo
+// reemplaza por el token de la sesión guardada (y lo renueva al vencer).
 final proveedorObtenerToken = Provider<ObtenerToken>((ref) => () async => null);
+
+// La app sobrescribe este proveedor para cerrar la sesión cuando el API
+// responde 401. En pruebas o sin sesión no hace nada.
+final proveedorAlPerderSesion = Provider<AlPerderSesion>((ref) => () {});
 
 final proveedorClienteApi = Provider<Dio>((ref) {
   final dio = crearClienteApi(
     urlBase: ref.watch(proveedorUrlApi),
     obtenerToken: ref.watch(proveedorObtenerToken),
+    alPerderSesion: () => ref.read(proveedorAlPerderSesion)(),
   );
   ref.onDispose(dio.close);
   return dio;

@@ -54,7 +54,8 @@ final proveedorRouter = Provider<GoRouter>((ref) {
       final sesion = ref.read(controladorSesionProvider);
       final enLogin = state.matchedLocation == '/login';
 
-      // Mientras se lee la sesión guardada no se expulsa al usuario.
+      // Mientras se lee la sesión guardada se mantiene el login; cuando
+      // termina, esta misma redirección decide si entra o se queda ahí.
       if (sesion.isLoading) return enLogin ? null : '/login';
 
       final autenticado = sesion.value != null;

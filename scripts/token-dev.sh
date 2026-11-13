@@ -1,12 +1,11 @@
 #!/bin/bash
-# Imprime un token de sesión del usuario de prueba de Supabase LOCAL, para correr la
-# app contra la API mientras no exista el inicio de sesión (Épica 6). Solo funciona
-# con la base local: el usuario lo crea supabase/seed_desarrollo.sql.
+# Imprime un token de sesión del usuario de prueba de Supabase LOCAL. Sirve solo
+# para probar la API directamente (curl o Swagger); la app ya no lo usa porque
+# tiene su propia pantalla de login. Solo funciona con la base local: el usuario
+# lo crea supabase/seed_desarrollo.sql.
 #
 # Uso (desde cualquier carpeta, en Git Bash / Linux / macOS):
 #   bash scripts/token-dev.sh
-#   cd app && flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1 \
-#     --dart-define=API_TOKEN=$(bash ../scripts/token-dev.sh)
 #
 # Otro usuario local: TOKEN_EMAIL=... TOKEN_PASSWORD=... bash scripts/token-dev.sh
 # Solo el token sale por la salida estándar; los avisos van a la salida de errores.
