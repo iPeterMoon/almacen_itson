@@ -10,10 +10,12 @@ import '../../catalogo_inventario/datos/producto_resumen_test.dart' show filaPin
 
 // Repositorio de productos falso: registra cada búsqueda y responde lo indicado.
 class ProductosFalso implements ProductosRepository {
-  ProductosFalso({this.productos = const [], this.error});
+  ProductosFalso({this.productos = const [], this.error, this.total});
 
   final List<ProductoResumen> productos;
   final ErrorNegocio? error;
+  // Total que responde el servidor falso; si no se indica, los productos recibidos.
+  final int? total;
   final llamadas = <({String? texto, int? pagina, int? limite})>[];
   // Filtros de la última búsqueda (AI-62).
   ({int? categoriaId, String? tipo, int? almacenId, bool soloMasComunes})? ultimosFiltros;
@@ -36,7 +38,12 @@ class ProductosFalso implements ProductosRepository {
       soloMasComunes: soloMasComunes,
     );
     if (error != null) throw error!;
-    return ResultadoBusquedaProductos(datos: productos, pagina: pagina ?? 1, limite: limite ?? 8);
+    return ResultadoBusquedaProductos(
+      datos: productos,
+      total: total ?? productos.length,
+      pagina: pagina ?? 1,
+      limite: limite ?? 8,
+    );
   }
 }
 
@@ -170,14 +177,33 @@ void main() {
       expect(pagina.totalPaginas, 1);
     });
 
-    test('el total cuenta solo lo recibido, sin ofrecer otra página (AI-63)', () async {
+    test('usa el total del servidor para calcular las páginas (AI-63)', () async {
       final ocho = List.filled(8, pinol);
 
-      final pagina = await crearApi(ProductosFalso(productos: ocho))
-          .buscarMateriales(consulta: 'cd', pagina: 1, porPagina: 8);
+      final pagina = await crearApi(ProductosFalso(productos: ocho, total: 12))
+          .buscarMateriales(pagina: 1, porPagina: 8);
 
-      expect(pagina.total, 8);
-      expect(pagina.totalPaginas, 1);
+      expect(pagina.items, hasLength(8));
+      expect(pagina.total, 12);
+      expect(pagina.totalPaginas, 2);
+    });
+
+    test('pide la página indicada con el tamaño de página de la tabla (AI-63)', () async {
+      final productos = ProductosFalso(productos: [pinol], total: 9);
+
+      final pagina = await crearApi(productos).buscarMateriales(pagina: 2, porPagina: 8);
+
+      expect(productos.llamadas.single, (texto: '', pagina: 2, limite: 8));
+      expect(pagina.pagina, 2);
+      expect(pagina.items, hasLength(1));
+      expect(pagina.total, 9);
+    });
+
+    test('una página vacía por cambios de datos trae total 0', () async {
+      final pagina = await crearApi(ProductosFalso(total: 0)).buscarMateriales(pagina: 3, porPagina: 8);
+
+      expect(pagina.items, isEmpty);
+      expect(pagina.total, 0);
     });
 
     test('deja pasar el ErrorNegocio del servidor para que la pantalla lo muestre', () async {

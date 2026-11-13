@@ -112,26 +112,32 @@ class ProductoResumen {
       };
 }
 
-// Una página de resultados de la búsqueda. El servidor todavía no manda el total
-// de coincidencias; se agregará con la paginación (AI-63).
+// Una página de resultados de la búsqueda. [total] es cuántos productos cumplen la
+// búsqueda en todas las páginas (AI-63); con él se calcula cuántas páginas hay.
 class ResultadoBusquedaProductos {
   const ResultadoBusquedaProductos({
     required this.datos,
+    required this.total,
     required this.pagina,
     required this.limite,
   });
 
   final List<ProductoResumen> datos;
+  final int total;
   final int pagina;
   final int limite;
 
   bool get vacio => datos.isEmpty;
 
+  // Si una respuesta no trae "total" (servidor anterior a AI-63), se usa lo recibido
+  // en esta página para no mostrar páginas que no existen.
   factory ResultadoBusquedaProductos.fromJson(Map<String, dynamic> json) {
+    final datos = (json['datos'] as List<dynamic>)
+        .map((fila) => ProductoResumen.fromJson(fila as Map<String, dynamic>))
+        .toList(growable: false);
     return ResultadoBusquedaProductos(
-      datos: (json['datos'] as List<dynamic>)
-          .map((fila) => ProductoResumen.fromJson(fila as Map<String, dynamic>))
-          .toList(growable: false),
+      datos: datos,
+      total: (json['total'] as num?)?.toInt() ?? datos.length,
       pagina: json['pagina'] as int,
       limite: json['limite'] as int,
     );

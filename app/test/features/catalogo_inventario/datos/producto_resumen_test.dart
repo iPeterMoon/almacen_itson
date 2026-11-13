@@ -103,15 +103,27 @@ void main() {
     test('lee la página con sus productos', () {
       final resultado = ResultadoBusquedaProductos.fromJson({
         'datos': [filaPinol],
+        'total': 12,
         'pagina': 1,
         'limite': 8,
       });
 
+      expect(resultado.total, 12);
       expect(resultado.datos.single.codigo, 'CD-123');
       expect(resultado.datos.single.ubicaciones, hasLength(2));
       expect(resultado.pagina, 1);
       expect(resultado.limite, 8);
       expect(resultado.vacio, isFalse);
+    });
+
+    test('sin "total" en la respuesta usa lo recibido en la página', () {
+      final resultado = ResultadoBusquedaProductos.fromJson({
+        'datos': [filaPinol],
+        'pagina': 1,
+        'limite': 8,
+      });
+
+      expect(resultado.total, 1);
     });
 
     test('una lista vacía significa que no hay coincidencias', () {

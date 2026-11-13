@@ -64,12 +64,11 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
       limite: porPagina,
     );
     final items = resultado.datos.map(aMaterialCatalogo).toList(growable: false);
-    // TEMPORAL (AI-63): el servidor todavía no manda el total de coincidencias, así
-    // que se cuenta solo lo recibido hasta esta página y el paginador no ofrece
-    // una página siguiente.
+    // El total viene del servidor (AI-63): cuántos materiales cumplen el texto y los
+    // filtros en todas las páginas. Con él el paginador de Denise calcula las páginas.
     return Pagina(
       items: items,
-      total: (pagina - 1) * porPagina + items.length,
+      total: resultado.total,
       pagina: pagina,
       porPagina: porPagina,
     );
