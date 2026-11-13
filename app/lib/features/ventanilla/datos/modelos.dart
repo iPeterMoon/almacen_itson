@@ -58,8 +58,12 @@ class MaterialCatalogo {
     required this.unidadBase,
     required this.unidades,
     this.esComun = false,
+    this.productoId,
   });
 
+  // Id del producto en el servidor. Solo lo traen los materiales de la API; el
+  // repositorio simulado no lo usa.
+  final int? productoId;
   final String codigo;
   final String concepto;
   final String alias;
@@ -221,9 +225,11 @@ class ItemActivo {
 class SolicitudEntrega {
   const SolicitudEntrega({
     this.solicitanteId,
+    this.solicitante,
     this.nombreSinRegistro,
     this.unidadSinRegistro,
     this.autorizoId,
+    this.autorizoNombre,
     this.numeroSolicitud,
     required this.materiales,
     required this.activos,
@@ -232,9 +238,13 @@ class SolicitudEntrega {
   });
 
   final String? solicitanteId;
+  // El solicitante registrado completo (nombre y dependencia para el resumen).
+  final Solicitante? solicitante;
   final String? nombreSinRegistro;
   final String? unidadSinRegistro;
   final String? autorizoId;
+  // Nombre de quien autorizó (campo "Autorizó (Opcional)"); el servidor guarda el nombre.
+  final String? autorizoNombre;
   final String? numeroSolicitud;
   final List<ItemMaterial> materiales;
   final List<ItemActivo> activos;

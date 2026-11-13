@@ -1,30 +1,40 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errores/error_negocio.dart';
+import '../../autenticacion/presentacion/sesion_controlador.dart';
 import '../../catalogo_inventario/datos/catalogos.dart';
 import '../../catalogo_inventario/datos/catalogos_repository.dart';
 import '../../catalogo_inventario/datos/producto_resumen.dart';
 import '../../catalogo_inventario/datos/productos_repository.dart';
+import 'boletas_repositorio.dart';
 import 'modelos.dart';
 import 'ventanilla_repositorio.dart';
 
 // Mínimo de caracteres para buscar materiales; es el mismo que valida el servidor.
 const minimoCaracteresBusqueda = 2;
 
-// Implementación de VentanillaRepositorio que usa la API real donde ya existe.
-// AI-30 y AI-62: buscarMateriales va a GET /catalogo/productos y opcionesFiltros a
-// GET /catalogo/categorias y /catalogo/almacenes. El resto de los métodos sigue en
-// la implementación simulada de Denise porque sus endpoints todavía no existen
-// (solicitantes, autorizadores, activos, validación y entrega); cada tarea los irá
-// pasando a la API.
+// Implementación de VentanillaRepositorio que usa la API real donde ya existe:
+// - buscarMateriales: GET /catalogo/productos (AI-30, AI-62).
+// - opcionesFiltros: GET /catalogo/categorias y /catalogo/almacenes.
+// - validarMaterial: POST /boletas/validar-material.
+// - registrarEntrega: POST /boletas/firmas, POST /boletas y GET /boletas/:id.
+// Solicitantes, autorizadores y activos siguen en la implementación simulada de
+// Denise porque el servidor todavía no tiene esos endpoints.
 class VentanillaRepositorioApi implements VentanillaRepositorio {
   VentanillaRepositorioApi(
     this._productos, {
     required this._catalogos,
+    required this._boletas,
+    String Function()? entregadoPor,
     VentanillaRepositorio? simulado,
-  }) : _simulado = simulado ?? VentanillaRepositorioSimulado();
+  })  : _entregadoPor = entregadoPor ?? (() => ''),
+        _simulado = simulado ?? VentanillaRepositorioSimulado();
 
   final ProductosRepository _productos;
   final CatalogosRepository _catalogos;
+  final BoletasRepositorio _boletas;
+  // Nombre del usuario con sesión; aparece como "Entregado por" en el resumen.
+  final String Function() _entregadoPor;
   final VentanillaRepositorio _simulado;
 
   // La pantalla de Denise maneja los filtros por nombre; la API, por id. Se guardan
@@ -121,24 +131,164 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   @override
   Future<List<ActivoCatalogo>> buscarActivos(String consulta) => _simulado.buscarActivos(consulta);
 
+  // POST /boletas/validar-material. Si no alcanza la existencia lanza
+  // STOCK_INSUFICIENTE (el diálogo muestra el mensaje y no agrega el material).
+  // Si se rompe la periodicidad o el límite de la zona devuelve la alerta para
+  // pedir motivo y autorización.
+  // TEMPORAL: los solicitantes aún son simulados (no hay endpoint de trabajadores),
+  // así que no se manda trabajadorId ni zonaId y el servidor solo revisa la
+  // existencia. Cuando exista ese endpoint, mandar ambos para validar la HU6 E8/E10.
+  // La cantidad va en la unidad base: la app aún no maneja presentaciones (AI-29).
   @override
   Future<AlertaRestriccion?> validarMaterial({
     String? solicitanteId,
     required MaterialCatalogo material,
     required double cantidad,
     required String unidad,
-  }) =>
-      _simulado.validarMaterial(
-        solicitanteId: solicitanteId,
-        material: material,
-        cantidad: cantidad,
-        unidad: unidad,
+  }) async {
+    final v = await _boletas.validarMaterial(
+      productoId: _idDeProducto(material),
+      cantidad: cantidad,
+    );
+    if (!v.stockSuficiente) {
+      final disponible = '${formatearCantidad(v.cantidadSugerida ?? v.disponible)} ${material.unidadBase}';
+      throw ErrorNegocio(
+        'STOCK_INSUFICIENTE',
+        'No hay existencia suficiente de ${material.concepto}: '
+            'solicitaste ${formatearCantidad(cantidad)} $unidad y hay $disponible.',
+        datos: {'disponible': v.cantidadSugerida ?? v.disponible},
       );
+    }
+    final regla = v.limiteCantidad == null
+        ? ''
+        : '${formatearCantidad(v.limiteCantidad!)} ${material.unidadBase} '
+            'cada ${v.limiteCadaDias} días';
+    if (v.excedePeriodicidad) {
+      return AlertaRestriccion(
+        tipo: TipoAlerta.periodicidad,
+        titulo: 'Periodicidad no cumplida',
+        regla: regla,
+        ultimaEntrega: formatearHoraFecha(v.ultimaEntrega),
+        proximaEntrega: formatearFecha(v.proximaEntrega),
+        diasFaltantes: v.diasFaltantes,
+      );
+    }
+    if (v.excedeLimite) {
+      return AlertaRestriccion(
+        tipo: TipoAlerta.limiteZona,
+        titulo: 'Límite de la zona',
+        regla: 'Máximo $regla',
+        entregado: '${formatearCantidad(v.entregadoPeriodo)} ${material.unidadBase}',
+        solicitado: '${formatearCantidad(cantidad)} $unidad',
+      );
+    }
+    return null;
+  }
 
+  // Registra la boleta en el servidor en tres pasos:
+  // 1. Sube las dos firmas (POST /boletas/firmas) y obtiene sus rutas.
+  // 2. Crea la boleta (POST /boletas). La base valida stock, descuenta
+  //    existencias y genera el folio en una sola transacción.
+  // 3. Lee la fecha de entrega (GET /boletas/:id) para el resumen.
   @override
-  Future<ResumenEntrega> registrarEntrega(SolicitudEntrega solicitud) =>
-      _simulado.registrarEntrega(solicitud);
+  Future<ResumenEntrega> registrarEntrega(SolicitudEntrega solicitud) async {
+    // TEMPORAL: los activos aún son simulados (no hay endpoint de activos) y no
+    // tienen id del servidor. Se avisa en lugar de omitirlos sin decir nada.
+    if (solicitud.activos.isNotEmpty) {
+      throw const ErrorNegocio(
+        'HERRAMIENTAS_NO_CONECTADAS',
+        'El préstamo de herramientas todavía no está conectado al servidor. '
+            'Desmarca o quita las herramientas para registrar los materiales.',
+      );
+    }
+    final materiales = [
+      for (final m in solicitud.materiales)
+        {
+          'productoId': _idDeProducto(m.material),
+          'cantidad': m.cantidad,
+          if (m.comentario != null && m.comentario!.isNotEmpty) 'comentario': m.comentario,
+          if (m.autorizacion != null) 'motivoExcepcion': _motivo(m.autorizacion!),
+        },
+    ];
+    final supervisor = _supervisorId(solicitud.materiales);
+
+    final rutas = await Future.wait([
+      _boletas.subirFirma(solicitud.firmaRecibe, TipoFirma.recibe),
+      _boletas.subirFirma(solicitud.firmaEntrega, TipoFirma.entrega),
+    ]);
+
+    // TEMPORAL: el solicitante registrado viene de la lista simulada y su id no
+    // existe en el servidor; se manda como "sin registro" con su nombre y
+    // dependencia. Cuando exista el endpoint de trabajadores, mandar trabajadorId.
+    final nombre = solicitud.solicitante?.nombre ?? solicitud.nombreSinRegistro ?? '';
+    final unidad = solicitud.solicitante?.dependencia ?? solicitud.unidadSinRegistro ?? '';
+    final numero = solicitud.numeroSolicitud?.trim();
+    final boleta = await _boletas.crear({
+      'materiales': materiales,
+      'solicitanteNombre': nombre,
+      'solicitanteUnidad': unidad,
+      if (numero != null && numero.isNotEmpty) 'numeroSolicitud': numero,
+      if (solicitud.autorizoNombre != null) 'autorizoNombre': solicitud.autorizoNombre,
+      'supervisorId': ?supervisor,
+      'firmaRecibe': rutas[0],
+      'firmaEntrega': rutas[1],
+    });
+
+    if (boleta.estado == BoletaCreada.pendienteAutorizacion) {
+      throw ErrorNegocio(
+        'BOLETA_PENDIENTE_AUTORIZACION',
+        'La boleta ${boleta.folio} quedó registrada y pendiente de autorización del '
+            'supervisor. No la registres otra vez: se entregará cuando la autoricen.',
+      );
+    }
+
+    final entregadoEn = await _boletas.fechaEntrega(boleta.boletaId);
+    return ResumenEntrega(
+      folio: boleta.folio,
+      recibidoPor: nombre,
+      area: unidad,
+      fechaHora: formatearHoraFecha(entregadoEn),
+      entregadoPor: _entregadoPor(),
+      materiales: [
+        for (final m in solicitud.materiales)
+          LineaResumen(m.material.codigo, m.material.alias, m.cantidadTexto),
+      ],
+      activos: const [],
+    );
+  }
+
+  // Los materiales de la API siempre traen productoId; uno sin él vendría del
+  // repositorio simulado, que no existe en el servidor.
+  int _idDeProducto(MaterialCatalogo material) {
+    final id = material.productoId;
+    if (id == null) {
+      throw ErrorNegocio(
+        'PRODUCTO_NO_REGISTRADO',
+        'El material ${material.codigo} no está registrado en el servidor.',
+      );
+    }
+    return id;
+  }
+
+  String _motivo(Autorizacion a) {
+    final detalle = a.detalleOtro?.trim();
+    return detalle == null || detalle.isEmpty ? a.motivo : '${a.motivo}: $detalle';
+  }
+
+  // Supervisor que autorizará las excepciones. TEMPORAL: los autorizadores aún
+  // son simulados y sus ids no son UUID del servidor; solo se manda un UUID real.
+  // Si la base requiere autorización sin supervisor, responde AUTORIZADOR_REQUERIDO.
+  String? _supervisorId(List<ItemMaterial> materiales) {
+    for (final m in materiales) {
+      final id = m.autorizacion?.autorizadorId;
+      if (id != null && _patronUuid.hasMatch(id)) return id;
+    }
+    return null;
+  }
 }
+
+final _patronUuid =
+    RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', caseSensitive: false);
 
 // Etiquetas que usa la pantalla para el tipo de producto.
 const _etiquetasTipo = {
@@ -159,6 +309,7 @@ MaterialCatalogo aMaterialCatalogo(ProductoResumen p) {
     almacen: textoAlmacenes(p.ubicaciones),
     ubicacion: textoUbicaciones(p.ubicaciones),
     existencia: p.existencia,
+    productoId: p.id,
     unidadBase: p.unidad,
     // TEMPORAL (AI-29): la API todavía no manda las presentaciones de entrega
     // (medio litro, galón, caja...), así que solo se ofrece la unidad base. El
@@ -215,5 +366,7 @@ final ventanillaRepositorioApiProvider = Provider<VentanillaRepositorio>(
   (ref) => VentanillaRepositorioApi(
     ref.watch(proveedorProductosRepository),
     catalogos: ref.watch(proveedorCatalogosRepository),
+    boletas: ref.watch(proveedorBoletasRepositorio),
+    entregadoPor: () => ref.read(controladorSesionProvider).value?.usuario.nombre ?? '',
   ),
 );

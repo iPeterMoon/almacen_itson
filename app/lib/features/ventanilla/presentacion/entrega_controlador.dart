@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errores/error_negocio.dart';
+import '../../autenticacion/presentacion/sesion_controlador.dart';
 import '../datos/modelos.dart';
 import '../datos/ventanilla_repositorio.dart';
 
@@ -301,9 +302,11 @@ class EntregaController extends Notifier<EntregaState> {
     try {
       final resumen = await _repo.registrarEntrega(SolicitudEntrega(
         solicitanteId: state.sinRegistro ? null : state.solicitante?.id,
+        solicitante: state.sinRegistro ? null : state.solicitante,
         nombreSinRegistro: state.sinRegistro ? state.nombreSinRegistro.trim() : null,
         unidadSinRegistro: state.sinRegistro ? state.unidadSinRegistro.trim() : null,
         autorizoId: state.autorizoId,
+        autorizoNombre: _nombreAutorizador(state.autorizoId),
         numeroSolicitud: state.numeroSolicitud.trim().isEmpty ? null : state.numeroSolicitud.trim(),
         materiales: state.materiales.where((m) => m.entregado).toList(),
         activos: state.activos.where((a) => a.entregado).toList(),
@@ -312,8 +315,10 @@ class EntregaController extends Notifier<EntregaState> {
       ));
       state = state.copyWith(enviando: false, resumen: resumen);
     } on ErrorNegocio catch (e) {
-      if (e.codigo == 'STOCK_INSUFICIENTE') {
-        // SUPUESTO: el servidor manda en "datos" el material y la existencia disponible.
+      // El diálogo para ajustar la cantidad necesita saber qué material falló. El
+      // servidor real no manda ese detalle (solo el mensaje), así que en ese caso
+      // se muestra el mensaje tal cual.
+      if (e.codigo == 'STOCK_INSUFICIENTE' && e.datos['codigo'] is String) {
         state = state.copyWith(
           enviando: false,
           stockInsuficiente: StockInsuficiente(
@@ -330,6 +335,15 @@ class EntregaController extends Notifier<EntregaState> {
     } catch (_) {
       state = state.copyWith(enviando: false, error: 'No se pudo conectar con el servidor.');
     }
+  }
+
+  String? _nombreAutorizador(String? id) {
+    if (id == null) return null;
+    final lista = ref.read(autorizadoresProvider).value ?? const <Autorizador>[];
+    for (final a in lista) {
+      if (a.id == id) return a.nombre;
+    }
+    return null;
   }
 
   /// Escenario 6: ajusta la cantidad a lo disponible; nunca guarda más que el stock.
@@ -354,8 +368,9 @@ class EntregaController extends Notifier<EntregaState> {
 final ventanillaRepositorioProvider =
     Provider<VentanillaRepositorio>((ref) => VentanillaRepositorioSimulado());
 
-/// SUPUESTO: el nombre del almacenista sale del perfil de sesión (feature autenticacion).
-final almacenistaActualProvider = Provider<String>((ref) => 'Alicia García Beltrán');
+/// Nombre del usuario con sesión iniciada; se muestra como quien entrega.
+final almacenistaActualProvider = Provider<String>(
+    (ref) => ref.watch(controladorSesionProvider).value?.usuario.nombre ?? '');
 
 final entregaControllerProvider =
     NotifierProvider<EntregaController, EntregaState>(EntregaController.new);
