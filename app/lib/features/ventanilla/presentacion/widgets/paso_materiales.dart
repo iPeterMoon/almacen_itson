@@ -139,7 +139,7 @@ class _FiltrosMateriales extends ConsumerWidget {
       const SizedBox(height: 16),
       opciones.when(
         loading: () => const LinearProgressIndicator(),
-        error: (_, __) => const AvisoCaja(
+        error: (_, _) => const AvisoCaja(
             tipo: TipoAviso.error, mensaje: 'No se pudieron cargar los filtros.'),
         data: (o) => Wrap(spacing: 12, runSpacing: 12, children: [
           selector('Categoría', filtro.categoria, o.categorias, notif.setCategoria),
@@ -244,7 +244,7 @@ class _ResultadosActivos extends ConsumerWidget {
     return ref.watch(activosProvider).when(
           loading: () => const Padding(
               padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
-          error: (_, __) =>
+          error: (_, _) =>
               const AvisoCaja(tipo: TipoAviso.error, mensaje: 'No se pudo cargar los activos.'),
           data: (lista) => lista.isEmpty
               ? const Padding(

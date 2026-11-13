@@ -89,12 +89,15 @@ class PasoRevision extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 8),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: c.todoMarcado,
-              onChanged: (v) => c.marcarTodo(v ?? false),
-              title: const Text('Marcar Todo'),
+            Material(
+              type: MaterialType.transparency,
+              child: CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: c.todoMarcado,
+                onChanged: (v) => c.marcarTodo(v ?? false),
+                title: const Text('Marcar Todo'),
+              ),
             ),
           ]),
         ),

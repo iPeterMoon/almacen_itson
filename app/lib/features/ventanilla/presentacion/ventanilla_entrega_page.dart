@@ -41,6 +41,7 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
       c.reiniciar();
       if (accion == AccionResumen.volver && mounted) _salir();
     }
+    if (!mounted) return;
     if (nuevo.stockInsuficiente != null && anterior?.stockInsuficiente == null) {
       final ajustar = await mostrarDialogoStock(context, nuevo.stockInsuficiente!);
       if (ajustar == true) {

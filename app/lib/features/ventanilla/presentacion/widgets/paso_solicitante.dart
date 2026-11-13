@@ -125,7 +125,7 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
               resultados.when(
                 loading: () => const Padding(
                     padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator())),
-                error: (_, __) => const AvisoCaja(
+                error: (_, _) => const AvisoCaja(
                     tipo: TipoAviso.error, mensaje: 'No se pudo cargar el personal. Intenta de nuevo.'),
                 data: (pagina) => pagina.items.isEmpty
                     ? const Padding(
@@ -185,7 +185,7 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
           child: LayoutBuilder(builder: (context, caja) {
             final autorizo = autorizadores.when(
               loading: () => const LinearProgressIndicator(),
-              error: (_, __) => const Text('No se pudo cargar la lista.'),
+              error: (_, _) => const Text('No se pudo cargar la lista.'),
               data: (lista) => CampoSelector<String?>(
                 etiqueta: 'Autorizó (Opcional)',
                 valor: e.autorizoId,

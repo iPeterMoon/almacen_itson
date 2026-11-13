@@ -2,6 +2,8 @@ import 'package:almacen_itson/arranque.dart';
 import 'package:almacen_itson/core/config/configuracion_api.dart';
 import 'package:almacen_itson/core/errores/error_negocio.dart';
 import 'package:almacen_itson/core/red/cliente_api.dart';
+import 'package:almacen_itson/features/autenticacion/datos/almacen_sesion.dart';
+import 'package:almacen_itson/features/autenticacion/datos/sesion.dart';
 import 'package:almacen_itson/features/ventanilla/datos/ventanilla_repositorio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/ventanilla_repositorio_api.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/entrega_controlador.dart';
@@ -18,47 +20,52 @@ ProviderContainer contenedorCon(List<Override> overrides) {
   return contenedor;
 }
 
+Sesion sesionVigente() => Sesion(
+      accessToken: 'token-acceso',
+      refreshToken: 'token-renovacion',
+      expiraEn: DateTime.now().add(const Duration(hours: 1)),
+      usuario: const UsuarioSesion(
+        id: 'u1',
+        nombre: 'Almacén Náinari (demo)',
+        email: 'almacen.nainari@itson.mx',
+        rol: 'ALMACENISTA',
+        campusId: 1,
+        campus: 'Náinari',
+      ),
+    );
+
 void main() {
   group('proveedoresSegunEntorno', () {
-    test('sin API_URL deja los datos simulados de Denise', () {
-      final overrides = proveedoresSegunEntorno(urlApi: '', tokenDesarrollo: 'x', depuracion: true);
-      final contenedor = contenedorCon(overrides);
+    test('sin API_URL mantiene la ventanilla simulada', () {
+      final contenedor = contenedorCon(proveedoresSegunEntorno(urlApi: ''));
 
-      expect(overrides, isEmpty);
       expect(contenedor.read(ventanillaRepositorioProvider), isA<VentanillaRepositorioSimulado>());
     });
 
     test('con API_URL la búsqueda de materiales usa la API', () {
       final contenedor = contenedorCon(
-        proveedoresSegunEntorno(urlApi: 'http://10.0.2.2:3000/api/v1', tokenDesarrollo: '', depuracion: true),
+        proveedoresSegunEntorno(urlApi: 'http://10.0.2.2:3000/api/v1'),
       );
 
       expect(contenedor.read(ventanillaRepositorioProvider), isA<VentanillaRepositorioApi>());
     });
 
-    test('en depuración con API_TOKEN manda ese token', () async {
-      final contenedor = contenedorCon(
-        proveedoresSegunEntorno(urlApi: 'http://x', tokenDesarrollo: ' token-dev ', depuracion: true),
-      );
+    test('el cliente HTTP usa el token de la sesión guardada', () async {
+      final contenedor = contenedorCon([
+        proveedorAlmacenSesion.overrideWithValue(AlmacenSesionMemoria(sesionVigente())),
+        ...proveedoresSegunEntorno(urlApi: 'http://x'),
+      ]);
 
-      expect(await contenedor.read(proveedorObtenerToken)(), 'token-dev');
+      expect(await contenedor.read(proveedorObtenerToken)(), 'token-acceso');
     });
 
-    test('sin API_TOKEN no hay token', () async {
-      final contenedor = contenedorCon(
-        proveedoresSegunEntorno(urlApi: 'http://x', tokenDesarrollo: '', depuracion: true),
-      );
+    test('sin sesión guardada no hay token', () async {
+      final contenedor = contenedorCon([
+        proveedorAlmacenSesion.overrideWithValue(AlmacenSesionMemoria()),
+        ...proveedoresSegunEntorno(urlApi: 'http://x'),
+      ]);
 
       expect(await contenedor.read(proveedorObtenerToken)(), isNull);
-    });
-
-    test('fuera de depuración ignora API_TOKEN', () async {
-      final contenedor = contenedorCon(
-        proveedoresSegunEntorno(urlApi: 'http://x', tokenDesarrollo: 'token-dev', depuracion: false),
-      );
-
-      expect(await contenedor.read(proveedorObtenerToken)(), isNull);
-      expect(contenedor.read(ventanillaRepositorioProvider), isA<VentanillaRepositorioApi>());
     });
   });
 

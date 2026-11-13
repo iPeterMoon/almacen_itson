@@ -32,6 +32,25 @@ class AdaptadorFalso implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
+// Responde 401 para simular un token vencido o revocado en el servidor.
+class AdaptadorNoAutorizado extends AdaptadorFalso {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    ultimaPeticion = options;
+    return ResponseBody.fromString(
+      jsonEncode({'mensaje': 'Sesión vencida'}),
+      401,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+}
+
 void main() {
   group('crearClienteApi', () {
     test('agrega el token de sesión como Bearer', () async {
@@ -75,6 +94,21 @@ void main() {
       await dio.get<Object?>('/b');
 
       expect(adaptador.ultimaPeticion!.headers['Authorization'], 'Bearer token-2');
+    });
+
+    test('si el servidor responde 401 avisa que la sesión ya no sirve', () async {
+      final adaptador = AdaptadorNoAutorizado();
+      var perdioSesion = false;
+      final dio = crearClienteApi(
+        urlBase: 'http://servidor/api/v1',
+        obtenerToken: () async => 'token-vencido',
+        alPerderSesion: () => perdioSesion = true,
+        adaptador: adaptador,
+      );
+
+      await expectLater(dio.get<Object?>('/catalogo/productos'), throwsA(isA<DioException>()));
+
+      expect(perdioSesion, isTrue);
     });
   });
 

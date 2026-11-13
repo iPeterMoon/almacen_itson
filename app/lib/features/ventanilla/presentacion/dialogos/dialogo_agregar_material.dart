@@ -79,15 +79,19 @@ class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial>
         setState(() => _cargando = false);
       }
     } on ErrorNegocio catch (e) {
-      if (mounted) setState(() {
-        _cargando = false;
-        _error = e.mensaje;
-      });
+      if (mounted) {
+        setState(() {
+          _cargando = false;
+          _error = e.mensaje;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() {
-        _cargando = false;
-        _error = 'No se pudo conectar con el servidor.';
-      });
+      if (mounted) {
+        setState(() {
+          _cargando = false;
+          _error = 'No se pudo conectar con el servidor.';
+        });
+      }
     }
   }
 
