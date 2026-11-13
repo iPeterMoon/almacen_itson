@@ -13,7 +13,7 @@ export class SupervisoresController {
   // Sin @Roles: el almacenista necesita la lista para pedir la autorización.
   @Get('supervisores')
   @ApiOperation({
-    summary: 'Lista los supervisores activos de los campus del usuario',
+    summary: 'Lista los supervisores activos del campus del usuario',
     description:
       'Para elegir quién autoriza una excepción de periodicidad o límite de zona (HU6 E8/E10). ' +
       'El "id" es el que se manda como supervisorId en POST /boletas. Ordenados por nombre.',
@@ -32,6 +32,6 @@ export class SupervisoresController {
     },
   })
   listar(@UsuarioActual() usuario: UsuarioAutenticado) {
-    return this.supervisores.listar(usuario.token);
+    return this.supervisores.listar(usuario.token, usuario.campusId);
   }
 }

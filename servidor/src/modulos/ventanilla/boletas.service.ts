@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { rangoDePagina } from '../../comun/dto/paginacion.dto';
 import { ErrorNegocio, parsearErrorBase } from '../../comun/errores/error-negocio';
 import { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { SupabaseService } from '../../supabase/supabase.service';
@@ -284,7 +285,7 @@ export class BoletasService {
     // PostgREST usa rangos inclusivos: 0..limite-1 es la primera página.
     const { data, error, count } = await consulta
       .order('creado_en', { ascending: false })
-      .range((pagina - 1) * limite, pagina * limite - 1);
+      .range(...rangoDePagina(pagina, limite));
 
     if (error) throw this.errorDeBase(error);
 

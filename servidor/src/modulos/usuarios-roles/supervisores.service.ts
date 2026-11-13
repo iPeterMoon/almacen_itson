@@ -14,18 +14,20 @@ export interface Supervisor {
 const ROLES_AUTORIZAN = [Rol.Supervisor, Rol.SupervisorJefe];
 
 // Supervisores que pueden autorizar una boleta (HU6 E8/E10) y el campo "Autorizó".
-// RLS de usuarios solo deja ver a los usuarios de los campus del que consulta.
+// Solo los del campus del usuario: es el campus en el que opera la ventanilla y
+// crear_boleta rechaza (AUTORIZADOR_REQUERIDO) a un supervisor de otro campus.
 @Injectable()
 export class SupervisoresService {
   constructor(private readonly supabase: SupabaseService) {}
 
-  async listar(token: string): Promise<Supervisor[]> {
+  async listar(token: string, campusId: number): Promise<Supervisor[]> {
     const { data, error } = await this.supabase
       .clienteDeUsuario(token)
       .from('usuarios')
       .select('id, nombre, rol, campus_id')
       .in('rol', ROLES_AUTORIZAN)
       .eq('activo', true)
+      .eq('campus_id', campusId)
       .order('nombre', { ascending: true });
 
     if (error) throw parsearErrorBase(error.message) ?? new Error(error.message);

@@ -8,7 +8,7 @@ function crear(respuesta: RespuestaFalsa) {
 }
 
 describe('SupervisoresService', () => {
-  it('lista supervisores y jefes activos con el token del usuario, por nombre', async () => {
+  it('lista supervisores y jefes activos del campus del usuario, por nombre', async () => {
     const { servicio, consulta, from, clienteDeUsuario } = crear({
       data: [
         {
@@ -21,12 +21,13 @@ describe('SupervisoresService', () => {
       error: null,
     });
 
-    const supervisores = await servicio.listar('token-usuario');
+    const supervisores = await servicio.listar('token-usuario', 1);
 
     expect(clienteDeUsuario).toHaveBeenCalledWith('token-usuario');
     expect(from).toHaveBeenCalledWith('usuarios');
     expect(consulta.in).toHaveBeenCalledWith('rol', ['SUPERVISOR', 'SUPERVISOR_JEFE']);
     expect(consulta.eq).toHaveBeenCalledWith('activo', true);
+    expect(consulta.eq).toHaveBeenCalledWith('campus_id', 1);
     expect(consulta.order).toHaveBeenCalledWith('nombre', { ascending: true });
     expect(supervisores).toEqual([
       {
@@ -41,12 +42,12 @@ describe('SupervisoresService', () => {
   it('sin filas devuelve una lista vacía', async () => {
     const { servicio } = crear({ data: null, error: null });
 
-    expect(await servicio.listar('token')).toEqual([]);
+    expect(await servicio.listar('token', 1)).toEqual([]);
   });
 
   it('un fallo que no es de negocio sale como error interno', async () => {
     const { servicio } = crear({ data: null, error: { message: 'permission denied' } });
 
-    await expect(servicio.listar('token')).rejects.not.toBeInstanceOf(ErrorNegocio);
+    await expect(servicio.listar('token', 1)).rejects.not.toBeInstanceOf(ErrorNegocio);
   });
 });
