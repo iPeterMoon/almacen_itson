@@ -160,7 +160,18 @@ select v.nombre, v.tipo, v.compania, v.dependencia, v.puesto, c.id,
   from (values
     ('Juan Pérez Soto',    'ITSON',    null,             'SERVICIOS_GENERALES', 'Intendencia'),
     ('María Sánchez Ruiz', 'COMPANIA', 'Maxi Servicios', 'SERVICIOS_GENERALES', 'Aseo'),
-    ('Luis Ramírez Ortega','ITSON',    null,             'MANTENIMIENTO',       'Electricista')
+    ('Luis Ramírez Ortega','ITSON',    null,             'MANTENIMIENTO',       'Electricista'),
+    -- Más trabajadores para que la tabla de solicitantes tenga 2 páginas (8 por página).
+    ('Ana López Valdez',      'ITSON',    null,             'SERVICIOS_GENERALES', 'Intendencia'),
+    ('Carlos Mendoza Ruiz',   'ITSON',    null,             'MANTENIMIENTO',       'Plomero'),
+    ('Diana Torres Félix',    'COMPANIA', 'Maxi Servicios', 'SERVICIOS_GENERALES', 'Aseo'),
+    ('Ernesto Gil Castro',    'ITSON',    null,             'MANTENIMIENTO',       'Carpintero'),
+    ('Fernanda Ruiz Leyva',   'ITSON',    null,             'SERVICIOS_GENERALES', 'Intendencia'),
+    ('Gabriel Soto Medina',   'COMPANIA', 'Maxi Servicios', 'SERVICIOS_GENERALES', 'Aseo'),
+    ('Héctor Navarro Ibarra', 'ITSON',    null,             'MANTENIMIENTO',       'Pintor'),
+    ('Irene Campos Duarte',   'ITSON',    null,             'SERVICIOS_GENERALES', 'Jardinería'),
+    ('Jorge Vega Morales',    'ITSON',    null,             'MANTENIMIENTO',       'Electricista'),
+    ('Karla Ochoa Peña',      'COMPANIA', 'Maxi Servicios', 'SERVICIOS_GENERALES', 'Aseo')
   ) as v(nombre, tipo, compania, dependencia, puesto)
   join public.campus c on c.clave = 'NAI'
  where not exists (
@@ -184,7 +195,18 @@ select t.id, z.id
   from (values
     ('Juan Pérez Soto',     'Edificio 1800 - Planta baja'),
     ('María Sánchez Ruiz',  'Edificio 1800 - Planta baja'),
-    ('Luis Ramírez Ortega', 'Edificio 2000 - Segundo piso')
+    ('Luis Ramírez Ortega', 'Edificio 2000 - Segundo piso'),
+    ('Ana López Valdez',      'Edificio 1800 - Planta baja'),
+    ('Carlos Mendoza Ruiz',   'Edificio 2000 - Segundo piso'),
+    ('Diana Torres Félix',    'Edificio 1800 - Planta baja'),
+    ('Ernesto Gil Castro',    'Edificio 2000 - Segundo piso'),
+    ('Fernanda Ruiz Leyva',   'Edificio 1800 - Planta baja'),
+    ('Fernanda Ruiz Leyva',   'Edificio 2000 - Segundo piso'),
+    ('Gabriel Soto Medina',   'Edificio 1800 - Planta baja'),
+    ('Héctor Navarro Ibarra', 'Edificio 2000 - Segundo piso'),
+    ('Irene Campos Duarte',   'Edificio 1800 - Planta baja'),
+    ('Jorge Vega Morales',    'Edificio 2000 - Segundo piso'),
+    ('Karla Ochoa Peña',      'Edificio 1800 - Planta baja')
   ) as v(trabajador, zona)
   join public.trabajadores t on t.nombre = v.trabajador
   join public.zonas       z on z.nombre = v.zona
