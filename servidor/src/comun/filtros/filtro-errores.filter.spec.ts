@@ -23,6 +23,18 @@ describe('FiltroErrores', () => {
     });
   });
 
+  it('incluye los datos del ErrorNegocio cuando los trae', () => {
+    const { host, respuesta } = hostFalso();
+    const datos = { disponible: 4, cantidadSugerida: 4 };
+    filtro.catch(new ErrorNegocio('STOCK_INSUFICIENTE', 'Solo hay 4.', undefined, datos), host);
+    expect(respuesta.status).toHaveBeenCalledWith(409);
+    expect(respuesta.json).toHaveBeenCalledWith({
+      codigo: 'STOCK_INSUFICIENTE',
+      mensaje: 'Solo hay 4.',
+      datos,
+    });
+  });
+
   it('incluye los detalles de validación del ValidationPipe', () => {
     const { host, respuesta } = hostFalso();
     filtro.catch(new BadRequestException(['cantidad must be a number']), host);

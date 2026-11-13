@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BoletasController } from './boletas.controller';
 import { BoletasService } from './boletas.service';
+import { ConfirmacionService } from './confirmacion.service';
 import { EntregasController } from './entregas.controller';
 import { EntregasService } from './entregas.service';
 
@@ -8,6 +9,6 @@ import { EntregasService } from './entregas.service';
 // agregando otros controladores del mismo dominio (por ejemplo, devoluciones).
 @Module({
   controllers: [BoletasController, EntregasController],
-  providers: [BoletasService, EntregasService],
+  providers: [BoletasService, ConfirmacionService, EntregasService],
 })
 export class VentanillaModule {}

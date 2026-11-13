@@ -11,6 +11,7 @@ import { UsuarioActual } from '../../comun/decoradores/usuario-actual.decorator'
 import { Rol } from '../../comun/tipos/usuario-autenticado';
 import type { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { BoletasService } from './boletas.service';
+import { ConfirmacionService } from './confirmacion.service';
 import { ConfirmarEntregaDto } from './dto/confirmar-entrega.dto';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
 import { ListarBoletasDto } from './dto/listar-boletas.dto';
@@ -24,7 +25,10 @@ import { ValidarMaterialDto } from './dto/validar-material.dto';
 @ApiBearerAuth()
 @Controller('boletas')
 export class BoletasController {
-  constructor(private readonly boletas: BoletasService) {}
+  constructor(
+    private readonly boletas: BoletasService,
+    private readonly confirmacion: ConfirmacionService,
+  ) {}
 
   // Validación previa: no crea la boleta, solo devuelve alertas para que el almacenista decida.
   @Post('validar-material')
@@ -68,11 +72,15 @@ export class BoletasController {
       'Registra materiales y herramientas de un solo solicitante. Si todo está dentro de los ' +
       'límites, la boleta se entrega en el acto y descuenta existencias; si algún material ' +
       'excede la periodicidad o el límite de la zona, queda PENDIENTE_AUTORIZACION y no se ' +
-      'mueve inventario.',
+      'mueve inventario. Si la entrega se hace en el acto, la respuesta incluye el resumen; ' +
+      'si queda pendiente, `resumen` es null. Si algún material no alcanza, responde 409 ' +
+      'STOCK_INSUFICIENTE con `datos` (disponible y cantidadSugerida) para ofrecer el ajuste.',
   })
-  @ApiCreatedResponse({ description: 'Boleta creada, con su folio, estado y alertas.' })
+  @ApiCreatedResponse({
+    description: 'Boleta creada, con su folio, estado, alertas y resumen (si se entregó).',
+  })
   crear(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: CrearBoletaDto) {
-    return this.boletas.crear(usuario.token, dto);
+    return this.confirmacion.crearBoleta(usuario.token, dto);
   }
 
   // Sin @Roles: cualquier usuario autenticado puede consultar; las políticas RLS filtran por campus.
@@ -89,6 +97,20 @@ export class BoletasController {
   @ApiOkResponse({ description: 'Detalle completo de la boleta.' })
   obtener(@UsuarioActual() usuario: UsuarioAutenticado, @Param('id', ParseIntPipe) id: number) {
     return this.boletas.obtener(usuario.token, id);
+  }
+
+  // Resumen de una boleta ya entregada (el mismo que se muestra al confirmar).
+  @Get(':id/resumen')
+  @ApiOperation({
+    summary: 'Resumen de una boleta entregada',
+    description: 'Responde 409 BOLETA_NO_ENTREGADA si la boleta aún no se entrega.',
+  })
+  @ApiOkResponse({ description: 'Resumen con folio, solicitante, materiales y herramientas.' })
+  obtenerResumen(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.confirmacion.obtenerResumen(usuario.token, id);
   }
 
   // La base vuelve a validar que sea el supervisor asignado, un jefe o un administrador.
@@ -120,12 +142,41 @@ export class BoletasController {
     summary: 'Confirma la entrega de una boleta autorizada',
     description:
       'Requiere las dos firmas ya subidas. Descuenta existencias y abre los préstamos de las ' +
-      'herramientas incluidas.',
+      'herramientas incluidas, todo en una sola transacción. Si el stock ya no alcanza responde ' +
+      '409 STOCK_INSUFICIENTE con `datos` y no se descuenta nada.',
   })
   @ApiOkResponse({
-    description: 'Folio de la boleta entregada.',
+    description: 'Folio de la boleta entregada y resumen de la entrega.',
     schema: {
-      example: { boletaId: 7, folio: 'BOL-2026-000007', estado: 'ENTREGADA' },
+      example: {
+        boletaId: 7,
+        folio: 'BOL-2026-000007',
+        estado: 'ENTREGADA',
+        resumen: {
+          boletaId: 7,
+          folio: 'BOL-2026-000007',
+          estado: 'ENTREGADA',
+          entregadoEn: '2026-11-12T18:00:00.000Z',
+          recibidoPor: 'Miguel Ángel Ruiz',
+          area: 'SERVICIOS_GENERALES',
+          zona: 'Baños edificio 2',
+          numeroSolicitud: 'OT-9981',
+          autorizoNombre: null,
+          entregadoPor: 'Alicia García',
+          materiales: [
+            {
+              codigo: 'JAB-001',
+              nombre: 'Jabón líquido',
+              cantidad: 2,
+              unidad: 'Medio litro',
+              cantidadBase: 1,
+              comentario: null,
+              motivoExcepcion: null,
+            },
+          ],
+          herramientas: [],
+        },
+      },
     },
   })
   confirmarEntrega(
@@ -133,6 +184,6 @@ export class BoletasController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ConfirmarEntregaDto,
   ) {
-    return this.boletas.confirmarEntrega(usuario.token, id, dto);
+    return this.confirmacion.confirmarEntrega(usuario.token, id, dto);
   }
 }

@@ -32,3 +32,15 @@ describe('estadoHttpDeCodigo', () => {
     expect(estadoHttpDeCodigo(codigo)).toBe(estado);
   });
 });
+
+describe('ErrorNegocio con datos', () => {
+  it('conserva el estado HTTP del código cuando solo se pasan datos', () => {
+    const error = new ErrorNegocio('STOCK_INSUFICIENTE', 'Solo hay 4.', undefined, { disponible: 4 });
+    expect(error.estadoHttp).toBe(HttpStatus.CONFLICT);
+    expect(error.datos).toEqual({ disponible: 4 });
+  });
+
+  it('deja datos sin definir cuando no se pasan', () => {
+    expect(new ErrorNegocio('SIN_PERMISO', 'No.').datos).toBeUndefined();
+  });
+});
