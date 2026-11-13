@@ -168,7 +168,7 @@ class EntregaController extends Notifier<EntregaState> {
     final alerta = await _repo.validarMaterial(
       solicitante: state.sinRegistro ? null : state.solicitante,
       material: material,
-      cantidad: (existente?.cantidad ?? 0) + cantidad,
+      cantidad: redondearCantidad((existente?.cantidad ?? 0) + cantidad),
       unidad: unidad,
     );
     if (alerta != null) return alerta;
@@ -200,7 +200,7 @@ class EntregaController extends Notifier<EntregaState> {
       final ex = lista[i];
       lista[i] = ItemMaterial(
         material: ex.material,
-        cantidad: ex.cantidad + nuevo.cantidad,
+        cantidad: redondearCantidad(ex.cantidad + nuevo.cantidad),
         unidad: ex.unidad,
         entregado: ex.entregado,
         comentario: ex.comentario,
@@ -215,13 +215,65 @@ class EntregaController extends Notifier<EntregaState> {
   void quitarMaterial(String codigo) => state = state.copyWith(
       materiales: state.materiales.where((m) => m.material.codigo != codigo).toList());
 
-  void cambiarCantidad(String codigo, double cantidad) {
-    if (cantidad <= 0) return;
-    state = state.copyWith(
-        materiales: [
-      for (final m in state.materiales)
-        if (m.material.codigo == codigo) m.copyWith(cantidad: cantidad) else m
-    ]);
+  /// Cambia la cantidad de un material de la boleta. Si sube y el material no tiene
+  /// autorización, la valida antes en el servidor: si rompe la periodicidad o el
+  /// límite de la zona devuelve la alerta y no cambia nada (la pantalla pide motivo
+  /// y autorización y llama a [cambiarCantidadAutorizada]). Si no hay existencia
+  /// lanza STOCK_INSUFICIENTE. Bajar la cantidad no puede romper ninguna regla.
+  Future<AlertaRestriccion?> cambiarCantidad(String codigo, double cantidad) async {
+    final item = _buscarMaterial(codigo);
+    final nueva = redondearCantidad(cantidad);
+    if (item == null || nueva <= 0) return null;
+    if (nueva > item.cantidad && item.autorizacion == null) {
+      final alerta = await _repo.validarMaterial(
+        solicitante: state.sinRegistro ? null : state.solicitante,
+        material: item.material,
+        cantidad: nueva,
+        unidad: item.unidad,
+      );
+      if (alerta != null) return alerta;
+    }
+    _actualizarMaterial(codigo, (m) => m.copyWith(cantidad: nueva));
+    return null;
+  }
+
+  void cambiarCantidadAutorizada(String codigo, double cantidad, Autorizacion autorizacion) =>
+      _actualizarMaterial(codigo,
+          (m) => m.copyWith(cantidad: redondearCantidad(cantidad), autorizacion: autorizacion));
+
+  /// Agrega la autorización a un material que ya está en la boleta.
+  void autorizarMaterial(String codigo, Autorizacion autorizacion) =>
+      _actualizarMaterial(codigo, (m) => m.copyWith(autorizacion: autorizacion));
+
+  void _actualizarMaterial(String codigo, ItemMaterial Function(ItemMaterial) cambio) =>
+      state = state.copyWith(materiales: [
+        for (final m in state.materiales)
+          if (m.material.codigo == codigo) cambio(m) else m
+      ]);
+
+  /// Vuelve a validar los materiales sin autorización con el solicitante actual. Se
+  /// usa al salir del paso 1 cuando ya hay materiales (se regresó a cambiar el
+  /// solicitante): lo que valía para uno puede romper las reglas de otro. Devuelve
+  /// los materiales que ahora necesitan autorización. La existencia no se revisa
+  /// aquí; la vuelve a validar el servidor al confirmar.
+  Future<List<(ItemMaterial, AlertaRestriccion)>> revalidarMateriales() async {
+    final solicitante = state.sinRegistro ? null : state.solicitante;
+    final pendientes = <(ItemMaterial, AlertaRestriccion)>[];
+    for (final m in state.materiales) {
+      if (m.autorizacion != null) continue;
+      try {
+        final alerta = await _repo.validarMaterial(
+          solicitante: solicitante,
+          material: m.material,
+          cantidad: m.cantidad,
+          unidad: m.unidad,
+        );
+        if (alerta != null) pendientes.add((m, alerta));
+      } on ErrorNegocio catch (e) {
+        if (e.codigo != 'STOCK_INSUFICIENTE') rethrow;
+      }
+    }
+    return pendientes;
   }
 
   void cambiarUnidad(String codigo, String unidad) => state = state.copyWith(materiales: [
@@ -420,8 +472,12 @@ final solicitantesProvider = FutureProvider.autoDispose<Pagina<Solicitante>>((re
       .buscarSolicitantes(q, pagina: p, porPagina: registrosPorPagina);
 });
 
-final autorizadoresProvider = FutureProvider<List<Autorizador>>(
-    (ref) => ref.watch(ventanillaRepositorioProvider).listarAutorizadores());
+/// Supervisores del campus del usuario. Se vuelve a pedir cuando cambia el usuario
+/// con sesión: si no, tras cerrar sesión otro usuario vería los de otro campus.
+final autorizadoresProvider = FutureProvider<List<Autorizador>>((ref) {
+  ref.watch(controladorSesionProvider.select((s) => s.value?.usuario.id));
+  return ref.watch(ventanillaRepositorioProvider).listarAutorizadores();
+});
 
 const _noCambia = Object();
 

@@ -178,7 +178,7 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   }) async {
     final v = await _boletas.validarMaterial(
       productoId: _idDeProducto(material),
-      cantidad: cantidad,
+      cantidad: redondearCantidad(cantidad),
       trabajadorId: _idDeTrabajador(solicitante),
       zonaId: solicitante?.zonaId,
     );
@@ -221,7 +221,9 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   // 1. Sube las dos firmas (POST /boletas/firmas) y obtiene sus rutas.
   // 2. Crea la boleta (POST /boletas). La base valida stock, descuenta
   //    existencias y genera el folio en una sola transacción.
-  // 3. Lee la fecha de entrega (GET /boletas/:id) para el resumen.
+  // 3. Lee la fecha de entrega (GET /boletas/:id) para el resumen. Para entonces
+  //    la boleta ya existe: si esta lectura falla se usa la hora del dispositivo,
+  //    porque mostrar un error haría que se volviera a confirmar y se duplicara.
   // Si algún material necesita autorización, la base deja la boleta PENDIENTE: no
   // descuenta nada y el resumen lo indica (el folio ya existe, no se registra otra vez).
   @override
@@ -235,7 +237,7 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
       for (final m in solicitud.materiales)
         {
           'productoId': _idDeProducto(m.material),
-          'cantidad': m.cantidad,
+          'cantidad': redondearCantidad(m.cantidad),
           if (m.comentario != null && m.comentario!.isNotEmpty) 'comentario': m.comentario,
           if (m.autorizacion != null) 'motivoExcepcion': _motivo(m.autorizacion!),
         },
@@ -271,7 +273,7 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
     });
 
     final pendiente = boleta.estado == BoletaCreada.pendienteAutorizacion;
-    final entregadoEn = pendiente ? null : await _boletas.fechaEntrega(boleta.boletaId);
+    final entregadoEn = pendiente ? null : await _fechaEntrega(boleta.boletaId);
     return ResumenEntrega(
       folio: boleta.folio,
       autorizacionPendiente: pendiente,
@@ -288,6 +290,14 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
           LineaResumen(a.activo.codigo, a.activo.equipo, a.activo.modelo, a.activo.serie),
       ],
     );
+  }
+
+  Future<String?> _fechaEntrega(int boletaId) async {
+    try {
+      return await _boletas.fechaEntrega(boletaId);
+    } catch (_) {
+      return DateTime.now().toUtc().toIso8601String();
+    }
   }
 
   // Id del trabajador para el servidor; null si no hay solicitante registrado.

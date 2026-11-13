@@ -6,6 +6,10 @@ import 'dart:typed_data';
 
 String formatearCantidad(double c) => c % 1 == 0 ? c.toInt().toString() : c.toString();
 
+// Redondea a 3 decimales, los que acepta el servidor. Sumar doubles deja restos
+// (0.1 + 0.2 = 0.30000000000000004) que el servidor rechazaría con un 400.
+double redondearCantidad(double c) => (c * 1000).roundToDouble() / 1000;
+
 class Solicitante {
   const Solicitante({
     required this.id,
@@ -183,14 +187,20 @@ class ItemMaterial {
 
   String get cantidadTexto => '${formatearCantidad(cantidad)} $unidad';
 
-  ItemMaterial copyWith({double? cantidad, String? unidad, bool? entregado, String? comentario}) =>
+  ItemMaterial copyWith({
+    double? cantidad,
+    String? unidad,
+    bool? entregado,
+    String? comentario,
+    Autorizacion? autorizacion,
+  }) =>
       ItemMaterial(
         material: material,
         cantidad: cantidad ?? this.cantidad,
         unidad: unidad ?? this.unidad,
         entregado: entregado ?? this.entregado,
         comentario: comentario ?? this.comentario,
-        autorizacion: autorizacion,
+        autorizacion: autorizacion ?? this.autorizacion,
       );
 
   Map<String, dynamic> toJson() => {

@@ -560,6 +560,32 @@ void main() {
       expect(resumen.materiales.single.detalle, '2 L');
     });
 
+    test('si falla leer la fecha, la boleta creada no se reporta como error', () async {
+      final boletas = BoletasFalso(errorAlLeerFecha: Exception('timeout'));
+
+      final resumen = await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud());
+
+      expect(resumen.folio, 'BOL-2026-000007');
+      expect(resumen.fechaHora, isNotEmpty);
+    });
+
+    test('manda la cantidad redondeada a 3 decimales', () async {
+      final boletas = BoletasFalso();
+      final s = solicitud();
+      final conSuma = SolicitudEntrega(
+        nombreSinRegistro: s.nombreSinRegistro,
+        unidadSinRegistro: s.unidadSinRegistro,
+        materiales: [s.materiales.single.copyWith(cantidad: 0.1 + 0.2)],
+        activos: const [],
+        firmaEntrega: firma,
+        firmaRecibe: firma,
+      );
+
+      await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(conSuma);
+
+      expect((boletas.cuerpoCreado!['materiales'] as List).single['cantidad'], 0.3);
+    });
+
     SolicitudEntrega deJuan({List<ItemActivo> activos = const []}) => SolicitudEntrega(
           solicitanteId: '1',
           solicitante: aSolicitante(juanPerez),

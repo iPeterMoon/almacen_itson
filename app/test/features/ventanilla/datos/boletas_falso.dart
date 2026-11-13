@@ -15,12 +15,14 @@ class BoletasFalso implements BoletasRepositorio {
     this.creada = const BoletaCreada(boletaId: 7, folio: 'BOL-2026-000007', estado: 'ENTREGADA'),
     this.entregadoEn = '2026-10-17T15:57:00Z',
     this.errorAlCrear,
+    this.errorAlLeerFecha,
   });
 
   ValidacionMaterial validacion;
   BoletaCreada creada;
   String? entregadoEn;
   ErrorNegocio? errorAlCrear;
+  Object? errorAlLeerFecha;
 
   final validaciones = <({int productoId, double cantidad, int? trabajadorId, int? zonaId})>[];
   final firmas = <TipoFirma>[];
@@ -52,5 +54,8 @@ class BoletasFalso implements BoletasRepositorio {
   }
 
   @override
-  Future<String?> fechaEntrega(int boletaId) async => entregadoEn;
+  Future<String?> fechaEntrega(int boletaId) async {
+    if (errorAlLeerFecha != null) throw errorAlLeerFecha!;
+    return entregadoEn;
+  }
 }
