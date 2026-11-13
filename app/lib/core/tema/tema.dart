@@ -7,9 +7,13 @@ class Colores {
   static const exitoOscuro = Color(0xFF047857);
   static const exitoFondo = Color(0xFFECFDF5);
   static const fondo = Color(0xFFF3F6FB);
+  static const fondoLogin = Color(0xFFF4F7FB);
+  static const superficie = Color(0xFFFEFEFE);
   static const texto = Color(0xFF111827);
   static const textoSuave = Color(0xFF6B7280);
+  static const textoEtiqueta = Color(0xFF374151);
   static const borde = Color(0xFFE5E7EB);
+  static const bordeCampo = Color(0xFFD1D5DB);
   static const filaAlterna = Color(0xFFF8FAFC);
   static const avisoFondo = Color(0xFFFEF3C7);
   static const avisoTexto = Color(0xFF92400E);

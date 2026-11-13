@@ -51,3 +51,14 @@ final proveedorClienteApi = Provider<Dio>((ref) {
   ref.onDispose(dio.close);
   return dio;
 });
+
+// Cliente para las rutas públicas (iniciar/renovar sesión): no manda el token
+// de una sesión anterior ni depende de que exista una.
+final proveedorClienteApiPublico = Provider<Dio>((ref) {
+  final dio = crearClienteApi(
+    urlBase: ref.watch(proveedorUrlApi),
+    obtenerToken: () async => null,
+  );
+  ref.onDispose(dio.close);
+  return dio;
+});
