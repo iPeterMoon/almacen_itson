@@ -3,9 +3,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errores/error_negocio.dart';
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
+import '../../datos/ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
 import '../entrega_controlador.dart';
+import 'paso_materiales.dart' show mensajeEscribeParaBuscar;
+
+const mensajeSinSolicitantes = 'Sin resultados. Puedes usar un solicitante sin registro.';
+const mensajeErrorPersonal = 'No se pudo cargar el personal. Intenta de nuevo.';
+
+// Mensaje de la tabla de solicitantes vacía: con 1 carácter no se consulta al
+// servidor, así que se pide escribir más en lugar de decir que no hay resultados.
+String mensajeSolicitantesVacio(String consulta) {
+  final texto = consulta.trim();
+  if (texto.isNotEmpty && texto.length < minimoCaracteresBusqueda) {
+    return mensajeEscribeParaBuscar;
+  }
+  return mensajeSinSolicitantes;
+}
 
 /// Paso 1. Escenarios 2 (solicitante no registrado), 3 y 4 (número de solicitud opcional).
 class PasoSolicitante extends ConsumerStatefulWidget {
@@ -51,6 +67,7 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
     final e = ref.watch(entregaControllerProvider);
     final c = ref.read(entregaControllerProvider.notifier);
     final resultados = ref.watch(solicitantesProvider);
+    final consulta = ref.watch(consultaSolicitantesProvider);
     final autorizadores = ref.watch(autorizadoresProvider);
     final s = e.solicitante;
 
@@ -125,13 +142,15 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
               resultados.when(
                 loading: () => const Padding(
                     padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator())),
-                error: (_, _) => const AvisoCaja(
-                    tipo: TipoAviso.error, mensaje: 'No se pudo cargar el personal. Intenta de nuevo.'),
+                // Si el servidor mandó un mensaje (por ejemplo, la sesión expiró), se muestra ese.
+                error: (error, _) => AvisoCaja(
+                    tipo: TipoAviso.error,
+                    mensaje: error is ErrorNegocio ? error.mensaje : mensajeErrorPersonal),
                 data: (pagina) => pagina.items.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text('Sin resultados. Puedes usar un solicitante sin registro.',
-                            style: TextStyle(color: Colores.textoSuave)))
+                    ? Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(mensajeSolicitantesVacio(consulta),
+                            style: const TextStyle(color: Colores.textoSuave)))
                     : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         const Text('Selecciona un solicitante para continuar. Toca de nuevo para quitar la selección.',
                             style: TextStyle(color: Colores.textoSuave)),
