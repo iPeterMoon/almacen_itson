@@ -7,7 +7,7 @@ import { UsuarioSesionRepository } from '../src/comun/autenticacion/usuario-sesi
 import { Roles } from '../src/comun/decoradores/roles.decorator';
 import { UsuarioActual } from '../src/comun/decoradores/usuario-actual.decorator';
 import { ErrorNegocio } from '../src/comun/errores/error-negocio';
-import { Rol, UsuarioAutenticado } from '../src/comun/tipos/usuario-autenticado';
+import { Rol, type UsuarioAutenticado } from '../src/comun/tipos/usuario-autenticado';
 import { configurarApp } from '../src/configurar-app';
 
 class CuerpoPrueba {
