@@ -15,9 +15,14 @@ class Solicitante {
     required this.zona,
     this.areaTrabajo,
     this.areaTrabajo2,
+    this.zonaId,
   });
 
+  // Id del trabajador en el servidor, como texto (el simulado usa "1", "2"...).
   final String id;
+  // Zona de la entrega cuando el trabajador tiene solo una; con varias, la base
+  // necesita que se elija y por ahora se deja en null.
+  final int? zonaId;
   final String nombre;
   final String dependencia;
   final String tipo;
@@ -101,8 +106,11 @@ class ActivoCatalogo {
     required this.serie,
     required this.almacen,
     required this.ubicacion,
+    this.activoId,
   });
 
+  // Id del activo en el servidor; el repositorio simulado no lo usa.
+  final int? activoId;
   final String codigo;
   final String equipo;
   final String modelo;
@@ -285,8 +293,12 @@ class ResumenEntrega {
     required this.entregadoPor,
     required this.materiales,
     required this.activos,
+    this.autorizacionPendiente = false,
   });
 
+  // true si algún material excedió periodicidad o límite: la boleta quedó
+  // registrada con su folio pero el material no ha salido hasta que la autoricen.
+  final bool autorizacionPendiente;
   final String folio;
   final String recibidoPor;
   final String area;

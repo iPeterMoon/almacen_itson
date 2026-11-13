@@ -75,6 +75,15 @@ Future<AccionResumen?> mostrarDialogoResumen(BuildContext context, ResumenEntreg
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
                   Text('Recibida por ${r.recibidoPor}'),
+                  if (r.autorizacionPendiente) ...[
+                    const SizedBox(height: 12),
+                    const AvisoCaja(
+                      tipo: TipoAviso.advertencia,
+                      titulo: 'Pendiente de autorización',
+                      mensaje: 'La boleta quedó registrada, pero el material todavía no sale: '
+                          'se entregará cuando el supervisor la autorice. No la registres otra vez.',
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Container(
                     width: double.infinity,

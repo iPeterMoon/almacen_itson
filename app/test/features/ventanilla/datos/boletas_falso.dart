@@ -22,7 +22,7 @@ class BoletasFalso implements BoletasRepositorio {
   String? entregadoEn;
   ErrorNegocio? errorAlCrear;
 
-  final validaciones = <({int productoId, double cantidad})>[];
+  final validaciones = <({int productoId, double cantidad, int? trabajadorId, int? zonaId})>[];
   final firmas = <TipoFirma>[];
   Map<String, dynamic>? cuerpoCreado;
 
@@ -33,7 +33,8 @@ class BoletasFalso implements BoletasRepositorio {
     int? trabajadorId,
     int? zonaId,
   }) async {
-    validaciones.add((productoId: productoId, cantidad: cantidad));
+    validaciones.add(
+        (productoId: productoId, cantidad: cantidad, trabajadorId: trabajadorId, zonaId: zonaId));
     return validacion;
   }
 

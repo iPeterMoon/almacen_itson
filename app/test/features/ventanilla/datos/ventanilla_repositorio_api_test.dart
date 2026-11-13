@@ -7,13 +7,16 @@ import 'package:almacen_itson/features/catalogo_inventario/datos/producto_resume
 import 'package:almacen_itson/features/catalogo_inventario/datos/productos_repository.dart';
 import 'package:almacen_itson/features/ventanilla/datos/boletas_repositorio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/modelos.dart';
+import 'package:almacen_itson/features/ventanilla/datos/trabajadores_repositorio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/ventanilla_repositorio_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../catalogo_inventario/datos/producto_resumen_test.dart' show filaPinol;
 import 'boletas_falso.dart';
+import 'listas_falsas.dart';
 
 export 'boletas_falso.dart';
+export 'listas_falsas.dart';
 
 // Repositorio de productos falso: registra cada búsqueda y responde lo indicado.
 class ProductosFalso implements ProductosRepository {
@@ -89,11 +92,16 @@ VentanillaRepositorioApi crearApi(
   ProductosFalso productos, {
   CatalogosFalso? catalogos,
   BoletasFalso? boletas,
+  TrabajadoresFalso? trabajadores,
+  ActivosFalso? activos,
 }) =>
     VentanillaRepositorioApi(
       productos,
       catalogos: catalogos ?? CatalogosFalso(),
       boletas: boletas ?? BoletasFalso(),
+      trabajadores: trabajadores ?? TrabajadoresFalso(),
+      supervisores: SupervisoresFalso(),
+      activos: activos ?? ActivosFalso(),
       entregadoPor: () => 'Alicia García',
     );
 
@@ -346,12 +354,69 @@ void main() {
     expect(codigoDeTipo('Otro'), isNull);
   });
 
-  test('los demás métodos siguen en el repositorio simulado', () async {
-    final repositorio = crearApi(ProductosFalso());
+  group('buscarSolicitantes', () {
+    test('convierte los trabajadores de la API en solicitantes', () async {
+      final trabajadores = TrabajadoresFalso(total: 12);
 
-    expect((await repositorio.listarAutorizadores()), isNotEmpty);
-    expect((await repositorio.buscarSolicitantes('Rosa')).items.single.nombre, 'Rosa Molina');
+      final pagina = await crearApi(ProductosFalso(), trabajadores: trabajadores)
+          .buscarSolicitantes(' juan ', pagina: 2, porPagina: 8);
+
+      expect(trabajadores.ultimaConsulta, (texto: 'juan', pagina: 2, limite: 8));
+      expect(pagina.total, 12);
+      final s = pagina.items.single;
+      expect(s.id, '1');
+      expect(s.nombre, 'Juan Pérez Soto');
+      expect(s.dependencia, 'Servicios Generales');
+      expect(s.tipo, 'ITSON');
+      expect(s.zona, 'Edificio 1800 - Planta baja');
+      expect(s.zonaId, 7);
+    });
+
+    test('con 1 carácter no llama al servidor', () async {
+      final trabajadores = TrabajadoresFalso();
+
+      final pagina = await crearApi(ProductosFalso(), trabajadores: trabajadores)
+          .buscarSolicitantes('j');
+
+      expect(pagina.items, isEmpty);
+      expect(trabajadores.llamadas, 0);
+    });
+
+    test('con varias zonas no se elige ninguna y muestra todas', () {
+      final s = aSolicitante(const Trabajador(
+        id: 2,
+        nombre: 'María Sánchez',
+        tipo: 'COMPANIA',
+        compania: 'Maxi Servicios',
+        dependencia: 'MANTENIMIENTO',
+        zonas: [ZonaTrabajador(id: 1, nombre: 'A'), ZonaTrabajador(id: 2, nombre: 'B')],
+      ));
+
+      expect(s.tipo, 'Maxi Servicios');
+      expect(s.zona, 'A, B');
+      expect(s.areaTrabajo2, 'B');
+      expect(s.zonaId, isNull);
+    });
   });
+
+  test('listarAutorizadores devuelve los supervisores con su UUID', () async {
+    final lista = await crearApi(ProductosFalso()).listarAutorizadores();
+
+    expect(lista.single.id, supervisorDemo.id);
+    expect(lista.single.nombre, 'Supervisión Náinari');
+  });
+
+  test('buscarActivos pide solo los disponibles y guarda el id del activo', () async {
+    final activos = ActivosFalso();
+
+    final lista = await crearApi(ProductosFalso(), activos: activos).buscarActivos('tal');
+
+    expect(activos.ultimaConsulta, (texto: 'tal', estado: 'DISPONIBLE', limite: 20));
+    expect(lista.single.activoId, 3);
+    expect(lista.single.equipo, 'Taladro inalámbrico');
+    expect(lista.single.serie, 'SN-TAL-001');
+  });
+
   group('validarMaterial', () {
     final material = aMaterialCatalogo(pinol);
 
@@ -363,7 +428,22 @@ void main() {
       final boletas = BoletasFalso();
 
       expect(await validar(boletas), isNull);
-      expect(boletas.validaciones.single, (productoId: 1, cantidad: 2.0));
+      expect(boletas.validaciones.single,
+          (productoId: 1, cantidad: 2.0, trabajadorId: null, zonaId: null));
+    });
+
+    test('con un trabajador registrado manda su id y su zona', () async {
+      final boletas = BoletasFalso();
+
+      await crearApi(ProductosFalso(), boletas: boletas).validarMaterial(
+        solicitante: aSolicitante(juanPerez),
+        material: material,
+        cantidad: 2,
+        unidad: 'L',
+      );
+
+      expect(boletas.validaciones.single,
+          (productoId: 1, cantidad: 2.0, trabajadorId: 1, zonaId: 7));
     });
 
     test('sin existencia suficiente lanza STOCK_INSUFICIENTE con lo disponible', () async {
@@ -480,26 +560,30 @@ void main() {
       expect(resumen.materiales.single.detalle, '2 L');
     });
 
-    test('un solicitante de la lista se manda con su nombre y dependencia', () async {
+    SolicitudEntrega deJuan({List<ItemActivo> activos = const []}) => SolicitudEntrega(
+          solicitanteId: '1',
+          solicitante: aSolicitante(juanPerez),
+          materiales: solicitud().materiales,
+          activos: activos,
+          firmaEntrega: firma,
+          firmaRecibe: firma,
+        );
+
+    test('un trabajador registrado se manda con su id y su zona, sin nombre ni unidad', () async {
       final boletas = BoletasFalso();
-      const pedro = Solicitante(
-          id: '1', nombre: 'Pedro Luna', dependencia: 'Servicios Generales', tipo: 'ITSON', zona: '');
 
-      await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(SolicitudEntrega(
-        solicitanteId: '1',
-        solicitante: pedro,
-        materiales: solicitud().materiales,
-        activos: const [],
-        firmaEntrega: firma,
-        firmaRecibe: firma,
-      ));
+      final resumen =
+          await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(deJuan());
 
-      expect(boletas.cuerpoCreado!['solicitanteNombre'], 'Pedro Luna');
-      expect(boletas.cuerpoCreado!['solicitanteUnidad'], 'Servicios Generales');
-      expect(boletas.cuerpoCreado!.containsKey('trabajadorId'), isFalse);
+      expect(boletas.cuerpoCreado!['trabajadorId'], 1);
+      expect(boletas.cuerpoCreado!['zonaId'], 7);
+      expect(boletas.cuerpoCreado!.containsKey('solicitanteNombre'), isFalse);
+      expect(boletas.cuerpoCreado!.containsKey('solicitanteUnidad'), isFalse);
+      expect(resumen.recibidoPor, 'Juan Pérez Soto');
+      expect(resumen.area, 'Servicios Generales');
     });
 
-    test('manda el motivo de la excepción y solo un supervisor con UUID', () async {
+    test('manda el motivo de la excepción y el supervisor elegido', () async {
       final boletas = BoletasFalso();
       const uuid = '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f';
 
@@ -512,41 +596,44 @@ void main() {
       expect(boletas.cuerpoCreado!['supervisorId'], uuid);
     });
 
-    test('un autorizador simulado (sin UUID) no se manda como supervisor', () async {
+    test('las herramientas se mandan con su id y días, y salen en el resumen', () async {
       final boletas = BoletasFalso();
+      final activo = aActivoCatalogo(taladro);
 
-      await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud(
-        autorizacion: const Autorizacion(autorizadorId: 'a1', autorizadorNombre: 'Leonel', motivo: 'Urgente'),
-      ));
+      final resumen = await crearApi(ProductosFalso(), boletas: boletas)
+          .registrarEntrega(deJuan(activos: [ItemActivo(activo: activo, dias: 3)]));
 
-      expect(boletas.cuerpoCreado!.containsKey('supervisorId'), isFalse);
+      expect(boletas.cuerpoCreado!['herramientas'], [
+        {'activoId': 3, 'diasPrestamo': 3},
+      ]);
+      expect(resumen.activos.single.codigo, 'TAL-001');
+      expect(resumen.activos.single.extra, 'SN-TAL-001');
     });
 
-    test('con herramientas avisa que el préstamo aún no está conectado y no sube nada', () async {
+    test('una herramienta sin id del servidor se rechaza antes de subir las firmas', () async {
       final boletas = BoletasFalso();
       const activo = ActivoCatalogo(
           codigo: '912391', equipo: 'Rotomartillo', modelo: 'GBH', serie: 'K1', almacen: '', ubicacion: '');
 
       await expectLater(
         crearApi(ProductosFalso(), boletas: boletas)
-            .registrarEntrega(solicitud(activos: [const ItemActivo(activo: activo)])),
-        throwsA(isA<ErrorNegocio>().having((e) => e.codigo, 'codigo', 'HERRAMIENTAS_NO_CONECTADAS')),
+            .registrarEntrega(deJuan(activos: [const ItemActivo(activo: activo)])),
+        throwsA(isA<ErrorNegocio>().having((e) => e.codigo, 'codigo', 'ACTIVO_NO_ENCONTRADO')),
       );
       expect(boletas.firmas, isEmpty);
-      expect(boletas.cuerpoCreado, isNull);
     });
 
-    test('una boleta pendiente de autorización se avisa con su folio', () async {
+    test('una boleta pendiente de autorización regresa su folio marcado como pendiente', () async {
       final boletas = BoletasFalso(
         creada: const BoletaCreada(boletaId: 8, folio: 'BOL-2026-000008', estado: 'PENDIENTE_AUTORIZACION'),
       );
 
-      await expectLater(
-        crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud()),
-        throwsA(isA<ErrorNegocio>()
-            .having((e) => e.codigo, 'codigo', 'BOLETA_PENDIENTE_AUTORIZACION')
-            .having((e) => e.mensaje, 'mensaje', contains('BOL-2026-000008'))),
-      );
+      final resumen =
+          await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud());
+
+      expect(resumen.folio, 'BOL-2026-000008');
+      expect(resumen.autorizacionPendiente, isTrue);
+      expect(resumen.fechaHora, 'Pendiente de autorización');
     });
 
     test('los errores del servidor salen tal cual', () async {

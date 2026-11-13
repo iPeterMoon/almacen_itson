@@ -166,7 +166,7 @@ class EntregaController extends Notifier<EntregaState> {
     }
     // La periodicidad y el límite de zona se validan con el total que quedaría en la boleta.
     final alerta = await _repo.validarMaterial(
-      solicitanteId: state.solicitante?.id,
+      solicitante: state.sinRegistro ? null : state.solicitante,
       material: material,
       cantidad: (existente?.cantidad ?? 0) + cantidad,
       unidad: unidad,
