@@ -189,8 +189,9 @@ un error. Inicia sesión con `almacen.nainari@itson.mx` / `demo1234`.
 
 `supabase/seeds/entrega_demo.sql` carga un escenario completo para probar la entrega de
 material (HU6) contra la base local: un almacenista y un supervisor con acceso a la app,
-cuatro materiales con existencia, tres trabajadores, dos zonas con su límite y periodicidad,
-y firmas de ejemplo en el bucket. Es idempotente (se puede correr varias veces).
+cuatro materiales con existencia, 13 trabajadores (2 páginas en la tabla de solicitantes),
+dos zonas con su límite y periodicidad, y firmas de ejemplo en el bucket. Es idempotente
+(se puede correr varias veces).
 
 ```bash
 # Desde la raíz del repo, en Git Bash. No necesitas psql instalado:
