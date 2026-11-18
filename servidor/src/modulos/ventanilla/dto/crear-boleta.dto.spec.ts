@@ -68,6 +68,14 @@ describe('CrearBoletaDto', () => {
       ).toEqual([]);
     });
 
+    it('acepta un comentario de hasta 255 caracteres', async () => {
+      expect(
+        await erroresDe({
+          materiales: [{ productoId: 12, cantidad: 1, comentario: 'a'.repeat(255) }],
+        }),
+      ).toEqual([]);
+    });
+
     it('rechaza un comentario de más de 255 caracteres', async () => {
       expect(
         await erroresDe({
@@ -114,6 +122,33 @@ describe('CrearBoletaDto', () => {
           numeroSolicitud: 'OT-9981',
         }),
       ).toEqual([]);
+    });
+
+    it('acepta nombres de hasta 200 caracteres en el solicitante', async () => {
+      const texto = 'a'.repeat(200);
+      expect(
+        await erroresDe({
+          materiales: [{ productoId: 12, cantidad: 1 }],
+          solicitanteNombre: texto,
+          solicitanteUnidad: texto,
+          autorizoNombre: texto,
+        }),
+      ).toEqual([]);
+    });
+
+    it('rechaza nombres de 201 caracteres en el solicitante', async () => {
+      const texto = 'a'.repeat(201);
+      expect(await erroresDe({ solicitanteNombre: texto })).toEqual(['solicitanteNombre']);
+      expect(await erroresDe({ solicitanteUnidad: texto })).toEqual(['solicitanteUnidad']);
+      expect(await erroresDe({ autorizoNombre: texto })).toEqual(['autorizoNombre']);
+    });
+
+    it('acepta un número de solicitud de hasta 100 caracteres', async () => {
+      expect(await erroresDe({ numeroSolicitud: 'a'.repeat(100) })).toEqual([]);
+    });
+
+    it('rechaza un número de solicitud de 101 caracteres', async () => {
+      expect(await erroresDe({ numeroSolicitud: 'a'.repeat(101) })).toEqual(['numeroSolicitud']);
     });
 
     it('rechaza un trabajadorId menor a 1', async () => {

@@ -12,7 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { LARGO_COMENTARIO } from '../../../comun/dto/limites';
+import { LARGO_COMENTARIO, LARGO_NOMBRE, LARGO_REFERENCIA } from '../../../comun/dto/limites';
 
 // Un renglón de material dentro de la boleta. La cantidad se captura en la
 // presentación elegida y la base la convierte a unidad base.
@@ -93,13 +93,13 @@ export class CrearBoletaDto {
   @ApiPropertyOptional({ example: 'Miguel Ángel Ruiz' })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(LARGO_NOMBRE)
   solicitanteNombre?: string;
 
   @ApiPropertyOptional({ example: 'Servicios Generales' })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(LARGO_NOMBRE)
   solicitanteUnidad?: string;
 
   @ApiPropertyOptional({ example: 3, description: 'Zona de trabajo del solicitante.' })
@@ -111,13 +111,13 @@ export class CrearBoletaDto {
   @ApiPropertyOptional({ example: 'SOL-2026-0042' })
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(LARGO_REFERENCIA)
   numeroSolicitud?: string;
 
   @ApiPropertyOptional({ example: 'Leonel Lares' })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(LARGO_NOMBRE)
   autorizoNombre?: string;
 
   @ApiPropertyOptional({
