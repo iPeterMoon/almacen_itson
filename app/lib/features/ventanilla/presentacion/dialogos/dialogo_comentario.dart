@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../../core/validacion/limites_texto.dart';
 
 /// Escenario 5: comentario por material/activo. Devuelve el texto o null si se cancela.
 Future<String?> mostrarDialogoComentario(
@@ -35,8 +37,24 @@ Future<String?> mostrarDialogoComentario(
                 autofocus: true,
                 minLines: 4,
                 maxLines: 6,
-                decoration: const InputDecoration(hintText: 'Escribe aquí tu comentario...'),
-              ),
+                maxLength: limiteComentario,
+                maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                textCapitalization: TextCapitalization.sentences,
+                buildCounter: (
+                  BuildContext context, {
+                    required int currentLength,
+                    required int? maxLength,
+                    required bool isFocused,
+                  }) {
+                    return Text(
+                      '$currentLength/${maxLength ?? limiteComentario}',
+                      semanticsLabel: 'caracteres usados',
+                    );
+                  },
+                  decoration: const InputDecoration(
+                    hintText: 'Escribe aquí tu comentario...'
+                  ),
+                ),
               const SizedBox(height: 16),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),

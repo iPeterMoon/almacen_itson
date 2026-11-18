@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:almacen_itson/core/validacion/limites_texto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -124,11 +125,13 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
                   const SizedBox(height: 8),
                   TextField(
                       controller: _nombre,
+                      maxLength: limiteNombre,
                       onChanged: c.setNombreSinRegistro,
                       decoration: const InputDecoration(labelText: 'Nombre')),
                   const SizedBox(height: 8),
                   TextField(
                       controller: _unidad,
+                      maxLength: limiteNombre,
                       onChanged: c.setUnidadSinRegistro,
                       decoration: const InputDecoration(labelText: 'Unidad/Campus')),
                   const SizedBox(height: 4),
@@ -218,6 +221,7 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
             );
             final numero = TextField(
               controller: _numero,
+              maxLength: limiteReferencia,
               onChanged: c.setNumeroSolicitud,
               decoration: const InputDecoration(
                   labelText: 'No. Solicitud (Opcional)', hintText: 'Ej. OT-9981'),

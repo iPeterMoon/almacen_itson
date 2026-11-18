@@ -1,4 +1,6 @@
+import 'package:almacen_itson/core/validacion/limites_texto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/tema/tema.dart';
@@ -113,8 +115,13 @@ class _DialogoAutorizacionState extends ConsumerState<DialogoAutorizacion> {
                 controller: _otro,
                 minLines: 3,
                 maxLines: 4,
+                maxLength: limiteComentario,
+                maxLengthEnforcement: MaxLengthEnforcement.enforced,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(labelText: 'Otro', alignLabelWithHint: true),
+                decoration: const InputDecoration(
+                  labelText: 'Otro', 
+                  alignLabelWithHint: true
+                ),
               ),
               const SizedBox(height: 20),
               Row(children: [
