@@ -68,10 +68,10 @@ describe('CrearBoletaDto', () => {
       ).toEqual([]);
     });
 
-    it('rechaza un comentario de más de 500 caracteres', async () => {
+    it('rechaza un comentario de más de 255 caracteres', async () => {
       expect(
         await erroresDe({
-          materiales: [{ productoId: 12, cantidad: 1, comentario: 'a'.repeat(501) }],
+          materiales: [{ productoId: 12, cantidad: 1, comentario: 'a'.repeat(256) }],
         }),
       ).toEqual(['materiales.0.comentario']);
     });

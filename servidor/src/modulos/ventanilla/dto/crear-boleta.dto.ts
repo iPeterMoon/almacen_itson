@@ -12,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { LARGO_COMENTARIO } from '../../../comun/dto/limites';
 
 // Un renglón de material dentro de la boleta. La cantidad se captura en la
 // presentación elegida y la base la convierte a unidad base.
@@ -35,7 +36,7 @@ export class MaterialSolicitadoDto {
   @ApiPropertyOptional({ example: 'Para el baño del edificio 2.' })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(LARGO_COMENTARIO)
   comentario?: string;
 
   @ApiPropertyOptional({
@@ -44,7 +45,7 @@ export class MaterialSolicitadoDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(LARGO_COMENTARIO)
   motivoExcepcion?: string;
 }
 

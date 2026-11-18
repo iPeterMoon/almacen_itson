@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { LARGO_COMENTARIO } from '../../../comun/dto/limites';
 
 // Decisión del supervisor sobre una boleta pendiente.
 export class ResolverAutorizacionDto {
@@ -10,6 +11,6 @@ export class ResolverAutorizacionDto {
   @ApiPropertyOptional({ example: 'Autorizado por urgencia en el baño del edificio 2.' })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(LARGO_COMENTARIO)
   comentario?: string;
 }
