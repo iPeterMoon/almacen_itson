@@ -228,7 +228,11 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas, {
         productos: {
-          data: { codigo: 'ESC-001', nombre_estandar: 'Escoba', unidades_medida: { nombre: 'Pieza' } },
+          data: {
+            codigo: 'ESC-001',
+            nombre_estandar: 'Escoba',
+            unidades_medida: { nombre: 'Pieza' },
+          },
           error: null,
         },
       });
@@ -377,7 +381,11 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas, {
         productos: {
-          data: { codigo: 'ESC-001', nombre_estandar: 'Escoba', unidades_medida: { nombre: 'Pieza' } },
+          data: {
+            codigo: 'ESC-001',
+            nombre_estandar: 'Escoba',
+            unidades_medida: { nombre: 'Pieza' },
+          },
           error: null,
         },
       });
@@ -410,7 +418,11 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas, {
         productos: {
-          data: { codigo: 'JAB-001', nombre_estandar: 'Jabón líquido', unidades_medida: { nombre: 'Litro' } },
+          data: {
+            codigo: 'JAB-001',
+            nombre_estandar: 'Jabón líquido',
+            unidades_medida: { nombre: 'Litro' },
+          },
           error: null,
         },
         presentaciones_producto: { data: { nombre: 'Medio litro' }, error: null },
@@ -443,7 +455,11 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas, {
         productos: {
-          data: { codigo: 'ESC-001', nombre_estandar: 'Escoba', unidades_medida: { nombre: 'Pieza' } },
+          data: {
+            codigo: 'ESC-001',
+            nombre_estandar: 'Escoba',
+            unidades_medida: { nombre: 'Pieza' },
+          },
           error: null,
         },
       });
