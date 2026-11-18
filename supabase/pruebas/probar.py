@@ -555,3 +555,4 @@ for paso, hu, desc, out in resultados:
     fallas += not paso
     print(f"{'PASA ' if paso else 'FALLA'} | {hu:8} | {desc}" + ("" if paso else f"\n        -> {out}"))
 print(f"\n{len(resultados) - fallas}/{len(resultados)} casos pasan")
+sys.exit(1 if fallas else 0)
