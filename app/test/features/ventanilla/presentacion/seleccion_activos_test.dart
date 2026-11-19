@@ -218,10 +218,10 @@ void main() {
   });
 
   group('búsqueda', () {
-    testWidgets('el campo usa el texto del prototipo', (tester) async {
+    testWidgets('el campo permite buscar por código, nombre o serie', (tester) async {
       await abrirActivos(tester, ActivosFalso());
 
-      expect(find.text('Buscar por código de activo o nombre del equipo'), findsOneWidget);
+      expect(find.text('Buscar por código, nombre o número de serie del equipo'), findsOneWidget);
     });
 
     testWidgets('un código que no existe muestra "Activo no encontrado" (Escenario 4)',
@@ -233,6 +233,7 @@ void main() {
 
       expect(activos.ultimaConsulta!.texto, 'ZZZ-999');
       expect(find.text(mensajeActivoNoEncontrado), findsOneWidget);
+      expect(find.text(mensajeSinHerramientas), findsOneWidget);
     });
 
     testWidgets('sin activos y sin búsqueda no dice "no encontrado"', (tester) async {

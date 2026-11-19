@@ -112,15 +112,38 @@ class EntregaController extends Notifier<EntregaState> {
   @override
   EntregaState build() => const EntregaState();
 
-  void reiniciar() => state = const EntregaState();
+  void reiniciar() {
+    state = const EntregaState();
+    _limpiarBusquedas();
+  }
+
+  // Los textos de búsqueda viven en providers que sobreviven al cambio de paso, pero
+  // los campos de texto se crean vacíos al volver. Si no se limpian, la tabla queda
+  // filtrada con la barra en blanco. Se limpian al salir de un paso y al empezar
+  // una boleta. (Los filtros de categoría, tipo y almacén sí se ven en pantalla y se conservan.)
+  void _limpiarBusquedas() {
+    if (ref.read(consultaSolicitantesProvider).isNotEmpty) {
+      ref.read(consultaSolicitantesProvider.notifier).set('');
+    }
+    if (ref.read(consultaActivosProvider).isNotEmpty) {
+      ref.read(consultaActivosProvider.notifier).set('');
+    }
+    if (ref.read(filtroMaterialesProvider).consulta.isNotEmpty) {
+      ref.read(filtroMaterialesProvider.notifier).setConsulta('');
+    }
+  }
 
   // --- Navegación entre pasos ---
   void avanzar() {
-    if (state.paso < 3 && state.puedeAvanzar()) state = state.copyWith(paso: state.paso + 1);
+    if (state.paso < 3 && state.puedeAvanzar()) {
+      state = state.copyWith(paso: state.paso + 1);
+      _limpiarBusquedas();
+    }
   }
 
   void retroceder() {
     if (state.paso == 0) return;
+    _limpiarBusquedas();
     // Al salir de la confirmación se descartan las firmas (el lienzo se vacía).
     state = state.copyWith(
       paso: state.paso - 1,

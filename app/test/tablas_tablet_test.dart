@@ -77,9 +77,9 @@ void main() {
         final c = ProviderContainer();
         addTearDown(c.dispose);
         await tester.pumpWidget(_app(c, const PasoMateriales()));
-        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
         await tester.tap(find.text('Activos'));
-        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
         // Con un equipo marcado se ven las dos tablas: Seleccionados y Resultados.
         await tester.tap(find.byType(Checkbox).first);
         await tester.pump();
@@ -90,6 +90,25 @@ void main() {
         _dentroDePantalla(tester, find.text('Tiempo de préstamo'));
         _dentroDePantalla(tester, find.text('Préstamo'));
         _dentroDePantalla(tester, find.text('Siguiente'));
+        _sinScrollHorizontal(tester);
+      });
+
+      testWidgets('tabla de activos filtrada por la búsqueda completa', (tester) async {
+        configurar(tester);
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        await tester.pumpWidget(_app(c, const PasoMateriales()));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.tap(find.text('Activos'));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField).first, 'ro');
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Resultados'), findsOneWidget);
+        _dentroDePantalla(tester, find.text('Ubicación'));
+        _dentroDePantalla(tester, find.text('Préstamo'));
         _sinScrollHorizontal(tester);
       });
 

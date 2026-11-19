@@ -15,7 +15,8 @@ import 'seleccion_activos.dart';
 
 /// Paso 2: "Selecciona material o equipo a entregar".
 /// Materiales: búsqueda + "Más comunes"/"Todos" + filtros de categoría, tipo y almacén.
-/// Activos (HU8): búsqueda + tablas "Seleccionados" y "Resultados" (ver seleccion_activos.dart).
+/// Activos (HU8): la búsqueda filtra la tabla "Resultados"; arriba va "Seleccionados"
+/// (ver seleccion_activos.dart).
 class PasoMateriales extends ConsumerStatefulWidget {
   const PasoMateriales({super.key});
 
@@ -106,7 +107,7 @@ class _PasoMaterialesState extends ConsumerState<PasoMateriales> {
               decoration: InputDecoration(
                 hintText: _pestana == 0
                     ? 'Buscar por código o concepto/alias del material'
-                    : 'Buscar por código de activo o nombre del equipo',
+                    : 'Buscar por código, nombre o número de serie del equipo',
                 suffixIcon: const Icon(Icons.search),
               ),
             ),

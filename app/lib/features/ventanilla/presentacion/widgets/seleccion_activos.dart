@@ -15,6 +15,7 @@ const mensajeActivosEscribeParaBuscar = 'Escribe al menos 2 caracteres para busc
 const mensajeErrorActivos = 'No se pudieron cargar los activos.';
 const mensajeActivoNoDisponible = 'El activo no está disponible.';
 const mensajeActivoEnPrestamo = 'Este equipo ya está en préstamo.';
+const mensajeSinHerramientas = 'No se encontró ninguna herramienta con ese código, nombre o serie';
 
 /// Qué decir cuando la lista de activos llega vacía, según lo que se escribió.
 String mensajeActivosVacios(String consulta) {
@@ -29,9 +30,17 @@ String mensajeActivosVacios(String consulta) {
 String mensajeActivoNoSeleccionable(ActivoCatalogo activo) =>
     activo.estado == estadoActivoEnPrestamo ? mensajeActivoEnPrestamo : mensajeActivoNoDisponible;
 
+// Aviso al tocar un activo que no se puede prestar.
+void _avisarNoSeleccionable(BuildContext context, ActivoCatalogo activo) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(mensajeActivoNoSeleccionable(activo))));
+}
+
 /// Pestaña "Activos" del paso 2 (HU8): tabla "Seleccionados" con los días de
 /// préstamo y tabla "Resultados" con el estado de cada equipo y la casilla "Agregar".
 /// Usa el mismo formato de fichas que la tabla de materiales (se ve completa en tableta).
+/// La búsqueda del campo de arriba (código, nombre o serie) va filtrando la tabla de Resultados.
 class SeleccionActivos extends ConsumerWidget {
   const SeleccionActivos({super.key});
 
@@ -121,8 +130,7 @@ class _ResultadosActivos extends ConsumerWidget {
           data: (pagina) => pagina.items.isEmpty
               ? Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Text(mensajeActivosVacios(consulta),
-                      style: const TextStyle(color: Colores.textoSuave)))
+                  child: _SinResultados(mensajeActivosVacios(consulta)))
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   ContenedorLista(children: [
                     for (var i = 0; i < pagina.items.length; i++)
@@ -145,6 +153,22 @@ class _ResultadosActivos extends ConsumerWidget {
   }
 }
 
+/// Tabla vacía. Cuando se buscó algo y no hay coincidencias se dan los dos mensajes:
+/// "Activo no encontrado" (HU8, Escenario 4) y el detalle de qué se buscó.
+class _SinResultados extends StatelessWidget {
+  const _SinResultados(this.mensaje);
+  final String mensaje;
+
+  @override
+  Widget build(BuildContext context) {
+    const estilo = TextStyle(color: Colores.textoSuave);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(mensaje, style: estilo),
+      if (mensaje == mensajeActivoNoEncontrado) const Text(mensajeSinHerramientas, style: estilo),
+    ]);
+  }
+}
+
 /// Fila de "Resultados". Disponible: casilla "Agregar". Cualquier otro estado: sin
 /// casilla, y al tocarla se avisa por qué no se puede prestar.
 class _FilaResultado extends StatelessWidget {
@@ -160,12 +184,6 @@ class _FilaResultado extends StatelessWidget {
   final bool agregado;
   final EntregaController controlador;
 
-  void _avisar(BuildContext context) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(mensajeActivoNoSeleccionable(activo))));
-  }
-
   @override
   Widget build(BuildContext context) {
     return FilaRegistro(
@@ -176,6 +194,7 @@ class _FilaResultado extends StatelessWidget {
         CampoDato('Equipo', activo.equipo),
         CampoDato('Modelo', activo.modelo),
         CampoDato('N° Serie', activo.serie),
+        CampoDato('Ubicación', activo.ubicacion),
         CampoDato('Préstamo', EtiquetaEstadoActivo.texto(activo.estado),
             widget: EtiquetaEstadoActivo(activo.estado)),
       ],
@@ -192,7 +211,9 @@ class _FilaResultado extends StatelessWidget {
               ])
             : null,
       ),
-      onTap: activo.disponible ? () => controlador.alternarActivo(activo) : () => _avisar(context),
+      onTap: activo.disponible
+          ? () => controlador.alternarActivo(activo)
+          : () => _avisarNoSeleccionable(context, activo),
     );
   }
 }
