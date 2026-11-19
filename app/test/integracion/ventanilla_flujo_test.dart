@@ -471,4 +471,64 @@ void main() {
     expect(find.text('Iniciar sesión'), findsWidgets);
     expect(find.text('Ventanilla de entregas'), findsNothing);
   });
+
+  // AI-66: al terminar una entrega, la siguiente no arrastra la búsqueda anterior y
+  // las tablas se vuelven a pedir a la API con la existencia ya descontada.
+  for (final salida in ['+ Nueva entrega', 'Volver a ventanilla']) {
+    testWidgets('al terminar una entrega con "$salida" las tablas se recargan limpias (AI-66)',
+        (tester) async {
+      var existencia = 10;
+      final servidor = _servidorBase()
+        ..en('GET /catalogo/productos', (_) => RespuestaApi.ok({
+              'datos': [
+                {
+                  ..._jabon,
+                  'existencia': existencia,
+                  'ubicaciones': [
+                    {...(_jabon['ubicaciones']! as List).single as Map, 'cantidad': existencia},
+                  ],
+                },
+              ],
+              'total': 1,
+              'pagina': 1,
+              'limite': 8,
+            }));
+      await _abrirApp(tester, servidor);
+      await _elegirSolicitanteRegistrado(tester);
+      await _tocar(tester, _boton('Siguiente'));
+      expect(find.text('10 Litro'), findsWidgets);
+      await _agregarJabon(tester, '2');
+      await _revisarFirmarYConfirmar(tester);
+      expect(find.text('Folio BOL-2026-000007'), findsOneWidget);
+
+      // El servidor ya descontó las 2 piezas de la entrega.
+      existencia = 8;
+      final trabajadoresAntes = servidor.a('GET /trabajadores').length;
+      final productosAntes = servidor.a('GET /catalogo/productos').length;
+      if (salida == '+ Nueva entrega') {
+        await _tocar(tester, _boton('+ Nueva entrega'));
+      } else {
+        await _tocar(tester, find.text('Volver a ventanilla'));
+        await _tocar(tester, _boton('+ Nueva entrega'));
+      }
+
+      // Paso 1: el campo está vacío y la tabla se pidió de nuevo sin el texto "miguel".
+      final buscador = tester.widget<EditableText>(find.descendant(
+          of: find.widgetWithText(TextField, 'Buscar por nombre del solicitante'),
+          matching: find.byType(EditableText)));
+      expect(buscador.controller.text, isEmpty);
+      final trabajadores = servidor.a('GET /trabajadores');
+      expect(trabajadores.length, trabajadoresAntes + 1);
+      expect(trabajadores.last.consulta, {'pagina': 1, 'limite': 8});
+
+      // Paso 2: el catálogo se pidió de nuevo y muestra la existencia descontada.
+      await _tocar(tester, find.text('Miguel Ángel Ruiz'));
+      await _tocar(tester, _boton('Siguiente'));
+      final productos = servidor.a('GET /catalogo/productos');
+      expect(productos.length, productosAntes + 1);
+      expect(productos.last.consulta, {'soloMasComunes': 'true', 'pagina': 1, 'limite': 8});
+      expect(find.text('8 Litro'), findsWidgets);
+      expect(find.text('10 Litro'), findsNothing);
+    });
+  }
 }

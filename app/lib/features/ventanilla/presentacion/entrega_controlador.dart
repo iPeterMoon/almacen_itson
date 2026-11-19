@@ -112,7 +112,18 @@ class EntregaController extends Notifier<EntregaState> {
   @override
   EntregaState build() => const EntregaState();
 
-  void reiniciar() => state = const EntregaState();
+  void reiniciar() {
+    state = const EntregaState();
+    for (final busqueda in [
+      consultaSolicitantesProvider,
+      paginaSolicitantesProvider,
+      filtroMaterialesProvider,
+      paginaMaterialesProvider,
+      consultaActivosProvider,
+    ]) {
+      ref.invalidate(busqueda);
+    }
+  }
 
   // --- Navegación entre pasos ---
   void avanzar() {
