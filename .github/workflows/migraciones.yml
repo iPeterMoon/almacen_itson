@@ -39,16 +39,16 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.2.0
 
       - name: Vincular proyecto
         run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
 
       - name: Migraciones pendientes
-        run: supabase migration list
+        run: supabase migration list --remote
 
       - name: Aplicar migraciones
-        run: supabase db push --yes
+        run: supabase db push --remote --yes
 
   principal:
     name: Proyecto principal
@@ -66,13 +66,13 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.2.0
 
       - name: Vincular proyecto
         run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
 
       - name: Migraciones pendientes
-        run: supabase migration list
+        run: supabase migration list --remote
 
       - name: Aplicar migraciones
-        run: supabase db push --yes
+        run: supabase db push --remote --yes
