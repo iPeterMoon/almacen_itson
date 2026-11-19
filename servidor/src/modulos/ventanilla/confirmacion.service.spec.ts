@@ -254,7 +254,7 @@ describe('ConfirmacionService', () => {
           cantidadSugerida: 4,
         },
       });
-      expect((error as ErrorNegocio).message).toContain('solo hay 4 Pieza');
+      expect((error as ErrorNegocio).message).toContain('solo se pueden entregar 4 Pieza');
       // Se valida con los datos de la boleta: solicitante, zona y campus.
       expect(boletas.validarMaterial).toHaveBeenCalledWith('token', {
         productoId: 13,

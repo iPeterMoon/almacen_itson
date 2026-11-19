@@ -759,17 +759,17 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       expect(res.body).toEqual({
         codigo: 'STOCK_INSUFICIENTE',
         mensaje:
-          'Existencia insuficiente de Jabón líquido: se solicitaron 6 Medio litro y solo hay ' +
-          '2.6 Medio litro en el campus.',
+          'Existencia insuficiente de Jabón líquido: se solicitaron 6 Medio litro y solo se pueden entregar ' +
+          '2 Medio litro en el campus.',
         datos: {
           productoId: 12,
           codigo: 'JAB-001',
           nombre: 'Jabón líquido',
           solicitado: 6,
-          disponible: 2.6,
+          disponible: 2,
           unidad: 'Medio litro',
           disponibleBase: 1.3,
-          cantidadSugerida: 2.6,
+          cantidadSugerida: 2,
         },
       });
       // Revalida con el mismo solicitante y zona que la boleta.

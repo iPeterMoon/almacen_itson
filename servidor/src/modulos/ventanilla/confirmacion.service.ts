@@ -228,7 +228,7 @@ export class ConfirmacionService {
         return new ErrorNegocio(
           'STOCK_INSUFICIENTE',
           `Existencia insuficiente de ${nombre}: se solicitaron ${linea.cantidad} ${unidad} ` +
-            `y solo hay ${disponible} ${unidad} en el campus.`,
+            `y solo se pueden entregar ${disponible} ${unidad} en el campus.`,
           undefined,
           {
             productoId: linea.productoId,
