@@ -46,10 +46,8 @@ describe('registrarLogsPeticiones', () => {
 
   it('no registra la cadena de consulta ni el cuerpo de la petición', () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-    const req = {
-      ...peticion('/api/v1/usuarios/sesion?token=secreto'),
-      body: { contrasena: 'abc' },
-    };
+    const req = peticion('/api/v1/usuarios/sesion?token=secreto');
+    req.body = { contrasena: 'abc' };
     const res = respuesta();
 
     registrarLogsPeticiones(req, res as unknown as Response, jest.fn());
