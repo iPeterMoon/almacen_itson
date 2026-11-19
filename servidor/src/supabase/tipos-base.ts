@@ -1823,6 +1823,8 @@ export type Database = {
           custodio_actual: string
           estado: string
           fecha_prevista: string
+          mismo_tipo_codigo: string
+          mismo_tipo_prestamo: string
           modelo: string
           nombre: string
           numero_serie: string

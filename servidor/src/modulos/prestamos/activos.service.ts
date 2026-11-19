@@ -37,7 +37,8 @@ const CAMPOS =
   'ubicaciones(descripcion, almacenes(id, nombre, campus_id))';
 
 // Fila que devuelve la RPC validar_activo (HU8). Custodio y fecha solo existen
-// cuando el activo está prestado.
+// cuando el activo está prestado; mismo_tipo_* solo cuando el trabajador ya tiene
+// una herramienta del mismo tipo prestada.
 interface FilaValidacionActivo {
   activo_id: number;
   codigo: string;
@@ -48,6 +49,15 @@ interface FilaValidacionActivo {
   custodio_actual: string | null;
   fecha_prevista: string | null;
   solicitante_con_vencido: boolean;
+  mismo_tipo_codigo: string | null;
+  mismo_tipo_prestamo: string | null;
+}
+
+// Herramienta del mismo tipo que impide el préstamo, con el folio del préstamo
+// abierto en el que la tiene el solicitante.
+export interface HerramientaMismoTipo {
+  codigo: string;
+  prestamo: string;
 }
 
 export interface ValidacionActivo {
@@ -60,9 +70,10 @@ export interface ValidacionActivo {
     estado: string;
   };
   prestable: boolean;
-  motivo?: 'NO_DISPONIBLE' | 'PRESTADO';
+  motivo?: 'NO_DISPONIBLE' | 'PRESTADO' | 'MISMO_TIPO';
   custodio?: string;
   fechaPrevista?: string;
+  mismoTipo?: HerramientaMismoTipo;
   solicitanteConVencido: boolean;
 }
 
@@ -86,7 +97,10 @@ export class ActivosService {
     const fila = data?.[0] as FilaValidacionActivo | undefined;
     if (!fila) throw new Error('La base no devolvió la validación del activo.');
 
-    const prestable = fila.estado === 'DISPONIBLE';
+    const disponible = fila.estado === 'DISPONIBLE';
+    // crear_boleta rechaza otra herramienta del mismo tipo; aquí se avisa antes.
+    const mismoTipo = Boolean(fila.mismo_tipo_codigo && fila.mismo_tipo_prestamo);
+    const prestable = disponible && !mismoTipo;
     const respuesta: ValidacionActivo = {
       activo: {
         id: Number(fila.activo_id),
@@ -101,8 +115,17 @@ export class ActivosService {
       solicitanteConVencido: fila.solicitante_con_vencido,
     };
 
-    if (!prestable) {
+    // El estado del activo tiene prioridad sobre el mismo tipo.
+    if (!disponible) {
       respuesta.motivo = fila.estado === 'EN_PRESTAMO' ? 'PRESTADO' : 'NO_DISPONIBLE';
+    } else if (mismoTipo) {
+      respuesta.motivo = 'MISMO_TIPO';
+    }
+    if (mismoTipo) {
+      respuesta.mismoTipo = {
+        codigo: fila.mismo_tipo_codigo as string,
+        prestamo: fila.mismo_tipo_prestamo as string,
+      };
     }
     if (fila.custodio_actual) respuesta.custodio = fila.custodio_actual;
     if (fila.fecha_prevista) respuesta.fechaPrevista = fila.fecha_prevista;

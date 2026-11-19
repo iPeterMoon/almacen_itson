@@ -448,6 +448,15 @@ caso("HU8", "Otros dos taladros y otra esmeriladora", CEN,
 ACT201 = admin("select id from activos where codigo='ACT-201'")
 ACT202 = admin("select id from activos where codigo='ACT-202'")
 ACT301 = admin("select id from activos where codigo='ACT-301'")
+caso("HU8", "La validación avisa que ya tiene un taladro prestado", CEN,
+     f"select mismo_tipo_codigo||'|'||mismo_tipo_prestamo "
+     f"from validar_activo('ACT-201', {JUAN})", contiene="ACT-200|PRE-")
+caso("HU8", "Sin solicitante la validación no revisa el tipo", CEN,
+     "select coalesce(mismo_tipo_codigo,'ninguno') from validar_activo('ACT-201')", contiene="ninguno")
+caso("HU8", "Otra persona no tiene taladro", CEN,
+     f"select coalesce(mismo_tipo_codigo,'ninguno') from validar_activo('ACT-201', {MARIA})", contiene="ninguno")
+caso("Seg", "La app no llama la función privada del tipo", CEN,
+     f"select * from privado.herramienta_del_mismo_tipo({JUAN}, 'Taladro')", espera="permission denied")
 caso("HU8", "No se presta otro taladro a quien ya tiene uno", CEN,
      prestamo(JUAN, ACT201, 2), espera="HERRAMIENTA_MISMO_TIPO")
 caso("HU8", "Mensaje indica el préstamo abierto del mismo tipo", CEN,

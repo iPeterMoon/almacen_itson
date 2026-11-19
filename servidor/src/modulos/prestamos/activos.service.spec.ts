@@ -234,6 +234,81 @@ describe('ActivosService', () => {
       expect(resultado).not.toHaveProperty('motivo');
     });
 
+    it('no se presta si el trabajador ya tiene prestada una del mismo tipo', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            ...VALIDACION_ACTIVO,
+            mismo_tipo_codigo: 'TAL-002',
+            mismo_tipo_prestamo: 'PRE-2026-0004',
+          },
+        ],
+        error: null,
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', {
+        codigo: 'TAL-001',
+        trabajadorId: 15,
+      });
+
+      expect(resultado).toMatchObject({
+        prestable: false,
+        motivo: 'MISMO_TIPO',
+        mismoTipo: { codigo: 'TAL-002', prestamo: 'PRE-2026-0004' },
+        activo: { estado: 'DISPONIBLE' },
+      });
+    });
+
+    it('el estado del activo tiene prioridad sobre el mismo tipo', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            ...VALIDACION_ACTIVO,
+            estado: 'EN_REPARACION',
+            mismo_tipo_codigo: 'TAL-002',
+            mismo_tipo_prestamo: 'PRE-2026-0004',
+          },
+        ],
+        error: null,
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', {
+        codigo: 'TAL-001',
+        trabajadorId: 15,
+      });
+
+      expect(resultado).toMatchObject({
+        prestable: false,
+        motivo: 'NO_DISPONIBLE',
+        mismoTipo: { codigo: 'TAL-002', prestamo: 'PRE-2026-0004' },
+      });
+    });
+
+    it('sin herramienta del mismo tipo no agrega mismoTipo', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            ...VALIDACION_ACTIVO,
+            mismo_tipo_codigo: null,
+            mismo_tipo_prestamo: null,
+          },
+        ],
+        error: null,
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', {
+        codigo: 'TAL-001',
+        trabajadorId: 15,
+      });
+
+      expect(resultado.prestable).toBe(true);
+      expect(resultado).not.toHaveProperty('mismoTipo');
+      expect(resultado).not.toHaveProperty('motivo');
+    });
+
     it('falla si la base no devuelve la fila de validación', async () => {
       const rpc = jest.fn().mockResolvedValue({ data: [], error: null });
       const { servicio } = crearConRpc(rpc);

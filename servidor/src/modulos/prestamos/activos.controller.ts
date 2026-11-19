@@ -31,8 +31,10 @@ export class ActivosController {
     summary: 'Valida un activo antes de prestarlo',
     description:
       'Devuelve el estado del activo, su custodio y fecha prevista si está prestado, y si el ' +
-      'solicitante tiene préstamos vencidos. `prestable` es true solo si está DISPONIBLE; ' +
-      'un vencido es una alerta, no un bloqueo. No crea ni modifica nada.',
+      'solicitante tiene préstamos vencidos. `prestable` es true solo si está DISPONIBLE y el ' +
+      'solicitante no tiene ya prestada una herramienta del mismo tipo (mismo nombre); en ese ' +
+      'caso `motivo` es MISMO_TIPO y `mismoTipo` indica cuál y en qué préstamo. ' +
+      'Un vencido es una alerta, no un bloqueo. No crea ni modifica nada.',
   })
   @ApiOkResponse({
     description: 'Resultado de la validación.',

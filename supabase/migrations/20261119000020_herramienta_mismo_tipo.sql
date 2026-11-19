@@ -4,8 +4,9 @@
 -- Un trabajador no puede recibir una herramienta del mismo tipo que otra
 -- que ya tiene prestada, ni dos del mismo tipo en la misma boleta. El tipo
 -- es el nombre del activo sin distinguir mayúsculas ni espacios
--- ("Taladro" = " taladro"). crear_boleta lo rechaza. Parte de la
--- crear_boleta de la migración 19 (entregas sin autorizaciones).
+-- ("Taladro" = " taladro"). crear_boleta lo rechaza y validar_activo lo
+-- avisa antes de agregar la herramienta. Parte de la crear_boleta de la
+-- migración 19 (entregas sin autorizaciones).
 -- =====================================================================
 
 create or replace function privado.tipo_de_activo(p_nombre text)
@@ -207,3 +208,50 @@ begin
   perform ejecutar_entrega(v_id);
   return query select v_id, v_folio, 'ENTREGADA'::text, v_alertas;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- validar_activo avisa antes de agregar la herramienta a la boleta si el
+-- trabajador ya tiene prestada una del mismo tipo. Cambian las columnas que
+-- devuelve, así que se borra y se vuelve a crear con sus permisos.
+-- ---------------------------------------------------------------------
+drop function public.validar_activo(text, bigint);
+create function public.validar_activo(p_codigo text, p_trabajador_id bigint default null)
+returns table (activo_id bigint, codigo text, nombre text, modelo text, numero_serie text, estado text,
+               custodio_actual text, fecha_prevista timestamptz, solicitante_con_vencido boolean,
+               mismo_tipo_codigo text, mismo_tipo_prestamo text)
+language plpgsql stable security definer set search_path = public, privado as $$
+declare
+  v_a         record;
+  v_custodio  text;
+  v_prevista  timestamptz;
+  v_vencido   boolean;
+  v_previo    record;
+begin
+  perform campus_de_operacion(null);
+  select a.id, a.codigo, a.nombre, a.modelo, a.numero_serie, a.estado, al.campus_id into v_a
+    from activos a
+    join ubicaciones u on u.id = a.ubicacion_id
+    join almacenes al on al.id = u.almacen_id
+   where upper(btrim(a.codigo)) = upper(btrim(p_codigo));
+  if v_a.id is null or v_a.campus_id not in (select mis_campus()) then
+    raise exception 'ACTIVO_NO_ENCONTRADO: Activo no encontrado.';
+  end if;
+  select b.solicitante_nombre, p.fecha_prevista into v_custodio, v_prevista
+    from prestamos p
+    join boletas_herramientas bh on bh.id = p.boleta_herramienta_id
+    join boletas b on b.id = bh.boleta_id
+   where p.activo_id = v_a.id and p.estado = 'ACTIVO';
+  v_vencido := p_trabajador_id is not null and exists (
+    select 1 from prestamos p
+      join boletas_herramientas bh on bh.id = p.boleta_herramienta_id
+      join boletas b on b.id = bh.boleta_id
+     where b.trabajador_id = p_trabajador_id and p.estado = 'ACTIVO' and p.fecha_prevista < now());
+  -- Sin trabajador no hay filas y las columnas mismo_tipo_* quedan en null.
+  select * into v_previo from herramienta_del_mismo_tipo(p_trabajador_id, v_a.nombre);
+  return query select v_a.id, v_a.codigo, v_a.nombre, v_a.modelo, v_a.numero_serie, v_a.estado,
+                      v_custodio, v_prevista, v_vencido,
+                      v_previo.codigo, v_previo.prestamo;
+end $$;
+
+revoke execute on function public.validar_activo(text, bigint) from public, anon;
+grant execute on function public.validar_activo(text, bigint) to authenticated;
