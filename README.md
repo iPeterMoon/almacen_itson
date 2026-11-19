@@ -142,9 +142,10 @@ npx supabase start      # levanta PostgreSQL 17, API, Studio y storage
 npx supabase db reset   # aplica las migraciones y carga los datos de desarrollo
 ```
 
-`db reset` ejecuta `supabase/seed.sql` y `supabase/seed_desarrollo.sql` (ver `[db.seed]` en
-`supabase/config.toml`). Para agregar el escenario de entrega en ventanilla, corre además
-`supabase/seeds/entrega_demo.sql` (ver [Datos de ejemplo para ventanilla](#datos-de-ejemplo-para-ventanilla)).
+`db reset` ejecuta `supabase/seed.sql`, `supabase/seed_desarrollo.sql` y
+`supabase/seeds/entrega_demo.sql` (ver `[db.seed]` en `supabase/config.toml`), así que el
+escenario de entrega en ventanilla queda cargado desde el inicio (ver
+[Datos de ejemplo para ventanilla](#datos-de-ejemplo-para-ventanilla)).
 
 Servicios locales:
 
@@ -191,7 +192,9 @@ un error. Inicia sesión con `almacen.nainari@itson.mx` / `demo1234`.
 material (HU6) contra la base local: un almacenista y un supervisor con acceso a la app,
 cuatro materiales con existencia, 13 trabajadores (2 páginas en la tabla de solicitantes),
 dos zonas con su límite y periodicidad, y firmas de ejemplo en el bucket. Es idempotente
-(se puede correr varias veces).
+(se puede correr varias veces) y `db reset` lo ejecuta automáticamente.
+
+Si necesitas volver a cargarlo sin reiniciar la base:
 
 ```bash
 # Desde la raíz del repo, en Git Bash. No necesitas psql instalado:
