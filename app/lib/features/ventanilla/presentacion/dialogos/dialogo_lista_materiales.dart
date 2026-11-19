@@ -6,6 +6,7 @@ import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
 import '../../../../core/errores/error_negocio.dart';
 import '../entrega_controlador.dart';
+import '../validadores.dart' show cantidadMaxima;
 import 'dialogo_autorizacion.dart';
 
 Future<void> mostrarDialogoListaMateriales(BuildContext context) =>
@@ -107,15 +108,20 @@ class _BotonBorrar extends StatelessWidget {
 class _Cantidad extends StatelessWidget {
   const _Cantidad({required this.texto, required this.onMenos, required this.onMas});
   final String texto;
-  final VoidCallback onMenos;
-  final VoidCallback onMas;
+  // null desactiva el botón (por ejemplo, + al llegar al máximo).
+  final VoidCallback? onMenos;
+  final VoidCallback? onMas;
 
   @override
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(tooltip: 'Disminuir', onPressed: onMenos, icon: const Icon(Icons.remove)),
         SizedBox(
-            width: 28,
-            child: Text(texto, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16))),
+            // Cabe una cantidad de 4 dígitos (hasta 9999). Si no alcanza el ancho, el
+            // número se reduce en lugar de partirse en dos líneas.
+            width: 44,
+            child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(texto, maxLines: 1, style: const TextStyle(fontSize: 16)))),
         IconButton(tooltip: 'Aumentar', onPressed: onMas, icon: const Icon(Icons.add)),
       ]);
 }
@@ -147,8 +153,13 @@ class _FilaMaterial extends StatelessWidget {
           ),
           _Cantidad(
             texto: formatearCantidad(item.cantidad),
-            onMenos: () => _cambiarCantidad(context, c, item, item.cantidad - 1),
-            onMas: () => _cambiarCantidad(context, c, item, item.cantidad + 1),
+            // Igual que al agregar (AI-67): de 1 en 1, sin bajar de 1 ni pasar de 9999.
+            onMenos: item.cantidad > 1
+                ? () => _cambiarCantidad(context, c, item, item.cantidad - 1)
+                : null,
+            onMas: item.cantidad < cantidadMaxima
+                ? () => _cambiarCantidad(context, c, item, item.cantidad + 1)
+                : null,
           ),
           SizedBox(
             width: 150,
