@@ -94,3 +94,52 @@ jobs:
 
       - name: Probar escenarios
         run: python3 supabase/pruebas/probar.py
+
+  # Si el PR trae migraciones nuevas y todo lo anterior pasó, se aplican al
+  # proyecto de pruebas de Supabase antes de aceptarlo. Al principal solo llegan
+  # tras el merge (ver migraciones.yml).
+  supabase-pruebas:
+    name: Supabase pruebas (migraciones)
+    needs: [servidor, app, base-datos]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment: pruebas
+    # Nunca dos aplicaciones a la vez ni se cancela una a medias.
+    concurrency:
+      group: supabase-pruebas
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detectar migraciones nuevas
+        id: cambios
+        run: |
+          if git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- supabase/migrations; then
+            echo "hay=false" >> "$GITHUB_OUTPUT"
+            echo "El PR no trae migraciones nuevas."
+          else
+            echo "hay=true" >> "$GITHUB_OUTPUT"
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- supabase/migrations
+          fi
+
+      - uses: supabase/setup-cli@v1
+        if: steps.cambios.outputs.hay == 'true'
+        with:
+          version: 3.2.0
+
+      - name: Vincular proyecto
+        if: steps.cambios.outputs.hay == 'true'
+        run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+
+      - name: Migraciones pendientes
+        if: steps.cambios.outputs.hay == 'true'
+        run: supabase migration list --remote
+
+      - name: Aplicar migraciones
+        if: steps.cambios.outputs.hay == 'true'
+        run: supabase db push --remote --yes
