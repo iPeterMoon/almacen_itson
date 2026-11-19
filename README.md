@@ -62,6 +62,7 @@ números, espacios y `. - / # '`), `pagina` y `limite` (8 por defecto, máximo 5
 | `GET`  | `/api/v1/trabajadores`        | Solicitantes registrados con sus zonas (ventanilla)                    |
 | `GET`  | `/api/v1/usuarios/supervisores` | Supervisores que pueden autorizar una excepción (usuarios y roles)    |
 | `GET`  | `/api/v1/activos`             | Herramientas por código, nombre o serie; `estado=DISPONIBLE` para prestar (préstamos) |
+| `POST` | `/api/v1/activos/validar`     | Valida un activo antes de prestarlo: estado, custodio, fecha prevista y vencidos del solicitante |
 
 ## Tipos de Supabase
 

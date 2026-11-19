@@ -1,10 +1,20 @@
+import { HttpStatus } from '@nestjs/common';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { crearSupabaseFalso, RespuestaFalsa } from '../../comun/pruebas/supabase-falso';
+import { SupabaseService } from '../../supabase/supabase.service';
 import { ActivosService } from './activos.service';
 
 function crear(respuesta: RespuestaFalsa) {
   const falso = crearSupabaseFalso(respuesta);
   return { ...falso, servicio: new ActivosService(falso.supabase) };
+}
+
+// validar_activo es una RPC, así que necesita un cliente falso con rpc (el de
+// crearSupabaseFalso solo simula consultas con from).
+function crearConRpc(rpc: jest.Mock) {
+  const clienteDeUsuario = jest.fn(() => ({ rpc }));
+  const supabase = { clienteDeUsuario } as unknown as SupabaseService;
+  return { rpc, clienteDeUsuario, servicio: new ActivosService(supabase) };
 }
 
 const taladro = {
@@ -16,6 +26,18 @@ const taladro = {
   numero_serie: 'SN-TAL-001',
   estado: 'DISPONIBLE',
   ubicaciones: { descripcion: 'E1F1', almacenes: { id: 1, nombre: 'Principal', campus_id: 1 } },
+};
+
+const VALIDACION_ACTIVO = {
+  activo_id: 1,
+  codigo: 'TAL-001',
+  nombre: 'Taladro inalámbrico',
+  modelo: 'DCD771',
+  numero_serie: 'SN-TAL-001',
+  estado: 'DISPONIBLE',
+  custodio_actual: null,
+  fecha_prevista: null,
+  solicitante_con_vencido: false,
 };
 
 describe('ActivosService', () => {
@@ -77,5 +99,148 @@ describe('ActivosService', () => {
     const { servicio } = crear({ data: null, error: { message: 'SIN_PERMISO: No.' } });
 
     await expect(servicio.listar('token', {})).rejects.toBeInstanceOf(ErrorNegocio);
+  });
+
+  describe('validarActivo', () => {
+    it('un activo disponible se puede prestar y no tiene custodio ni motivo', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_ACTIVO], error: null });
+      const { servicio, clienteDeUsuario } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token-usuario', {
+        codigo: 'TAL-001',
+        trabajadorId: 15,
+      });
+
+      expect(clienteDeUsuario).toHaveBeenCalledWith('token-usuario');
+      expect(rpc).toHaveBeenCalledWith('validar_activo', {
+        p_codigo: 'TAL-001',
+        p_trabajador_id: 15,
+      });
+      expect(resultado).toEqual({
+        activo: {
+          id: 1,
+          codigo: 'TAL-001',
+          nombre: 'Taladro inalámbrico',
+          modelo: 'DCD771',
+          numeroSerie: 'SN-TAL-001',
+          estado: 'DISPONIBLE',
+        },
+        prestable: true,
+        solicitanteConVencido: false,
+      });
+    });
+
+    it('sin trabajadorId manda p_trabajador_id undefined', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_ACTIVO], error: null });
+      const { servicio } = crearConRpc(rpc);
+
+      await servicio.validarActivo('token', { codigo: 'TAL-001' });
+
+      expect(rpc).toHaveBeenCalledWith('validar_activo', {
+        p_codigo: 'TAL-001',
+        p_trabajador_id: undefined,
+      });
+    });
+
+    it('un activo en reparación no se presta (HU8-E3)', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_ACTIVO, estado: 'EN_REPARACION' }],
+        error: null,
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', { codigo: 'TAL-001' });
+
+      expect(resultado).toMatchObject({
+        prestable: false,
+        motivo: 'NO_DISPONIBLE',
+        activo: { estado: 'EN_REPARACION' },
+      });
+      expect(resultado).not.toHaveProperty('custodio');
+      expect(resultado).not.toHaveProperty('fechaPrevista');
+    });
+
+    it('un activo de baja no se presta', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_ACTIVO, estado: 'DE_BAJA' }],
+        error: null,
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', { codigo: 'TAL-001' });
+
+      expect(resultado).toMatchObject({ prestable: false, motivo: 'NO_DISPONIBLE' });
+    });
+
+    it('un activo prestado devuelve custodio y fecha prevista (HU8-E2)', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [
+          {
+            ...VALIDACION_ACTIVO,
+            estado: 'EN_PRESTAMO',
+            custodio_actual: 'Juan Pérez Soto',
+            fecha_prevista: '2026-11-20T18:00:00.000Z',
+          },
+        ],
+        error: null,
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', { codigo: 'TAL-001' });
+
+      expect(resultado).toEqual({
+        activo: {
+          id: 1,
+          codigo: 'TAL-001',
+          nombre: 'Taladro inalámbrico',
+          modelo: 'DCD771',
+          numeroSerie: 'SN-TAL-001',
+          estado: 'EN_PRESTAMO',
+        },
+        prestable: false,
+        motivo: 'PRESTADO',
+        custodio: 'Juan Pérez Soto',
+        fechaPrevista: '2026-11-20T18:00:00.000Z',
+        solicitanteConVencido: false,
+      });
+    });
+
+    it('un activo de otro campus responde 404 ACTIVO_NO_ENCONTRADO (HU8-E4)', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'ACTIVO_NO_ENCONTRADO: Activo no encontrado.' },
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      await expect(servicio.validarActivo('token', { codigo: 'ACT-N01' })).rejects.toMatchObject({
+        codigo: 'ACTIVO_NO_ENCONTRADO',
+        estadoHttp: HttpStatus.NOT_FOUND,
+      });
+    });
+
+    it('advierte el vencido del solicitante sin bloquear un activo disponible (HU8-E5)', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: [{ ...VALIDACION_ACTIVO, solicitante_con_vencido: true }],
+        error: null,
+      });
+      const { servicio } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', {
+        codigo: 'TAL-001',
+        trabajadorId: 15,
+      });
+
+      expect(resultado).toMatchObject({ prestable: true, solicitanteConVencido: true });
+      expect(resultado).not.toHaveProperty('motivo');
+    });
+
+    it('falla si la base no devuelve la fila de validación', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [], error: null });
+      const { servicio } = crearConRpc(rpc);
+
+      await expect(servicio.validarActivo('token', { codigo: 'TAL-001' })).rejects.toThrow(
+        'La base no devolvió la validación del activo.',
+      );
+    });
   });
 });
