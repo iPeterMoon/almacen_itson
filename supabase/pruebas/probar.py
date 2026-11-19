@@ -440,35 +440,29 @@ caso("HU8 E5", "Validación advierte que el solicitante tiene un vencido", CEN,
 caso("HU8 E5", "Se presta con advertencia registrada (1 día)", CEN,
      prestamo(JUAN, ACT200, 1), contiene='"solicitante_con_vencido": true')
 
-# Un solo préstamo por tipo de herramienta (mismo nombre, sin distinguir mayúsculas ni espacios)
-caso("HU8", "Otros dos taladros y otra esmeriladora", CEN,
-     activo('ACT-201', ' taladro ', 'DCD771', 'DCD771-1') + "; " + activo('ACT-202', 'TALADRO', 'DCD771', 'DCD771-2')
-     + "; " + activo('ACT-301', 'Esmeriladora', 'G720', 'G720-1'),
+# Varios activos con el mismo nombre: se prestan; la app solo avisa con los
+# préstamos abiertos del trabajador (POST /activos/validar los lee de la vista).
+caso("HU8", "Otros tres taladros", CEN,
+     activo('ACT-201', 'Taladro', 'DCD771', 'DCD771-1') + "; " + activo('ACT-202', 'Taladro', 'DCD771', 'DCD771-2')
+     + "; " + activo('ACT-203', 'Taladro', 'DCD771', 'DCD771-3'),
      contiene="DISPONIBLE")
 ACT201 = admin("select id from activos where codigo='ACT-201'")
 ACT202 = admin("select id from activos where codigo='ACT-202'")
-ACT301 = admin("select id from activos where codigo='ACT-301'")
-caso("HU8", "La validación avisa que ya tiene un taladro prestado", CEN,
-     f"select mismo_tipo_codigo||'|'||mismo_tipo_prestamo "
-     f"from validar_activo('ACT-201', {JUAN})", contiene="ACT-200|PRE-")
-caso("HU8", "Sin solicitante la validación no revisa el tipo", CEN,
-     "select coalesce(mismo_tipo_codigo,'ninguno') from validar_activo('ACT-201')", contiene="ninguno")
-caso("HU8", "Otra persona no tiene taladro", CEN,
-     f"select coalesce(mismo_tipo_codigo,'ninguno') from validar_activo('ACT-201', {MARIA})", contiene="ninguno")
-caso("Seg", "La app no llama la función privada del tipo", CEN,
-     f"select * from privado.herramienta_del_mismo_tipo({JUAN}, 'Taladro')", espera="permission denied")
-caso("HU8", "No se presta otro taladro a quien ya tiene uno", CEN,
-     prestamo(JUAN, ACT201, 2), espera="HERRAMIENTA_MISMO_TIPO")
-caso("HU8", "Mensaje indica el préstamo abierto del mismo tipo", CEN,
-     prestamo(JUAN, ACT201, 2), espera="ACT-200 en el préstamo PRE-")
-caso("HU8", "Dos herramientas del mismo tipo en una boleta", CEN,
-     f"select 1 from crear_boleta(p_herramientas=>'[{{\"activo_id\":{ACT201},\"dias_prestamo\":1}},"
-     f"{{\"activo_id\":{ACT202},\"dias_prestamo\":1}}]', p_trabajador_id=>{MARIA}, {FIRMAS})",
-     espera="en la misma boleta (ACT-201 y ACT-202)")
-caso("HU8", "Otra persona sí puede recibir un taladro", CEN,
-     prestamo(MARIA, ACT201, 2), contiene="ENTREGADA")
-caso("HU8", "Un tipo distinto sí se presta a quien ya tiene un taladro", CEN,
-     prestamo(JUAN, ACT301, 2), contiene="ENTREGADA")
+ACT203 = admin("select id from activos where codigo='ACT-203'")
+caso("HU8", "La vista lista los préstamos abiertos de Juan con su seguimiento", CEN,
+     f"select string_agg(codigo||':'||seguimiento, ',' order by fecha_prevista) from vista_seguimiento_prestamos "
+     f"where trabajador_id={JUAN} and estado='ACTIVO'", contiene="ACT-104:VENCIDO,ACT-200:PROXIMO_A_VENCER")
+caso("HU8", "Un taladro con el mismo nombre que el que ya tiene sigue prestable", CEN,
+     f"select estado from validar_activo('ACT-201', {JUAN})", contiene="DISPONIBLE")
+caso("HU8", "Se presta otro taladro a quien ya tiene uno", CEN,
+     prestamo(JUAN, ACT201, 2), contiene="ENTREGADA")
+caso("HU8", "Dos taladros en la misma boleta", CEN,
+     f"select estado from crear_boleta(p_herramientas=>'[{{\"activo_id\":{ACT202},\"dias_prestamo\":2}},"
+     f"{{\"activo_id\":{ACT203},\"dias_prestamo\":2}}]', p_trabajador_id=>{MARIA}, {FIRMAS})",
+     contiene="ENTREGADA")
+caso("HU8", "María queda con dos préstamos abiertos de taladro", CEN,
+     f"select count(*) from vista_seguimiento_prestamos where trabajador_id={MARIA} and estado='ACTIVO' "
+     f"and herramienta='Taladro'", contiene="2")
 
 # ---------- HU10: seguimiento ----------
 caso("HU10 E1", "Vencido con 2 días de retraso", CEN,

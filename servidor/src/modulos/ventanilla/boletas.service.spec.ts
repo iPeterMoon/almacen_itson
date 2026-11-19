@@ -194,26 +194,29 @@ describe('BoletasService', () => {
       expect(rpc).not.toHaveBeenCalled();
     });
 
-    // El DTO rechaza el mismo activo repetido; la base, otro del mismo tipo.
-    it('responde 409 HERRAMIENTA_MISMO_TIPO si el trabajador ya tiene una del mismo tipo', async () => {
-      const rpc = jest.fn().mockResolvedValue({
-        data: null,
-        error: {
-          message:
-            'HERRAMIENTA_MISMO_TIPO: Juan Pérez ya tiene prestada una herramienta "Taladro" (ACT-200 en el préstamo PRE-2026-0002).',
-        },
-      });
+    // El DTO solo rechaza el mismo activo repetido; dos activos distintos con el
+    // mismo nombre (dos taladros) se prestan en la misma boleta.
+    it('envía dos activos distintos aunque tengan el mismo nombre', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
       const servicio = crearServicio({ rpc });
 
-      await expect(
-        servicio.crear('token', {
-          herramientas: [{ activoId: 9, diasPrestamo: 2 }],
-          trabajadorId: 15,
-        }),
-      ).rejects.toMatchObject({
-        codigo: 'HERRAMIENTA_MISMO_TIPO',
-        estadoHttp: HttpStatus.CONFLICT,
+      await servicio.crear('token', {
+        herramientas: [
+          { activoId: 8, diasPrestamo: 2 },
+          { activoId: 9, diasPrestamo: 2 },
+        ],
+        trabajadorId: 15,
       });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_herramientas: [
+            { activo_id: 8, dias_prestamo: 2 },
+            { activo_id: 9, dias_prestamo: 2 },
+          ],
+        }),
+      );
     });
 
     it('rechaza cantidades decimales antes de llamar a la base', async () => {

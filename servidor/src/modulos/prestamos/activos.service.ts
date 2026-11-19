@@ -37,8 +37,7 @@ const CAMPOS =
   'ubicaciones(descripcion, almacenes(id, nombre, campus_id))';
 
 // Fila que devuelve la RPC validar_activo (HU8). Custodio y fecha solo existen
-// cuando el activo está prestado; mismo_tipo_* solo cuando el trabajador ya tiene
-// una herramienta del mismo tipo prestada.
+// cuando el activo está prestado.
 interface FilaValidacionActivo {
   activo_id: number;
   codigo: string;
@@ -49,15 +48,27 @@ interface FilaValidacionActivo {
   custodio_actual: string | null;
   fecha_prevista: string | null;
   solicitante_con_vencido: boolean;
-  mismo_tipo_codigo: string | null;
-  mismo_tipo_prestamo: string | null;
 }
 
-// Herramienta del mismo tipo que impide el préstamo, con el folio del préstamo
-// abierto en el que la tiene el solicitante.
-export interface HerramientaMismoTipo {
+// Fila de vista_seguimiento_prestamos con lo necesario para el aviso.
+interface FilaPrestamoAbierto {
+  folio: string;
   codigo: string;
+  herramienta: string;
+  fecha_prevista: string;
+  seguimiento: string;
+}
+
+// Préstamo abierto del solicitante, para que la app avise al agregar otro activo.
+// seguimiento: VIGENTE, PROXIMO_A_VENCER o VENCIDO. mismoNombre indica que es del
+// mismo nombre que el activo validado (se permite, solo se avisa).
+export interface PrestamoAbierto {
   prestamo: string;
+  codigo: string;
+  nombre: string;
+  fechaPrevista: string;
+  seguimiento: string;
+  mismoNombre: boolean;
 }
 
 export interface ValidacionActivo {
@@ -70,11 +81,16 @@ export interface ValidacionActivo {
     estado: string;
   };
   prestable: boolean;
-  motivo?: 'NO_DISPONIBLE' | 'PRESTADO' | 'MISMO_TIPO';
+  motivo?: 'NO_DISPONIBLE' | 'PRESTADO';
   custodio?: string;
   fechaPrevista?: string;
-  mismoTipo?: HerramientaMismoTipo;
   solicitanteConVencido: boolean;
+  prestamosAbiertos: PrestamoAbierto[];
+}
+
+// Compara nombres de activos sin distinguir mayúsculas ni espacios.
+function normalizarNombre(nombre: string) {
+  return nombre.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 // Activos (herramientas y equipos) para prestar en la boleta (HU8). Solo lectura;
@@ -88,19 +104,21 @@ export class ActivosService {
   // tiene prestado y si el solicitante tiene vencidos. Aquí solo se traduce la
   // respuesta al contrato camelCase y se deriva si se puede prestar.
   async validarActivo(token: string, dto: ValidarActivoDto): Promise<ValidacionActivo> {
-    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('validar_activo', {
-      p_codigo: dto.codigo,
-      p_trabajador_id: dto.trabajadorId,
-    });
+    const cliente = this.supabase.clienteDeUsuario(token);
+    const [{ data, error }, abiertos] = await Promise.all([
+      cliente.rpc('validar_activo', {
+        p_codigo: dto.codigo,
+        p_trabajador_id: dto.trabajadorId,
+      }),
+      this.prestamosAbiertos(cliente, dto.trabajadorId),
+    ]);
     if (error) throw parsearErrorBase(error.message) ?? new Error(error.message);
 
     const fila = data?.[0] as FilaValidacionActivo | undefined;
     if (!fila) throw new Error('La base no devolvió la validación del activo.');
 
-    const disponible = fila.estado === 'DISPONIBLE';
-    // crear_boleta rechaza otra herramienta del mismo tipo; aquí se avisa antes.
-    const mismoTipo = Boolean(fila.mismo_tipo_codigo && fila.mismo_tipo_prestamo);
-    const prestable = disponible && !mismoTipo;
+    const prestable = fila.estado === 'DISPONIBLE';
+    const nombre = normalizarNombre(fila.nombre);
     const respuesta: ValidacionActivo = {
       activo: {
         id: Number(fila.activo_id),
@@ -113,23 +131,40 @@ export class ActivosService {
       prestable,
       // Un vencido es una alerta que crear_boleta registra, no un bloqueo.
       solicitanteConVencido: fila.solicitante_con_vencido,
+      // Un préstamo abierto, aunque sea del mismo nombre, es un aviso, no un bloqueo.
+      prestamosAbiertos: abiertos.map((p) => ({
+        prestamo: p.folio,
+        codigo: p.codigo,
+        nombre: p.herramienta,
+        fechaPrevista: p.fecha_prevista,
+        seguimiento: p.seguimiento,
+        mismoNombre: normalizarNombre(p.herramienta) === nombre,
+      })),
     };
 
-    // El estado del activo tiene prioridad sobre el mismo tipo.
-    if (!disponible) {
+    if (!prestable) {
       respuesta.motivo = fila.estado === 'EN_PRESTAMO' ? 'PRESTADO' : 'NO_DISPONIBLE';
-    } else if (mismoTipo) {
-      respuesta.motivo = 'MISMO_TIPO';
-    }
-    if (mismoTipo) {
-      respuesta.mismoTipo = {
-        codigo: fila.mismo_tipo_codigo as string,
-        prestamo: fila.mismo_tipo_prestamo as string,
-      };
     }
     if (fila.custodio_actual) respuesta.custodio = fila.custodio_actual;
     if (fila.fecha_prevista) respuesta.fechaPrevista = fila.fecha_prevista;
     return respuesta;
+  }
+
+  // Préstamos de activos abiertos del trabajador, del que vence primero al último.
+  // Sin trabajador (solicitante no registrado) no hay préstamos que avisar.
+  private async prestamosAbiertos(
+    cliente: ReturnType<SupabaseService['clienteDeUsuario']>,
+    trabajadorId?: number,
+  ): Promise<FilaPrestamoAbierto[]> {
+    if (trabajadorId === undefined) return [];
+    const { data, error } = await cliente
+      .from('vista_seguimiento_prestamos')
+      .select('folio, codigo, herramienta, fecha_prevista, seguimiento')
+      .eq('trabajador_id', trabajadorId)
+      .eq('estado', 'ACTIVO')
+      .order('fecha_prevista', { ascending: true });
+    if (error) throw parsearErrorBase(error.message) ?? new Error(error.message);
+    return (data ?? []) as FilaPrestamoAbierto[];
   }
 
   async listar(token: string, dto: ListarActivosDto) {

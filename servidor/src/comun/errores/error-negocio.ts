@@ -32,7 +32,6 @@ const CODIGOS_POR_ESTADO: Record<number, readonly string[]> = {
     'ACTIVO_NO_DISPONIBLE',
     'ACTIVO_PRESTADO',
     'BOLETA_NO_ENTREGADA',
-    'HERRAMIENTA_MISMO_TIPO',
     'PRESTAMO_CERRADO',
     'REINGRESO_EXCEDE',
     'SIN_CAMBIO',
