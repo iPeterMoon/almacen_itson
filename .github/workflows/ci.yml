@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  servidor:
+    name: Servidor (NestJS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: servidor
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: servidor/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Auditar dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Verificar tipos
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Pruebas
+        run: npm test -- --ci
+
+      - name: Compilar
+        run: npm run build
+
+  app:
+    name: App (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Analizar
+        run: flutter analyze
+
+      - name: Pruebas
+        run: flutter test
+
+  base-datos:
+    name: Base de datos (migraciones)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Aplica migraciones y seeds sobre la imagen real de Supabase (Postgres 17).
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.2.0
+
+      - name: Aplicar migraciones en Supabase local
+        run: supabase db start
+
+      - name: Detener Supabase local
+        run: supabase stop --no-backup
+
+      # Escenarios de las HU contra Postgres con el stub de Supabase.
+      - name: Recrear base de pruebas
+        run: bash supabase/pruebas/reiniciar.sh
+
+      - name: Probar escenarios
+        run: python3 supabase/pruebas/probar.py
