@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errores/error_negocio.dart';
+import '../../../../core/validacion/sin_emojis.dart';
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
@@ -148,6 +149,7 @@ class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial>
                       child: TextFormField(
                         controller: _cantidad,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: formattersSinEmojis,
                         textAlign: TextAlign.center,
                         validator: validarCantidad,
                         decoration: InputDecoration(

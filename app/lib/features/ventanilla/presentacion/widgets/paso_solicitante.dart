@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:almacen_itson/core/validacion/limites_texto.dart';
+import 'package:almacen_itson/core/validacion/sin_emojis.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -79,6 +81,7 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             TextField(
               enabled: !e.sinRegistro,
+              inputFormatters: formattersSinEmojis,
               onChanged: _buscar,
               decoration: const InputDecoration(
                 hintText: 'Buscar por nombre del solicitante',
@@ -124,11 +127,15 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
                   const SizedBox(height: 8),
                   TextField(
                       controller: _nombre,
+                      maxLength: limiteNombre,
+                      inputFormatters: formattersSinEmojis,
                       onChanged: c.setNombreSinRegistro,
                       decoration: const InputDecoration(labelText: 'Nombre')),
                   const SizedBox(height: 8),
                   TextField(
                       controller: _unidad,
+                      maxLength: limiteNombre,
+                      inputFormatters: formattersSinEmojis,
                       onChanged: c.setUnidadSinRegistro,
                       decoration: const InputDecoration(labelText: 'Unidad/Campus')),
                   const SizedBox(height: 4),
@@ -218,6 +225,8 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
             );
             final numero = TextField(
               controller: _numero,
+              maxLength: limiteReferencia,
+              inputFormatters: formattersSinEmojis,
               onChanged: c.setNumeroSolicitud,
               decoration: const InputDecoration(
                   labelText: 'No. Solicitud (Opcional)', hintText: 'Ej. OT-9981'),

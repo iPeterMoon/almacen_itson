@@ -23,8 +23,8 @@ describe('ResolverAutorizacionDto', () => {
     expect((await validar({ autorizar: 1 })).campos).toEqual(['autorizar']);
   });
 
-  it('rechaza un comentario de más de 500 caracteres', async () => {
-    expect((await validar({ autorizar: true, comentario: 'a'.repeat(501) })).campos).toEqual([
+  it('rechaza un comentario de más de 255 caracteres', async () => {
+    expect((await validar({ autorizar: true, comentario: 'a'.repeat(256) })).campos).toEqual([
       'comentario',
     ]);
   });

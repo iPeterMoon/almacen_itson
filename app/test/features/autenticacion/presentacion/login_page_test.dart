@@ -79,6 +79,19 @@ void main() {
       expect(find.text('Ingresa tu correo institucional.'), findsOneWidget);
     });
 
+    testWidgets('no conserva emojis en el usuario ni en la contraseña', (tester) async {
+      await tester.pumpWidget(_login(RepositorioSesionFalso()));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(_campoUsuario(), 'almacen.nainari@itson.mx😀');
+      await tester.enterText(_campoContrasena(), 'demo😀1234');
+
+      expect(tester.widget<TextFormField>(_campoUsuario()).controller!.text,
+          'almacen.nainari@itson.mx');
+      expect(tester.widget<TextFormField>(_campoContrasena()).controller!.text, 'demo1234');
+      expect(find.textContaining('😀'), findsNothing);
+    });
+
     testWidgets('permite mostrar y ocultar la contraseña', (tester) async {
       await tester.pumpWidget(_login(RepositorioSesionFalso()));
       await tester.pumpAndSettle();

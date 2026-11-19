@@ -1,3 +1,5 @@
+import 'package:almacen_itson/core/validacion/limites_texto.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errores/error_negocio.dart';
@@ -329,7 +331,8 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
 
   String _motivo(Autorizacion a) {
     final detalle = a.detalleOtro?.trim();
-    return detalle == null || detalle.isEmpty ? a.motivo : '${a.motivo}: $detalle';
+    final texto = detalle == null || detalle.isEmpty ? a.motivo : '${a.motivo}: $detalle';
+    return texto.characters.take(limiteComentario).toString();
   }
 
   // Supervisor que autorizará las excepciones: el primero que se eligió en la
