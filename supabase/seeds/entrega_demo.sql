@@ -327,9 +327,10 @@ select 'Existencias demo', count(*)::text
 --     p_firma_entrega   => (select id::text from public.campus where clave = 'NAI') || '/entrega-demo.png');
 --   reset role;
 --
--- Para ver el caso de autorización (HU6 E8/E10), repite la entrega del cloro
--- dentro de los 5 días: la base la rechaza pidiendo el motivo (agrega
--- "motivo_excepcion" al material) y el supervisor
--- (p_supervisor_id => '5eed0000-0000-4000-8000-000000000004'); con ambos la
--- boleta queda en estado PENDIENTE_AUTORIZACION.
+-- Para ver la excepción (HU6 E8/E10), repite la entrega del cloro dentro de los
+-- 5 días: la base la rechaza si falta el motivo. Agrega "motivo_excepcion" al
+-- material (y, si quieres dejar constancia, p_autorizo_nombre con cualquier
+-- nombre, registrado o no). La boleta se entrega de inmediato como ENTREGADA y
+-- la respuesta incluye la alerta con la sugerencia de pedir autorización fuera
+-- del sistema. No existe p_supervisor_id ni estado PENDIENTE_AUTORIZACION.
 -- =====================================================================

@@ -9,7 +9,7 @@ Actúas como un desarrollador senior de Flutter. Conviertes pantallas de Figma, 
 
 ## Arquitectura (documento del equipo)
 
-App móvil Flutter → **API REST (servidor NestJS)** → base de datos Supabase. **La app nunca habla directo con Supabase y no guarda ninguna clave de Supabase.** Las reglas de negocio (stock, periodicidad, folios, autorizaciones, permisos) viven en la base y el servidor; la app muestra resultados y errores.
+App móvil Flutter → **API REST (servidor NestJS)** → base de datos Supabase. **La app nunca habla directo con Supabase y no guarda ninguna clave de Supabase.** Las reglas de negocio (stock, periodicidad, límite por zona, folios, permisos) viven en la base y el servidor; la app muestra resultados y errores. No hay flujo de autorización en el sistema: si se excede una regla se sugiere pedir autorización fuera de la app, se exige el motivo y la boleta se entrega de inmediato.
 
 ## Principios
 
@@ -66,7 +66,7 @@ app/
 ## Contrato con el servidor
 
 ### Errores
-El servidor responde errores con cuerpo `{ "codigo": "...", "mensaje": "..." }` y estado HTTP: 403 permiso, 404 no encontrado, 409 conflicto de estado o stock, 422 datos o firma inválidos, 500 inesperado. La app convierte la respuesta en `ErrorNegocio(codigo, mensaje)`; la pantalla muestra el mensaje y puede reaccionar según el código (por ejemplo, abrir el flujo de autorización). Los códigos reales están en el contrato de la API.
+El servidor responde errores con cuerpo `{ "codigo": "...", "mensaje": "..." }` y estado HTTP: 403 permiso, 404 no encontrado, 409 conflicto de estado o stock, 422 datos o firma inválidos, 500 inesperado. La app convierte la respuesta en `ErrorNegocio(codigo, mensaje)`; la pantalla muestra el mensaje y puede reaccionar según el código (por ejemplo, mostrar la sugerencia de pedir autorización fuera de la app y pedir el motivo de la excepción). Los códigos reales están en el contrato de la API.
 
 ### Sesión
 `POST /api/v1/usuarios/sesion` devuelve los tokens y el perfil (rol, campus); `POST /api/v1/usuarios/sesion/renovar` los renueva. Si una petición devuelve 401, el interceptor intenta renovar una vez y, si falla, lleva al inicio de sesión.

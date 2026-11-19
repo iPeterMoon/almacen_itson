@@ -22,7 +22,7 @@ const minimoCaracteresBusqueda = 2;
 // - buscarMateriales: GET /catalogo/productos (AI-30, AI-62).
 // - opcionesFiltros: GET /catalogo/categorias y /catalogo/almacenes.
 // - buscarSolicitantes: GET /trabajadores.
-// - listarAutorizadores: GET /usuarios/supervisores.
+// - listarSupervisores: GET /usuarios/supervisores (solo sugerencias para "Autorizó").
 // - buscarActivos: GET /activos?estado=DISPONIBLE.
 // - validarMaterial: POST /boletas/validar-material.
 // - registrarEntrega: POST /boletas/firmas, POST /boletas y GET /boletas/:id.
@@ -147,13 +147,10 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
     );
   }
 
-  // Supervisores del campus: los mismos sirven para "Autorizó" y para autorizar
-  // excepciones (su id es el UUID que pide crear_boleta).
+  // Supervisores del campus: solo se usan como sugerencia en el campo opcional
+  // "Autorizó". Se puede capturar cualquier otro nombre (texto libre).
   @override
-  Future<List<Autorizador>> listarAutorizadores() async {
-    final lista = await _supervisores.listar();
-    return [for (final s in lista) Autorizador(id: s.id, nombre: s.nombre)];
-  }
+  Future<List<Supervisor>> listarSupervisores() => _supervisores.listar();
 
   // Solo activos DISPONIBLE: los demás no se pueden prestar. La lista de la
   // pantalla no tiene paginador, así que se piden hasta 20.
@@ -168,7 +165,7 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   // POST /boletas/validar-material. Si no alcanza la existencia lanza
   // STOCK_INSUFICIENTE (el diálogo muestra el mensaje y no agrega el material).
   // Si se rompe la periodicidad o el límite de la zona devuelve la alerta para
-  // pedir motivo y autorización. Esas dos reglas solo se revisan con un
+  // sugerir pedir autorización fuera del sistema y exigir el motivo. Esas dos reglas solo se revisan con un
   // trabajador registrado; con uno sin registro solo cuenta la existencia.
   // La cantidad va en la unidad base: la app aún no maneja presentaciones (AI-29).
   @override
@@ -226,8 +223,8 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   // 3. Lee la fecha de entrega (GET /boletas/:id) para el resumen. Para entonces
   //    la boleta ya existe: si esta lectura falla se usa la hora del dispositivo,
   //    porque mostrar un error haría que se volviera a confirmar y se duplicara.
-  // Si algún material necesita autorización, la base deja la boleta PENDIENTE: no
-  // descuenta nada y el resumen lo indica (el folio ya existe, no se registra otra vez).
+  // Si algún material excede periodicidad o límite, la boleta se entrega igual:
+  // el servidor guarda el motivo y devuelve las alertas con la sugerencia.
   @override
   Future<ResumenEntrega> registrarEntrega(SolicitudEntrega solicitud) async {
     // El servidor no guarda comentarios por herramienta; los de materiales sí.
@@ -241,10 +238,9 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
           'productoId': _idDeProducto(m.material),
           'cantidad': redondearCantidad(m.cantidad),
           if (m.comentario != null && m.comentario!.isNotEmpty) 'comentario': m.comentario,
-          if (m.autorizacion != null) 'motivoExcepcion': _motivo(m.autorizacion!),
+          if (m.motivoExcepcion != null) 'motivoExcepcion': _motivo(m.motivoExcepcion!),
         },
     ];
-    final supervisor = _supervisorId(solicitud.materiales);
 
     final rutas = await Future.wait([
       _boletas.subirFirma(solicitud.firmaRecibe, TipoFirma.recibe),
@@ -268,20 +264,18 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
         'solicitanteUnidad': unidad,
       },
       if (numero != null && numero.isNotEmpty) 'numeroSolicitud': numero,
-      if (solicitud.autorizoNombre != null) 'autorizoNombre': solicitud.autorizoNombre,
-      'supervisorId': ?supervisor,
+      if (solicitud.autorizoNombre != null && solicitud.autorizoNombre!.isNotEmpty)
+        'autorizoNombre': solicitud.autorizoNombre,
       'firmaRecibe': rutas[0],
       'firmaEntrega': rutas[1],
     });
 
-    final pendiente = boleta.estado == BoletaCreada.pendienteAutorizacion;
-    final entregadoEn = pendiente ? null : await _fechaEntrega(boleta.boletaId);
+    final entregadoEn = await _fechaEntrega(boleta.boletaId);
     return ResumenEntrega(
       folio: boleta.folio,
-      autorizacionPendiente: pendiente,
       recibidoPor: nombre,
       area: unidad,
-      fechaHora: pendiente ? 'Pendiente de autorización' : formatearHoraFecha(entregadoEn),
+      fechaHora: formatearHoraFecha(entregadoEn),
       entregadoPor: _entregadoPor(),
       materiales: [
         for (final m in solicitud.materiales)
@@ -290,6 +284,12 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
       activos: [
         for (final a in solicitud.activos)
           LineaResumen(a.activo.codigo, a.activo.equipo, a.activo.modelo, a.activo.serie),
+      ],
+      autorizoNombre: solicitud.autorizoNombre?.trim(),
+      motivos: [
+        for (final m in solicitud.materiales)
+          if (m.motivoExcepcion != null)
+            '${m.material.alias}: ${_motivo(m.motivoExcepcion!)}',
       ],
     );
   }
@@ -329,21 +329,10 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
     return id;
   }
 
-  String _motivo(Autorizacion a) {
-    final detalle = a.detalleOtro?.trim();
-    final texto = detalle == null || detalle.isEmpty ? a.motivo : '${a.motivo}: $detalle';
+  String _motivo(MotivoExcepcion m) {
+    final detalle = m.detalleOtro?.trim();
+    final texto = detalle == null || detalle.isEmpty ? m.motivo : '${m.motivo}: $detalle';
     return texto.characters.take(limiteComentario).toString();
-  }
-
-  // Supervisor que autorizará las excepciones: el primero que se eligió en la
-  // boleta (la base guarda una sola autorización por boleta). Si la base requiere
-  // autorización sin supervisor, responde AUTORIZADOR_REQUERIDO.
-  String? _supervisorId(List<ItemMaterial> materiales) {
-    for (final m in materiales) {
-      final id = m.autorizacion?.autorizadorId;
-      if (id != null) return id;
-    }
-    return null;
   }
 }
 

@@ -1,18 +1,19 @@
 import '../../../core/errores/error_negocio.dart';
+import '../../autenticacion/datos/supervisores_repositorio.dart';
 import 'modelos.dart';
 
 /// Contrato que usa la pantalla. La implementación real llamará a la API NestJS con dio.
 ///
 /// SUPUESTOS DE ENDPOINTS (confirmar con backend en /docs):
 ///   GET  /api/v1/ventanilla/solicitantes?q=&pagina=&porPagina=   -> { items, total }
-///   GET  /api/v1/ventanilla/autorizadores
+///   GET  /api/v1/usuarios/supervisores (solo sugerencias para "Autorizó")
 ///   GET  /api/v1/inventario/materiales?q=&categoria=&tipo=&almacen=&comunes=&pagina=&porPagina=   -> { items, total }
 ///   GET  /api/v1/inventario/activos?q=
 ///   POST /api/v1/ventanilla/materiales/validar   -> alerta de periodicidad / límite de zona
 ///   POST /api/v1/ventanilla/entregas             -> folio y resumen (descuenta stock)
 abstract class VentanillaRepositorio {
   Future<Pagina<Solicitante>> buscarSolicitantes(String consulta, {int pagina = 1, int porPagina = 5});
-  Future<List<Autorizador>> listarAutorizadores();
+  Future<List<Supervisor>> listarSupervisores();
   Future<OpcionesFiltros> opcionesFiltros();
   Future<Pagina<MaterialCatalogo>> buscarMateriales({
     String consulta = '',
@@ -56,11 +57,11 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
     Solicitante(id: '11', nombre: 'Sofía Valdez', dependencia: 'Maxi Servicios', tipo: 'Compañía', zona: 'Auditorio', areaTrabajo: 'Servicios', areaTrabajo2: 'Auditorio'),
   ];
 
-  static const _autorizadores = [
-    Autorizador(id: 'a1', nombre: 'Leonel Lares'),
-    Autorizador(id: 'a2', nombre: 'Alicia Garcia'),
-    Autorizador(id: 'a3', nombre: 'Juan Lopez'),
-    Autorizador(id: 'a4', nombre: 'Martin Flores'),
+  static const _supervisores = [
+    Supervisor(id: 'a1', nombre: 'Leonel Lares', rol: 'SUPERVISOR'),
+    Supervisor(id: 'a2', nombre: 'Alicia Garcia', rol: 'SUPERVISOR_JEFE'),
+    Supervisor(id: 'a3', nombre: 'Juan Lopez', rol: 'SUPERVISOR'),
+    Supervisor(id: 'a4', nombre: 'Martin Flores', rol: 'SUPERVISOR'),
   ];
 
   static const _litros = ['Medio litros', 'Litros', 'Galones'];
@@ -99,9 +100,9 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
   }
 
   @override
-  Future<List<Autorizador>> listarAutorizadores() async {
+  Future<List<Supervisor>> listarSupervisores() async {
     await _espera();
-    return _autorizadores;
+    return _supervisores;
   }
 
   @override
@@ -205,6 +206,12 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
       entregadoPor: 'Alicia Beltrán',
       materiales: s.materiales.map((m) => LineaResumen(m.material.codigo, m.material.alias, m.cantidadTexto)).toList(),
       activos: s.activos.map((a) => LineaResumen(a.activo.codigo, a.activo.equipo, a.activo.modelo, a.activo.serie)).toList(),
+      autorizoNombre: s.autorizoNombre,
+      motivos: [
+        for (final m in s.materiales)
+          if (m.motivoExcepcion != null)
+            '${m.material.alias}: ${m.motivoExcepcion!.motivo}',
+      ],
     );
   }
 }

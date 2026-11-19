@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errores/error_negocio.dart';
 import '../../../core/validacion/sin_emojis.dart';
+import '../../../core/validacion/limites_texto.dart';
+import '../../autenticacion/datos/supervisores_repositorio.dart';
 import '../../autenticacion/presentacion/sesion_controlador.dart';
 import '../datos/modelos.dart';
 import '../datos/ventanilla_repositorio.dart';
@@ -18,7 +20,7 @@ class EntregaState {
     this.sinRegistro = false,
     this.nombreSinRegistro = '',
     this.unidadSinRegistro = '',
-    this.autorizoId,
+    this.autorizoNombre = '',
     this.numeroSolicitud = '',
     this.materiales = const [],
     this.activos = const [],
@@ -35,7 +37,8 @@ class EntregaState {
   final bool sinRegistro;
   final String nombreSinRegistro;
   final String unidadSinRegistro;
-  final String? autorizoId;
+  // "Autorizó" es opcional y de texto libre: también vale un supervisor no registrado.
+  final String autorizoNombre;
   final String numeroSolicitud; // opcional (Escenarios 3 y 4)
   final List<ItemMaterial> materiales;
   final List<ItemActivo> activos;
@@ -52,7 +55,7 @@ class EntregaState {
     bool? sinRegistro,
     String? nombreSinRegistro,
     String? unidadSinRegistro,
-    Object? autorizoId = _sin,
+    String? autorizoNombre,
     String? numeroSolicitud,
     List<ItemMaterial>? materiales,
     List<ItemActivo>? activos,
@@ -69,7 +72,7 @@ class EntregaState {
       sinRegistro: sinRegistro ?? this.sinRegistro,
       nombreSinRegistro: nombreSinRegistro ?? this.nombreSinRegistro,
       unidadSinRegistro: unidadSinRegistro ?? this.unidadSinRegistro,
-      autorizoId: identical(autorizoId, _sin) ? this.autorizoId : autorizoId as String?,
+      autorizoNombre: autorizoNombre ?? this.autorizoNombre,
       numeroSolicitud: numeroSolicitud ?? this.numeroSolicitud,
       materiales: materiales ?? this.materiales,
       activos: activos ?? this.activos,
@@ -87,12 +90,6 @@ class EntregaState {
   String get recibidoPor => sinRegistro ? nombreSinRegistro.trim() : (solicitante?.nombre ?? '');
 
   int get totalPartidas => materiales.length + activos.length;
-
-  /// Nombres de quienes autorizaron excepciones (se muestran en "Autorizado por").
-  List<String> get autorizadoPor => {
-        for (final m in materiales)
-          if (m.autorizacion != null) m.autorizacion!.autorizadorNombre,
-      }.toList();
 
   bool puedeAvanzar() => switch (paso) {
         0 => sinRegistro
@@ -157,13 +154,20 @@ class EntregaController extends Notifier<EntregaState> {
       state = state.copyWith(nombreSinRegistro: quitarEmojis(v));
   void setUnidadSinRegistro(String v) =>
       state = state.copyWith(unidadSinRegistro: quitarEmojis(v));
-  void setAutorizo(String? id) => state = state.copyWith(autorizoId: id);
+
+  /// Texto libre, opcional. Se limita a 200 caracteres como la columna de la boleta.
+  void setAutorizoNombre(String valor) {
+    final limpio = quitarEmojis(valor).trim();
+    final texto = limpio.length > limiteNombre ? limpio.substring(0, limiteNombre) : limpio;
+    state = state.copyWith(autorizoNombre: texto);
+  }
+
   void setNumeroSolicitud(String v) => state = state.copyWith(numeroSolicitud: quitarEmojis(v));
 
   // --- Paso 2: materiales y activos ---
 
   /// Pide al servidor validar periodicidad y límite de zona. Devuelve la alerta si la hay
-  /// (la pantalla pide motivo y autorización); si no, agrega el material directamente.
+  /// (la pantalla sugiere pedir autorización y exige el motivo); si no, agrega el material directamente.
   Future<AlertaRestriccion?> agregarMaterial({
     required MaterialCatalogo material,
     required double cantidad,
@@ -190,14 +194,14 @@ class EntregaController extends Notifier<EntregaState> {
     return null;
   }
 
-  void agregarMaterialAutorizado({
+  void agregarMaterialConMotivo({
     required MaterialCatalogo material,
     required double cantidad,
     required String unidad,
-    required Autorizacion autorizacion,
+    required MotivoExcepcion motivoExcepcion,
   }) =>
       _insertar(ItemMaterial(
-          material: material, cantidad: cantidad, unidad: unidad, autorizacion: autorizacion));
+          material: material, cantidad: cantidad, unidad: unidad, motivoExcepcion: motivoExcepcion));
 
   ItemMaterial? _buscarMaterial(String codigo) {
     for (final m in state.materiales) {
@@ -218,7 +222,7 @@ class EntregaController extends Notifier<EntregaState> {
         unidad: ex.unidad,
         entregado: ex.entregado,
         comentario: ex.comentario,
-        autorizacion: nuevo.autorizacion ?? ex.autorizacion,
+        motivoExcepcion: nuevo.motivoExcepcion ?? ex.motivoExcepcion,
       );
     } else {
       lista.add(nuevo);
@@ -230,15 +234,15 @@ class EntregaController extends Notifier<EntregaState> {
       materiales: state.materiales.where((m) => m.material.codigo != codigo).toList());
 
   /// Cambia la cantidad de un material de la boleta. Si sube y el material no tiene
-  /// autorización, la valida antes en el servidor: si rompe la periodicidad o el
-  /// límite de la zona devuelve la alerta y no cambia nada (la pantalla pide motivo
-  /// y autorización y llama a [cambiarCantidadAutorizada]). Si no hay existencia
-  /// lanza STOCK_INSUFICIENTE. Bajar la cantidad no puede romper ninguna regla.
+  /// motivo de excepción, la valida antes en el servidor: si rompe la periodicidad o
+  /// el límite de la zona devuelve la alerta y no cambia nada (la pantalla pide el
+  /// motivo y llama a [cambiarCantidadConMotivo]). Si no hay existencia lanza
+  /// STOCK_INSUFICIENTE. Bajar la cantidad no puede romper ninguna regla.
   Future<AlertaRestriccion?> cambiarCantidad(String codigo, double cantidad) async {
     final item = _buscarMaterial(codigo);
     final nueva = redondearCantidad(cantidad);
     if (item == null || nueva <= 0) return null;
-    if (nueva > item.cantidad && item.autorizacion == null) {
+    if (nueva > item.cantidad && item.motivoExcepcion == null) {
       final alerta = await _repo.validarMaterial(
         solicitante: state.sinRegistro ? null : state.solicitante,
         material: item.material,
@@ -251,13 +255,13 @@ class EntregaController extends Notifier<EntregaState> {
     return null;
   }
 
-  void cambiarCantidadAutorizada(String codigo, double cantidad, Autorizacion autorizacion) =>
+  void cambiarCantidadConMotivo(String codigo, double cantidad, MotivoExcepcion motivo) =>
       _actualizarMaterial(codigo,
-          (m) => m.copyWith(cantidad: redondearCantidad(cantidad), autorizacion: autorizacion));
+          (m) => m.copyWith(cantidad: redondearCantidad(cantidad), motivoExcepcion: motivo));
 
-  /// Agrega la autorización a un material que ya está en la boleta.
-  void autorizarMaterial(String codigo, Autorizacion autorizacion) =>
-      _actualizarMaterial(codigo, (m) => m.copyWith(autorizacion: autorizacion));
+  /// Guarda el motivo de la excepción en un material que ya está en la boleta.
+  void establecerMotivoExcepcion(String codigo, MotivoExcepcion motivo) =>
+      _actualizarMaterial(codigo, (m) => m.copyWith(motivoExcepcion: motivo));
 
   void _actualizarMaterial(String codigo, ItemMaterial Function(ItemMaterial) cambio) =>
       state = state.copyWith(materiales: [
@@ -265,7 +269,7 @@ class EntregaController extends Notifier<EntregaState> {
           if (m.material.codigo == codigo) cambio(m) else m
       ]);
 
-  /// Vuelve a validar los materiales sin autorización con el solicitante actual. Se
+  /// Vuelve a validar los materiales sin motivo de excepción con el solicitante actual. Se
   /// usa al salir del paso 1 cuando ya hay materiales (se regresó a cambiar el
   /// solicitante): lo que valía para uno puede romper las reglas de otro. Devuelve
   /// los materiales que ahora necesitan autorización. La existencia no se revisa
@@ -274,7 +278,7 @@ class EntregaController extends Notifier<EntregaState> {
     final solicitante = state.sinRegistro ? null : state.solicitante;
     final pendientes = <(ItemMaterial, AlertaRestriccion)>[];
     for (final m in state.materiales) {
-      if (m.autorizacion != null) continue;
+      if (m.motivoExcepcion != null) continue;
       try {
         final alerta = await _repo.validarMaterial(
           solicitante: solicitante,
@@ -372,8 +376,7 @@ class EntregaController extends Notifier<EntregaState> {
         solicitante: state.sinRegistro ? null : state.solicitante,
         nombreSinRegistro: state.sinRegistro ? quitarEmojis(state.nombreSinRegistro.trim()) : null,
         unidadSinRegistro: state.sinRegistro ? quitarEmojis(state.unidadSinRegistro.trim()) : null,
-        autorizoId: state.autorizoId,
-        autorizoNombre: _nombreAutorizador(state.autorizoId),
+        autorizoNombre: state.autorizoNombre.isEmpty ? null : state.autorizoNombre,
         numeroSolicitud: numero.isEmpty ? null : numero,
         materiales: state.materiales.where((m) => m.entregado).toList(),
         activos: state.activos.where((a) => a.entregado).toList(),
@@ -402,15 +405,6 @@ class EntregaController extends Notifier<EntregaState> {
     } catch (_) {
       state = state.copyWith(enviando: false, error: 'No se pudo conectar con el servidor.');
     }
-  }
-
-  String? _nombreAutorizador(String? id) {
-    if (id == null) return null;
-    final lista = ref.read(autorizadoresProvider).value ?? const <Autorizador>[];
-    for (final a in lista) {
-      if (a.id == id) return a.nombre;
-    }
-    return null;
   }
 
   /// Escenario 6: ajusta la cantidad a lo disponible; nunca guarda más que el stock.
@@ -487,11 +481,12 @@ final solicitantesProvider = FutureProvider.autoDispose<Pagina<Solicitante>>((re
       .buscarSolicitantes(q, pagina: p, porPagina: registrosPorPagina);
 });
 
-/// Supervisores del campus del usuario. Se vuelve a pedir cuando cambia el usuario
-/// con sesión: si no, tras cerrar sesión otro usuario vería los de otro campus.
-final autorizadoresProvider = FutureProvider<List<Autorizador>>((ref) {
+/// Supervisores del campus del usuario, usados solo como sugerencia en el campo
+/// opcional "Autorizó". Se vuelve a pedir cuando cambia el usuario con sesión:
+/// si no, tras cerrar sesión otro usuario vería los de otro campus.
+final supervisoresProvider = FutureProvider<List<Supervisor>>((ref) {
   ref.watch(controladorSesionProvider.select((s) => s.value?.usuario.id));
-  return ref.watch(ventanillaRepositorioProvider).listarAutorizadores();
+  return ref.watch(ventanillaRepositorioProvider).listarSupervisores();
 });
 
 const _noCambia = Object();

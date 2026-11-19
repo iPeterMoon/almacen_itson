@@ -297,7 +297,7 @@ caso("HU5", "Ajuste sin diferencia se rechaza", CEN,
      f"select * from registrar_ajuste({P1},{A1},12,'Recuento','E1F1')", espera="SIN_DIFERENCIA")
 caso("HU5", "Ajuste a cantidad negativa se rechaza", CEN,
      f"select * from registrar_ajuste({P1},{A1},-1,'Error','E1F1')", espera="CANTIDAD_INVALIDA")
-# ---------- HU6: periodicidad, límite de zona y autorización ----------
+# ---------- HU6: periodicidad, límite de zona y sugerencia de autorización ----------
 def boleta(materiales, extra=""):
     return f"select estado||'|'||folio from crear_boleta(p_materiales=>'{materiales}'{extra})"
 
@@ -309,28 +309,23 @@ caso("HU6 E8", "Validación muestra periodicidad no cumplida (faltan 5 días)", 
      f"from validar_material({P1}, 1, p_trabajador_id=>{JUAN})", contiene="true|5|true")
 caso("HU6 E8", "Sin motivo no se puede entregar antes de tiempo", CEN,
      boleta(m1, f", p_trabajador_id=>{JUAN}, {FIRMAS}"), espera="MOTIVO_EXCEPCION_REQUERIDO")
-caso("HU6 E8", "Con motivo pero sin supervisor", CEN,
-     boleta(m1_motivo, f", p_trabajador_id=>{JUAN}, {FIRMAS}"), espera="AUTORIZADOR_REQUERIDO")
-caso("HU6 E8", "Con motivo y supervisor queda pendiente", CEN,
-     boleta(m1_motivo, f", p_trabajador_id=>{JUAN}, p_supervisor_id=>'{SUP}'"), contiene="PENDIENTE_AUTORIZACION|BOL-2026-0002")
-caso("HU6 E8", "Pendiente no descuenta existencia (sigue 12 en E1F1)", CEN,
-     f"select cantidad from vista_existencias_por_ubicacion where producto_id={P1} and ubicacion='E1F1'", contiene="12.000")
-caso("HU6 E8", "El supervisor recibe el aviso", SUP,
-     "select string_agg(tipo, ',') from obtener_notificaciones()", contiene="AUTORIZACION_PENDIENTE")
-B2 = admin("select id from boletas where folio='BOL-2026-0002'")
-caso("Seg", "El almacenista no puede autorizarse a sí mismo", CEN,
-     f"select resolver_autorizacion({B2}, true)", espera="SIN_PERMISO")
-caso("HU6 E8", "No se entrega antes de autorizar", CEN,
-     f"select confirmar_entrega({B2}, '{CEN_ID}/r.png', '{CEN_ID}/e.png')", espera="BOLETA_NO_AUTORIZADA")
-caso("HU6 E8", "Supervisor autoriza", SUP,
-     f"select resolver_autorizacion({B2}, true, 'Autorizado por derrame')", contiene="AUTORIZADA")
-caso("HU6 E8", "El almacenista recibe aviso de la resolución", CEN,
-     "select string_agg(tipo, ',') from obtener_notificaciones()", contiene="AUTORIZACION_RESUELTA")
-caso("HU6 E1", "Confirmar sin firmas se rechaza", CEN,
-     f"select confirmar_entrega({B2}, '', '{CEN_ID}/e.png')", espera="FIRMAS_REQUERIDAS")
-caso("HU6 E1", "Confirmar entrega autorizada descuenta 1 L (12 a 11)", CEN,
-     f"select confirmar_entrega({B2}, '{CEN_ID}/r.png', '{CEN_ID}/e.png'); "
+caso("HU6 E8", "Con motivo se entrega de inmediato y devuelve la alerta", CEN,
+     f"select estado||'|'||folio||'|'||coalesce(alertas->0->>'excede_periodicidad','') "
+     f"from crear_boleta(p_materiales=>'{m1_motivo}', p_trabajador_id=>{JUAN}, {FIRMAS})",
+     contiene="ENTREGADA|BOL-2026-0002|true")
+caso("HU6 E8", "Descuenta existencia en el acto (12 a 11 en E1F1)", CEN,
      f"select cantidad from vista_existencias_por_ubicacion where producto_id={P1} and ubicacion='E1F1'", contiene="11.000")
+caso("HU6 E8", "No se generan avisos de autorización", CEN,
+     "select count(*) from notificaciones where tipo like 'AUTORIZACION%'", contiene="0")
+caso("Estructura", "No existe la tabla autorizaciones", CEN,
+     "select coalesce(to_regclass('public.autorizaciones')::text,'NO_EXISTE')", contiene="NO_EXISTE")
+caso("Estructura", "No existen las RPC de autorización ni de entrega en dos pasos", CEN,
+     "select coalesce(to_regprocedure('public.resolver_autorizacion(bigint,boolean,text)')::text,'NO_EXISTE')"
+     "||'|'||coalesce(to_regprocedure('public.confirmar_entrega(bigint,text,text)')::text,'NO_EXISTE')",
+     contiene="NO_EXISTE|NO_EXISTE")
+caso("HU6 E1", "Las firmas siguen siendo obligatorias", CEN,
+     f"select * from crear_boleta(p_materiales=>'{m1}', p_trabajador_id=>{JUAN}, "
+     f"p_firma_recibe=>'', p_firma_entrega=>'{CEN_ID}/e.png')", espera="FIRMAS_REQUERIDAS")
 
 # Pasan 6 días desde las entregas de Juan
 admin("update boletas set entregado_en = entregado_en - interval '6 days' where trabajador_id is not null")
@@ -339,24 +334,23 @@ caso("HU6 E9", "Periodicidad cumplida (hace 6 días, intervalo 5)", CEN,
      contiene="false|false")
 caso("HU6 E9", "María nunca lo ha recibido: sin restricción", CEN,
      f"select excede_periodicidad::text from validar_material({P1}, 1, p_trabajador_id=>{MARIA})", contiene="false")
-caso("HU6 E1", "Entrega a Juan de 2 L sin autorización", CEN,
+caso("HU6 E1", "Entrega a Juan de 2 L", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":2}}]', f", p_trabajador_id=>{JUAN}, {FIRMAS}"), contiene="ENTREGADA")
 caso("HU6 E10", "Límite de zona: 3 L cada 5 días, ya van 2, María pide 2", CEN,
      f"select excede_limite||'|'||limite_cantidad||'|'||entregado_periodo "
      f"from validar_material({P1}, 2, p_trabajador_id=>{MARIA})", contiene="true|3.000|2.000")
 caso("HU6 E10", "Excede límite sin motivo se rechaza", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":2}}]', f", p_trabajador_id=>{MARIA}, {FIRMAS}"), espera="MOTIVO_EXCEPCION_REQUERIDO")
-caso("HU6 E10", "Con motivo queda pendiente", CEN,
+caso("HU6 E10", "Con motivo se entrega de inmediato, sin supervisor en el sistema", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":2,"motivo_excepcion":"Evento en el edificio"}}]',
-            f", p_trabajador_id=>{MARIA}, p_supervisor_id=>'{SUP}'"), contiene="PENDIENTE_AUTORIZACION")
-BM_RECH = admin("select m.id from boletas_materiales m join boletas b on b.id=m.boleta_id "
-                "where b.estado='PENDIENTE_AUTORIZACION'")
-B_RECH = admin("select id from boletas where estado='PENDIENTE_AUTORIZACION'")
-caso("HU6", "Supervisor rechaza", SUP, f"select resolver_autorizacion({B_RECH}, false, 'No procede')", contiene="RECHAZADA")
-caso("HU6", "Una boleta rechazada no se entrega", CEN,
-     f"select confirmar_entrega({B_RECH}, '{CEN_ID}/r.png', '{CEN_ID}/e.png')", espera="BOLETA_NO_AUTORIZADA")
-caso("HU4", "No se reingresa material de una boleta no entregada", CEN,
-     f"select * from registrar_reingreso({BM_RECH},{A1},1)", espera="BOLETA_NO_ENTREGADA")
+            f", p_trabajador_id=>{MARIA}, p_autorizo_nombre=>'Supervisor externo', {FIRMAS}"),
+     contiene="ENTREGADA|BOL-")
+caso("HU6 E10", "Guarda el motivo y el nombre libre de quien autorizó", CEN,
+     "select m.motivo_excepcion||'|'||b.autorizo_nombre from boletas_materiales m "
+     "join boletas b on b.id=m.boleta_id where m.motivo_excepcion='Evento en el edificio'",
+     contiene="Evento en el edificio|Supervisor externo")
+caso("Seg", "No hay boletas pendientes ni rechazadas", CEN,
+     "select count(*) from boletas where estado<>'ENTREGADA'", contiene="0")
 
 caso("HU6 E2", "Solicitante sin registro con nombre y unidad", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":1,"comentario":"Para limpieza de oficina"}}]',
@@ -530,8 +524,8 @@ H = "select {} from vista_historial_entregas where {}"
 ZONA = admin("select id from zonas where nombre='Edificio 1800 - Planta baja'")
 caso("HU6 Hist", "Por solicitante registrado: 3 entregas de CD-123 a Juan (5 L)", CEN,
      H.format("count(*)||'|'||sum(cantidad_base)", f"trabajador_id={JUAN} and producto_id={P1}"), contiene="3|5.000")
-caso("HU6 Hist", "Boletas rechazadas o pendientes no son entregas", CEN,
-     H.format("count(*)", f"trabajador_id={MARIA}"), contiene="0")
+caso("HU6 Hist", "La entrega con excepción consta en el historial (sin estado pendiente)", CEN,
+     H.format("count(*)||'|'||sum(cantidad_base)", f"trabajador_id={MARIA}"), contiene="1|2.000")
 caso("HU6 Hist", "Por solicitante sin registro (nombre parcial)", CEN,
      H.format("tipo_solicitante||'|'||solicitante_nombre||'|'||numero_solicitud||'|'||comentario", "solicitante_nombre ilike '%rosa%'"),
      contiene="SIN_REGISTRO|Rosa Molina|OT-9981|Para limpieza de oficina")
@@ -540,9 +534,9 @@ caso("HU6 Hist", "Por insumo: guantes solo en la boleta combinada", CEN,
 caso("HU6 Hist", "Conserva la presentación entregada y su equivalente", CEN,
      H.format("presentacion||'|'||cantidad||'|'||cantidad_base||'|'||unidad_base", "solicitante_nombre='Ana'"),
      contiene="Medio litro|2.000|1.000|L")
-caso("HU6 Hist", "Por zona: 4 renglones entregados en el Edificio 1800", CEN,
-     H.format("count(*)||'|'||min(zona)", f"zona_id={ZONA}"), contiene="4|Edificio 1800 - Planta baja")
-caso("HU6 Hist", "Muestra la excepción autorizada y su motivo", CEN,
+caso("HU6 Hist", "Por zona: 5 renglones entregados en el Edificio 1800", CEN,
+     H.format("count(*)||'|'||min(zona)", f"zona_id={ZONA}"), contiene="5|Edificio 1800 - Planta baja")
+caso("HU6 Hist", "Muestra la excepción y su motivo (sin estado de autorización)", CEN,
      H.format("excede_periodicidad||'|'||motivo_excepcion", "folio='BOL-2026-0002'"), contiene="true|Derrame en baños")
 caso("HU6 Hist", "Muestra lo reingresado de cada renglón (HU4)", CEN,
      H.format("cantidad||'|'||cantidad_reingresada||'|'||entregado_por", "folio='BOL-2026-0001'"),

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ErrorNegocio } from '../errores/error-negocio';
+import { PeticionConCorrelacion, rutaSinConsulta } from '../middlewares/log-peticiones.middleware';
 
 export interface CuerpoError {
   codigo: string;
@@ -32,12 +33,30 @@ export class FiltroErrores implements ExceptionFilter {
 
   catch(error: unknown, host: ArgumentsHost): void {
     const respuesta = host.switchToHttp().getResponse<Response>();
-    const { estado, cuerpo } = this.traducir(error);
+    const { estado, cuerpo } = this.traducir(error, this.contexto(host));
     respuesta.status(estado).json(cuerpo);
   }
 
-  private traducir(error: unknown): { estado: number; cuerpo: CuerpoError } {
+  /** Vincula el error con la línea "→" y la línea final del middleware de logs. */
+  private contexto(host: ArgumentsHost): string {
+    let peticion: PeticionConCorrelacion | undefined;
+    try {
+      peticion = host.switchToHttp().getRequest<PeticionConCorrelacion>();
+    } catch {
+      // En las pruebas unitarias del filtro el host solo tiene la respuesta.
+    }
+    if (!peticion) return 'id=-';
+
+    const ruta = peticion.method
+      ? `${peticion.method} ${rutaSinConsulta(peticion.originalUrl ?? peticion.url ?? '')} `
+      : '';
+    const usuario = peticion.usuario?.id ? ` usuario=${peticion.usuario.id}` : '';
+    return `${ruta}id=${peticion.idCorrelacion ?? '-'}${usuario}`;
+  }
+
+  private traducir(error: unknown, contexto: string): { estado: number; cuerpo: CuerpoError } {
     if (error instanceof ErrorNegocio) {
+      this.logger.warn(`${contexto} ${error.codigo}: ${error.message}`);
       const cuerpo: CuerpoError = { codigo: error.codigo, mensaje: error.message };
       if (error.datos) cuerpo.datos = error.datos;
       return { estado: error.estadoHttp, cuerpo };
@@ -46,6 +65,7 @@ export class FiltroErrores implements ExceptionFilter {
     if (error instanceof HttpException) {
       const estado = error.getStatus();
       const codigo = CODIGO_POR_ESTADO[estado] ?? 'ERROR';
+      this.logger.warn(`${contexto} HTTP ${estado} ${codigo}: ${error.message}`);
       const res = error.getResponse();
       // El ValidationPipe devuelve { message: string[] } con un mensaje por campo.
       const mensajes =
@@ -63,7 +83,8 @@ export class FiltroErrores implements ExceptionFilter {
       return { estado, cuerpo: { codigo, mensaje: String(mensajes) } };
     }
 
-    this.logger.error(error instanceof Error ? error.stack : String(error));
+    const detalle = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    this.logger.error(`${contexto} ${detalle}`);
     return {
       estado: HttpStatus.INTERNAL_SERVER_ERROR,
       cuerpo: {

@@ -5,7 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   MaxLength,
   Min,
   ValidateNested,
@@ -42,7 +42,9 @@ export class MaterialSolicitadoDto {
 
   @ApiPropertyOptional({
     example: 'Se requiere para una fuga urgente.',
-    description: 'Obligatorio solo si el material excede periodicidad o límite de la zona.',
+    description:
+      'Obligatorio si el material excede periodicidad o límite de la zona; se guarda como ' +
+      'justificación aunque la entrega se registre de inmediato.',
   })
   @IsOptional()
   @IsString()
@@ -115,19 +117,20 @@ export class CrearBoletaDto {
   @MaxLength(LARGO_REFERENCIA)
   numeroSolicitud?: string;
 
-  @ApiPropertyOptional({ example: 'Leonel Lares' })
+  @ApiPropertyOptional({
+    example: 'Leonel Lares',
+    description:
+      'Persona que autorizó la entrega (opcional). Solo letras y espacios: puede elegirse de ' +
+      'la lista de supervisores o capturarse un nombre no registrado. No genera ninguna ' +
+      'autorización en el sistema.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(LARGO_NOMBRE)
-  autorizoNombre?: string;
-
-  @ApiPropertyOptional({
-    example: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
-    description: 'Supervisor que autorizará la entrega cuando algún material lo requiera.',
+  @Matches(/^(?:\p{L}+(?: \p{L}+)*)?$/u, {
+    message: 'autorizoNombre solo acepta letras y espacios',
   })
-  @IsOptional()
-  @IsUUID()
-  supervisorId?: string;
+  autorizoNombre?: string;
 
   @ApiPropertyOptional({
     example: '2/7f3c9a1e-firma-recibe.png',

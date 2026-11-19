@@ -10,13 +10,14 @@ import { SupervisoresService } from './supervisores.service';
 export class SupervisoresController {
   constructor(private readonly supervisores: SupervisoresService) {}
 
-  // Sin @Roles: el almacenista necesita la lista para pedir la autorización.
+  // Sin @Roles: el almacenista necesita la lista para sugerir nombres en el campo opcional.
   @Get('supervisores')
   @ApiOperation({
     summary: 'Lista los supervisores activos del campus del usuario',
     description:
-      'Para elegir quién autoriza una excepción de periodicidad o límite de zona (HU6 E8/E10). ' +
-      'El "id" es el que se manda como supervisorId en POST /boletas. Ordenados por nombre.',
+      'El campo "Autorizó" de la boleta es opcional y acepta texto libre: esta lista solo ' +
+      'sirve como sugerencia en la app para el caso de que la persona esté registrada. ' +
+      'No crea ni resuelve autorizaciones. Ordenados por nombre.',
   })
   @ApiOkResponse({
     description: 'Supervisores y supervisores jefe.',

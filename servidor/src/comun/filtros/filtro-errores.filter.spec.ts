@@ -1,4 +1,10 @@
-import { ArgumentsHost, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  BadRequestException,
+  HttpStatus,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ErrorNegocio } from '../errores/error-negocio';
 import { FiltroErrores } from './filtro-errores.filter';
 
@@ -12,6 +18,8 @@ function hostFalso() {
 
 describe('FiltroErrores', () => {
   const filtro = new FiltroErrores();
+
+  afterEach(() => jest.restoreAllMocks());
 
   it('traduce ErrorNegocio a su estado y { codigo, mensaje }', () => {
     const { host, respuesta } = hostFalso();
@@ -61,5 +69,45 @@ describe('FiltroErrores', () => {
     const cuerpo = (respuesta.json.mock.calls[0] as unknown[])[0];
     expect(cuerpo).toMatchObject({ codigo: 'ERROR_INTERNO' });
     expect(JSON.stringify(cuerpo)).not.toContain('secreto');
+  });
+
+  it('asocia el error con el id de correlación y la ruta de la petición', () => {
+    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const respuesta = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const peticion = {
+      idCorrelacion: 'abcd1234',
+      method: 'POST',
+      originalUrl: '/api/v1/usuarios/sesion?token=secreto',
+    };
+    const host = {
+      switchToHttp: () => ({
+        getResponse: () => respuesta,
+        getRequest: () => peticion,
+      }),
+    } as unknown as ArgumentsHost;
+
+    filtro.catch(new Error('falló Supabase Auth'), host);
+
+    const mensaje = error.mock.calls[0][0] as string;
+    expect(mensaje).toContain('POST /api/v1/usuarios/sesion');
+    expect(mensaje).toContain('id=abcd1234');
+    expect(mensaje).toContain('falló Supabase Auth');
+    expect(mensaje).not.toContain('token=secreto');
+  });
+
+  it('registra los errores de negocio con su código y la petición', () => {
+    const aviso = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { host, respuesta } = hostFalso();
+    filtro.catch(
+      new ErrorNegocio(
+        'CREDENCIALES_INVALIDAS',
+        'Correo o contraseña incorrectos.',
+        HttpStatus.UNAUTHORIZED,
+      ),
+      host,
+    );
+
+    expect(respuesta.status).toHaveBeenCalledWith(401);
+    expect(aviso).toHaveBeenCalledWith(expect.stringContaining('CREDENCIALES_INVALIDAS'));
   });
 });

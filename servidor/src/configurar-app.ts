@@ -1,11 +1,15 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { registrarLogsPeticiones } from './comun/middlewares/log-peticiones.middleware';
 
 export const PREFIJO_API = 'api/v1';
 
 // Compartido con las pruebas e2e para probar la app tal como corre en producción.
 export function configurarApp(app: INestApplication, opciones: { swagger?: boolean } = {}): void {
   app.setGlobalPrefix(PREFIJO_API);
+  // Antes de los guards y de los pipes: así incluso una petición rechazada por
+  // validación, autenticación o un error inesperado deja su log.
+  app.use(registrarLogsPeticiones);
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

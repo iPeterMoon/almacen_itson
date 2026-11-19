@@ -4,10 +4,8 @@ import { rangoDePagina } from '../../comun/dto/paginacion.dto';
 import { ErrorNegocio, parsearErrorBase } from '../../comun/errores/error-negocio';
 import { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { ConfirmarEntregaDto } from './dto/confirmar-entrega.dto';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
-import { EstadoBoleta, ListarBoletasDto } from './dto/listar-boletas.dto';
-import { ResolverAutorizacionDto } from './dto/resolver-autorizacion.dto';
+import { ListarBoletasDto } from './dto/listar-boletas.dto';
 import { SubirFirmaDto, TipoFirma } from './dto/subir-firma.dto';
 import { ValidarMaterialDto } from './dto/validar-material.dto';
 
@@ -70,15 +68,6 @@ interface ZonaResumen {
   piso: string | null;
 }
 
-interface AutorizacionDeBoleta {
-  id: number;
-  supervisor_id: string;
-  estado: string;
-  comentario: string | null;
-  solicitado_en: string;
-  resuelto_en: string | null;
-}
-
 interface FilaBoletaDetalle {
   id: number;
   folio: string;
@@ -100,7 +89,6 @@ interface FilaBoletaDetalle {
   zonas: ZonaResumen | null;
   boletas_materiales: MaterialDeBoleta[] | null;
   boletas_herramientas: HerramientaDeBoleta[] | null;
-  autorizaciones: AutorizacionDeBoleta[] | AutorizacionDeBoleta | null;
 }
 
 // Columnas del listado y del detalle. En el detalle se anidan las relaciones
@@ -123,8 +111,7 @@ const CAMPOS_DETALLE = `
   boletas_herramientas (
     id, activo_id, dias_prestamo, solicitante_con_vencido,
     activos ( codigo, nombre, modelo, numero_serie )
-  ),
-  autorizaciones ( id, supervisor_id, estado, comentario, solicitado_en, resuelto_en )
+  )
 `;
 
 // Reglas del bucket privado "firmas": tamaño máximo y firmas de archivo permitidas.
@@ -231,7 +218,6 @@ export class BoletasService {
       p_zona_id: dto.zonaId,
       p_numero_solicitud: dto.numeroSolicitud,
       p_autorizo_nombre: dto.autorizoNombre,
-      p_supervisor_id: dto.supervisorId,
       p_firma_recibe: dto.firmaRecibe,
       p_firma_entrega: dto.firmaEntrega,
       p_campus_id: dto.campusId,
@@ -246,32 +232,6 @@ export class BoletasService {
       estado: fila.estado,
       alertas: fila.alertas ?? [],
     };
-  }
-
-  // La RPC valida quién puede resolver la autorización y devuelve el nuevo estado.
-  async resolverAutorizacion(token: string, boletaId: number, dto: ResolverAutorizacionDto) {
-    const { data, error } = await this.supabase
-      .clienteDeUsuario(token)
-      .rpc('resolver_autorizacion', {
-        p_boleta_id: boletaId,
-        p_autorizar: dto.autorizar,
-        p_comentario: dto.comentario,
-      });
-    if (error) throw this.errorDeBase(error);
-    if (!data) throw new Error('La base no devolvió el estado de la boleta.');
-    return { boletaId, estado: data as EstadoBoleta };
-  }
-
-  // Confirmar es un paso aparte para las boletas que requirieron autorización.
-  async confirmarEntrega(token: string, boletaId: number, dto: ConfirmarEntregaDto) {
-    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('confirmar_entrega', {
-      p_boleta_id: boletaId,
-      p_firma_recibe: dto.firmaRecibe,
-      p_firma_entrega: dto.firmaEntrega,
-    });
-    if (error) throw this.errorDeBase(error);
-    if (!data) throw new Error('La base no devolvió el folio de la boleta.');
-    return { boletaId, folio: data, estado: 'ENTREGADA' as const };
   }
 
   // Listado paginado. Los campus permitidos los filtra RLS, no el cliente.
@@ -412,11 +372,6 @@ export class BoletasService {
         diasPrestamo: herramienta.dias_prestamo,
         solicitanteConVencido: herramienta.solicitante_con_vencido,
       })),
-      // PostgREST devuelve la relación única como objeto, pero algunas versiones la entregan
-      // como arreglo; se normaliza para que el contrato sea siempre el mismo.
-      autorizacion: Array.isArray(fila.autorizaciones)
-        ? (fila.autorizaciones[0] ?? null)
-        : fila.autorizaciones,
     };
   }
 

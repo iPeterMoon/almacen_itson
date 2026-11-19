@@ -158,9 +158,37 @@ describe('CrearBoletaDto', () => {
       expect(await erroresDe({ trabajadorId: 0 })).toEqual(['trabajadorId']);
     });
 
-    it('exige que el supervisor sea un UUID válido', async () => {
-      expect(await erroresDe({ supervisorId: 'no-es-uuid' })).toEqual(['supervisorId']);
-      expect(await erroresDe({ supervisorId: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f' })).toEqual([]);
+    it('acepta nombres con letras y espacios en autorizoNombre', async () => {
+      expect(await erroresDe({ autorizoNombre: 'Persona no registrada' })).toEqual([]);
+      expect(await erroresDe({ autorizoNombre: 'José Áñez' })).toEqual([]);
+    });
+
+    it('rechaza números y signos en autorizoNombre', async () => {
+      expect(await erroresDe({ autorizoNombre: 'Supervisor 123' })).toEqual(['autorizoNombre']);
+      expect(await erroresDe({ autorizoNombre: 'Ana-María' })).toEqual(['autorizoNombre']);
+      expect(await erroresDe({ autorizoNombre: '' })).toEqual([]);
+    });
+
+    it('ya no acepta supervisorId', async () => {
+      expect(await erroresDe({ supervisorId: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f' })).toEqual([
+        'supervisorId',
+      ]);
+    });
+
+    it('acepta las dos rutas de firma y rechaza rutas de más de 500 caracteres', async () => {
+      const firmas = { firmaRecibe: '2/firma-recibe.png', firmaEntrega: '2/firma-entrega.png' };
+      expect(await erroresDe(firmas)).toEqual([]);
+      expect(await erroresDe({ ...firmas, firmaRecibe: 'a'.repeat(501) })).toEqual(['firmaRecibe']);
+      expect(await erroresDe({ ...firmas, firmaEntrega: 'a'.repeat(501) })).toEqual([
+        'firmaEntrega',
+      ]);
+    });
+
+    it('rechaza firmas que no sean texto', async () => {
+      expect(await erroresDe({ firmaRecibe: 1, firmaEntrega: true })).toEqual([
+        'firmaEntrega',
+        'firmaRecibe',
+      ]);
     });
   });
 
