@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { rangoDePagina } from '../../comun/dto/paginacion.dto';
 import { ErrorNegocio, parsearErrorBase } from '../../comun/errores/error-negocio';
@@ -196,6 +196,14 @@ export class BoletasService {
   // Traduce el DTO de la API al JSON que espera crear_boleta. La base decide el estado
   // final, descuenta inventario y genera folio dentro de una sola transacción.
   async crear(token: string, dto: CrearBoletaDto) {
+    // Se responde 400 antes de llamar a la base; crear_boleta también lo revisa.
+    if ((dto.materiales?.length ?? 0) + (dto.herramientas?.length ?? 0) === 0) {
+      throw new ErrorNegocio(
+        'BOLETA_VACIA',
+        'Agrega al menos un material o una herramienta.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     for (const material of dto.materiales ?? []) {
       this.validarCantidadEntera(material.cantidad);
     }

@@ -142,6 +142,80 @@ describe('BoletasService', () => {
       });
     });
 
+    // HU8 E6: boleta solo con herramientas.
+    it('envía una boleta solo con herramientas sin materiales', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.crear('token', {
+        herramientas: [
+          { activoId: 8, diasPrestamo: 3 },
+          { activoId: 9, diasPrestamo: 30 },
+        ],
+        trabajadorId: 15,
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_materiales: [],
+          p_herramientas: [
+            { activo_id: 8, dias_prestamo: 3 },
+            { activo_id: 9, dias_prestamo: 30 },
+          ],
+        }),
+      );
+      expect(resultado.estado).toBe('ENTREGADA');
+    });
+
+    it('envía una boleta solo con materiales sin herramientas', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 1 }] });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({ p_herramientas: [] }),
+      );
+    });
+
+    it.each([
+      ['sin partidas', {}],
+      ['con listas vacías', { materiales: [], herramientas: [] }],
+    ])('rechaza con 400 BOLETA_VACIA una boleta %s sin llamar a la base', async (_caso, dto) => {
+      const rpc = jest.fn();
+      const servicio = crearServicio({ rpc });
+
+      await expect(servicio.crear('token', dto)).rejects.toMatchObject({
+        codigo: 'BOLETA_VACIA',
+        estadoHttp: HttpStatus.BAD_REQUEST,
+      });
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
+    // El DTO rechaza el mismo activo repetido; la base, otro del mismo tipo.
+    it('responde 409 HERRAMIENTA_MISMO_TIPO si el trabajador ya tiene una del mismo tipo', async () => {
+      const rpc = jest.fn().mockResolvedValue({
+        data: null,
+        error: {
+          message:
+            'HERRAMIENTA_MISMO_TIPO: Juan Pérez ya tiene prestada una herramienta "Taladro" (ACT-200 en el préstamo PRE-2026-0002).',
+        },
+      });
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', {
+          herramientas: [{ activoId: 9, diasPrestamo: 2 }],
+          trabajadorId: 15,
+        }),
+      ).rejects.toMatchObject({
+        codigo: 'HERRAMIENTA_MISMO_TIPO',
+        estadoHttp: HttpStatus.CONFLICT,
+      });
+    });
+
     it('rechaza cantidades decimales antes de llamar a la base', async () => {
       const rpc = jest.fn();
       const servicio = crearServicio({ rpc });

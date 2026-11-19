@@ -440,6 +440,27 @@ caso("HU8 E5", "Validación advierte que el solicitante tiene un vencido", CEN,
 caso("HU8 E5", "Se presta con advertencia registrada (1 día)", CEN,
      prestamo(JUAN, ACT200, 1), contiene='"solicitante_con_vencido": true')
 
+# Un solo préstamo por tipo de herramienta (mismo nombre, sin distinguir mayúsculas ni espacios)
+caso("HU8", "Otros dos taladros y otra esmeriladora", CEN,
+     activo('ACT-201', ' taladro ', 'DCD771', 'DCD771-1') + "; " + activo('ACT-202', 'TALADRO', 'DCD771', 'DCD771-2')
+     + "; " + activo('ACT-301', 'Esmeriladora', 'G720', 'G720-1'),
+     contiene="DISPONIBLE")
+ACT201 = admin("select id from activos where codigo='ACT-201'")
+ACT202 = admin("select id from activos where codigo='ACT-202'")
+ACT301 = admin("select id from activos where codigo='ACT-301'")
+caso("HU8", "No se presta otro taladro a quien ya tiene uno", CEN,
+     prestamo(JUAN, ACT201, 2), espera="HERRAMIENTA_MISMO_TIPO")
+caso("HU8", "Mensaje indica el préstamo abierto del mismo tipo", CEN,
+     prestamo(JUAN, ACT201, 2), espera="ACT-200 en el préstamo PRE-")
+caso("HU8", "Dos herramientas del mismo tipo en una boleta", CEN,
+     f"select 1 from crear_boleta(p_herramientas=>'[{{\"activo_id\":{ACT201},\"dias_prestamo\":1}},"
+     f"{{\"activo_id\":{ACT202},\"dias_prestamo\":1}}]', p_trabajador_id=>{MARIA}, {FIRMAS})",
+     espera="en la misma boleta (ACT-201 y ACT-202)")
+caso("HU8", "Otra persona sí puede recibir un taladro", CEN,
+     prestamo(MARIA, ACT201, 2), contiene="ENTREGADA")
+caso("HU8", "Un tipo distinto sí se presta a quien ya tiene un taladro", CEN,
+     prestamo(JUAN, ACT301, 2), contiene="ENTREGADA")
+
 # ---------- HU10: seguimiento ----------
 caso("HU10 E1", "Vencido con 2 días de retraso", CEN,
      "select seguimiento||'|'||dias_retraso from vista_seguimiento_prestamos where codigo='ACT-104'", contiene="VENCIDO|2")

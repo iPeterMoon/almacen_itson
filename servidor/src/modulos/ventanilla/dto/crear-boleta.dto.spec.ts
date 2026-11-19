@@ -102,6 +102,62 @@ describe('CrearBoletaDto', () => {
         'herramientas.0.diasPrestamo',
       ]);
     });
+
+    it('rechaza un activoId que no sea entero positivo', async () => {
+      expect(await erroresDe({ herramientas: [{ activoId: 0, diasPrestamo: 3 }] })).toEqual([
+        'herramientas.0.activoId',
+      ]);
+      expect(await erroresDe({ herramientas: [{ activoId: 1.5, diasPrestamo: 3 }] })).toEqual([
+        'herramientas.0.activoId',
+      ]);
+    });
+
+    it('acepta de 1 a 30 días de préstamo', async () => {
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 1 }] })).toEqual([]);
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 30 }] })).toEqual([]);
+    });
+
+    it('rechaza más de 30 días o días con decimales', async () => {
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 31 }] })).toEqual([
+        'herramientas.0.diasPrestamo',
+      ]);
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 2.5 }] })).toEqual([
+        'herramientas.0.diasPrestamo',
+      ]);
+    });
+
+    it('rechaza el mismo activo dos veces en la boleta', async () => {
+      expect(
+        await erroresDe({
+          herramientas: [
+            { activoId: 8, diasPrestamo: 3 },
+            { activoId: 8, diasPrestamo: 5 },
+          ],
+        }),
+      ).toEqual(['herramientas']);
+    });
+
+    it('acepta activos distintos en la misma boleta', async () => {
+      expect(
+        await erroresDe({
+          herramientas: [
+            { activoId: 8, diasPrestamo: 3 },
+            { activoId: 9, diasPrestamo: 3 },
+          ],
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  // HU8 E6: materiales y herramientas pueden ir en la misma boleta.
+  it('acepta una boleta combinada de materiales y herramientas', async () => {
+    expect(
+      await erroresDe({
+        materiales: [{ productoId: 12, cantidad: 2 }],
+        herramientas: [{ activoId: 8, diasPrestamo: 3 }],
+        trabajadorId: 15,
+      }),
+    ).toEqual([]);
   });
 
   describe('solicitante', () => {
@@ -192,7 +248,8 @@ describe('CrearBoletaDto', () => {
     });
   });
 
-  it('acepta una boleta vacía porque las reglas las aplica la base', async () => {
+  // La boleta vacía la rechaza BoletasService.crear, no el DTO.
+  it('el DTO no rechaza una boleta vacía', async () => {
     expect(await erroresDe({})).toEqual([]);
   });
 
