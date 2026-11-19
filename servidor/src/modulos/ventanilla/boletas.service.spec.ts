@@ -142,6 +142,16 @@ describe('BoletasService', () => {
       });
     });
 
+    it('rechaza cantidades decimales antes de llamar a la base', async () => {
+      const rpc = jest.fn();
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 0.5 }] }),
+      ).rejects.toMatchObject({ codigo: 'CANTIDAD_ENTERA_REQUERIDA' });
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
     it('traduce los errores de la base a ErrorNegocio', async () => {
       const rpc = jest.fn().mockResolvedValue({
         data: null,
@@ -242,7 +252,7 @@ describe('BoletasService', () => {
       const servicio = crearServicio({ rpc });
 
       await servicio.crear('token', {
-        materiales: [{ productoId: 12, cantidad: 0.5 }],
+        materiales: [{ productoId: 12, cantidad: 1 }],
         solicitanteNombre: 'Rosa Molina',
         solicitanteUnidad: 'Navojoa',
       });
@@ -370,13 +380,23 @@ describe('BoletasService', () => {
   });
 
   describe('validarMaterial', () => {
+    it('rechaza cantidades decimales antes de llamar a la base', async () => {
+      const rpc = jest.fn();
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.validarMaterial('token', { productoId: 12, cantidad: 1.5 }),
+      ).rejects.toMatchObject({ codigo: 'CANTIDAD_ENTERA_REQUERIDA' });
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
     it('devuelve la validación con nombres de la API', async () => {
       const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_MATERIAL], error: null });
       const servicio = crearServicio({ rpc });
 
       const resultado = await servicio.validarMaterial('token', {
         productoId: 12,
-        cantidad: 0.5,
+        cantidad: 1,
         presentacionId: 4,
         trabajadorId: 15,
         zonaId: 3,
@@ -386,7 +406,7 @@ describe('BoletasService', () => {
         'validar_material',
         expect.objectContaining({
           p_producto_id: 12,
-          p_cantidad: 0.5,
+          p_cantidad: 1,
           p_presentacion_id: 4,
           p_trabajador_id: 15,
           p_zona_id: 3,

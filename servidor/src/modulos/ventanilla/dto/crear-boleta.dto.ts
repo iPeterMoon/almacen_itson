@@ -3,9 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsInt,
-  IsNumber,
   IsOptional,
-  IsPositive,
   IsString,
   IsUUID,
   MaxLength,
@@ -22,9 +20,12 @@ export class MaterialSolicitadoDto {
   @Min(1)
   productoId: number;
 
-  @ApiProperty({ example: 2, description: 'Cantidad en la presentación elegida.' })
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @IsPositive()
+  @ApiProperty({
+    example: 2,
+    description: 'Cantidad de presentaciones completas (botellas, cajas, piezas). Debe ser entera.',
+  })
+  @IsInt({ message: 'La cantidad debe ser un número entero.' })
+  @Min(1, { message: 'La cantidad debe ser mayor a cero.' })
   cantidad: number;
 
   @ApiPropertyOptional({ example: 4, description: 'Presentación (litro, galón...).' })

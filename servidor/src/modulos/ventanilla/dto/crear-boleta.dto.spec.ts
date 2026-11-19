@@ -44,12 +44,15 @@ describe('CrearBoletaDto', () => {
       ]);
     });
 
-    // HU6 E7: cada cantidad se captura con su unidad de medida (hasta 3 decimales).
-    it('acepta hasta 3 decimales y rechaza 4', async () => {
-      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 0.125 }] })).toEqual([]);
-      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 0.1234 }] })).toEqual([
+    // HU6 E7: la cantidad son presentaciones completas, no fracciones.
+    it('rechaza cantidades con decimales', async () => {
+      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 0.5 }] })).toEqual([
         'materiales.0.cantidad',
       ]);
+      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 1.5 }] })).toEqual([
+        'materiales.0.cantidad',
+      ]);
+      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 2 }] })).toEqual([]);
     });
 
     // HU6 E5: comentario por material, opcional.

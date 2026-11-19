@@ -143,6 +143,7 @@ export class BoletasService {
 
   // Devuelve la validación en camelCase para que la app no dependa de los nombres de PostgreSQL.
   async validarMaterial(token: string, dto: ValidarMaterialDto) {
+    this.validarCantidadEntera(dto.cantidad);
     const cliente = this.supabase.clienteDeUsuario(token);
     const { data, error } = await cliente.rpc('validar_material', {
       p_producto_id: dto.productoId,
@@ -344,6 +345,15 @@ export class BoletasService {
 
     if (error) throw new ErrorNegocio('FIRMA_NO_SUBIDA', error.message);
     return { ruta };
+  }
+
+  private validarCantidadEntera(cantidad: number): void {
+    if (!Number.isInteger(cantidad)) {
+      throw new ErrorNegocio(
+        'CANTIDAD_ENTERA_REQUERIDA',
+        'La cantidad debe ser un número entero de presentaciones completas.',
+      );
+    }
   }
 
   private errorDeBase(error: ErrorSupabase): Error {

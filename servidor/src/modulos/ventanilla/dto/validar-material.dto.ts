@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNumber, IsOptional, IsPositive, Min } from 'class-validator';
+import { IsInt, IsOptional, Min } from 'class-validator';
 
 // Entrada del paso "Material" del flujo de ventanilla: valida un producto antes
 // de agregarlo al carrito de la boleta.
@@ -10,11 +10,11 @@ export class ValidarMaterialDto {
   productoId: number;
 
   @ApiProperty({
-    example: 0.5,
-    description: 'Cantidad solicitada antes de convertir a unidad base.',
+    example: 1,
+    description: 'Cantidad de presentaciones completas (botellas, cajas, piezas). Debe ser entera.',
   })
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @IsPositive()
+  @IsInt({ message: 'La cantidad debe ser un número entero.' })
+  @Min(1, { message: 'La cantidad debe ser mayor a cero.' })
   cantidad: number;
 
   @ApiPropertyOptional({ example: 4 })

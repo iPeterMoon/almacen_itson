@@ -34,11 +34,11 @@ void main() {
       'excedeLimite': false,
     });
 
-    final v = await repo.validarMaterial(productoId: 12, cantidad: 0.5);
+    final v = await repo.validarMaterial(productoId: 12, cantidad: 1);
 
     expect(servidor.ultimaPeticion!.method, 'POST');
     expect(servidor.ultimaPeticion!.path, '/boletas/validar-material');
-    expect(servidor.ultimaPeticion!.data, {'productoId': 12, 'cantidad': 0.5});
+    expect(servidor.ultimaPeticion!.data, {'productoId': 12, 'cantidad': 1});
     expect(servidor.ultimaPeticion!.headers['Authorization'], 'Bearer token');
     expect(v.disponible, 16);
     expect(v.stockSuficiente, isTrue);

@@ -10,7 +10,7 @@ async function validar(cuerpo: Record<string, unknown>) {
 
 describe('ValidarMaterialDto', () => {
   it('acepta solo producto y cantidad', async () => {
-    expect((await validar({ productoId: 12, cantidad: 0.5 })).campos).toEqual([]);
+    expect((await validar({ productoId: 12, cantidad: 1 })).campos).toEqual([]);
   });
 
   it('acepta todos los campos opcionales', async () => {
@@ -36,9 +36,10 @@ describe('ValidarMaterialDto', () => {
     expect((await validar({ productoId: 12, cantidad: 'abc' })).campos).toEqual(['cantidad']);
   });
 
-  it('acepta hasta 3 decimales en la cantidad y rechaza 4', async () => {
-    expect((await validar({ productoId: 12, cantidad: 0.125 })).campos).toEqual([]);
-    expect((await validar({ productoId: 12, cantidad: 0.1234 })).campos).toEqual(['cantidad']);
+  it('rechaza cantidades con decimales porque se entregan presentaciones completas', async () => {
+    expect((await validar({ productoId: 12, cantidad: 0.5 })).campos).toEqual(['cantidad']);
+    expect((await validar({ productoId: 12, cantidad: 1.5 })).campos).toEqual(['cantidad']);
+    expect((await validar({ productoId: 12, cantidad: 2 })).campos).toEqual([]);
   });
 
   it('rechaza un productoId que no sea entero positivo', async () => {
