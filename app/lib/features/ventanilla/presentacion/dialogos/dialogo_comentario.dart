@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/validacion/limites_texto.dart';
+import '../../../../core/validacion/sin_emojis.dart';
 
 /// Escenario 5: comentario por material/activo. Devuelve el texto o null si se cancela.
 Future<String?> mostrarDialogoComentario(
@@ -39,6 +40,7 @@ Future<String?> mostrarDialogoComentario(
                 maxLines: 6,
                 maxLength: limiteComentario,
                 maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                inputFormatters: formattersSinEmojis,
                 textCapitalization: TextCapitalization.sentences,
                 buildCounter: (
                   BuildContext context, {

@@ -278,6 +278,31 @@ void main() {
     expect(find.text('+ Nueva entrega'), findsOneWidget);
   });
 
+  testWidgets('un comentario con emojis se guarda sin ellos en la boleta', (tester) async {
+    final servidor = _servidorBase();
+    await _abrirApp(tester, servidor);
+    await _elegirSolicitanteRegistrado(tester);
+    await _tocar(tester, _boton('Siguiente'));
+    await _agregarJabon(tester, '2');
+    await _tocar(tester, _boton('Siguiente'));
+
+    await _tocar(tester, find.widgetWithText(OutlinedButton, 'Comentario'));
+    await tester.enterText(find.byType(TextField), 'Entregado correctamente😀');
+    await _tocar(tester, find.widgetWithText(FilledButton, 'Confirmar'));
+
+    expect(find.text('Comentario: Entregado correctamente'), findsOneWidget);
+    expect(find.textContaining('😀'), findsNothing);
+
+    // Ya estamos en revisión: falta pasar a firmas, firmar y confirmar.
+    await _tocar(tester, _boton('Siguiente'));
+    await _firmar(tester);
+    await _tocar(tester, _boton('Confirmar Entrega'));
+
+    expect(servidor.a('POST /boletas').single.cuerpo['materiales'], [
+      {'productoId': 12, 'cantidad': 2.0, 'comentario': 'Entregado correctamente'},
+    ]);
+  });
+
   testWidgets('material fuera de periodicidad: pide motivo y autorización y la boleta queda pendiente (E8)',
       (tester) async {
     final servidor = _servidorBase()

@@ -1,4 +1,5 @@
 import 'package:almacen_itson/core/validacion/limites_texto.dart';
+import 'package:almacen_itson/core/validacion/sin_emojis.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -117,6 +118,7 @@ class _DialogoAutorizacionState extends ConsumerState<DialogoAutorizacion> {
                 maxLines: 4,
                 maxLength: limiteComentario,
                 maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                inputFormatters: formattersSinEmojis,
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   labelText: 'Otro', 
@@ -144,7 +146,7 @@ class _DialogoAutorizacionState extends ConsumerState<DialogoAutorizacion> {
                                 autorizadorId: elegido.id,
                                 autorizadorNombre: elegido.nombre,
                                 motivo: _motivo ?? 'Otro',
-                                detalleOtro: _otro.text.trim(),
+                                detalleOtro: quitarEmojis(_otro.text.trim()),
                               ),
                             );
                           },

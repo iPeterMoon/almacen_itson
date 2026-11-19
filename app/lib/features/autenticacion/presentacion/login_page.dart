@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errores/error_negocio.dart';
+import '../../../core/validacion/sin_emojis.dart';
 import '../../../core/tema/tema.dart';
 import '../../../core/widgets/componentes.dart';
 import 'sesion_controlador.dart';
@@ -40,14 +41,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     setState(() => _enviando = true);
 
     await ref.read(controladorSesionProvider.notifier).iniciarSesion(
-          usuario: _usuario.text.trim(),
-          contrasena: _contrasena.text,
+          usuario: quitarEmojis(_usuario.text.trim()),
+          contrasena: quitarEmojis(_contrasena.text),
         );
 
     if (mounted) setState(() => _enviando = false);
   }
 
   String? _validarUsuario(String? valor) {
+    final sinEmojis = validarSinEmojis(valor);
+    if (sinEmojis != null) return sinEmojis;
     final texto = valor?.trim() ?? '';
     if (texto.isEmpty) return 'Ingresa tu usuario.';
     if (!texto.contains('@') || !texto.contains('.')) {
@@ -57,6 +60,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   String? _validarContrasena(String? valor) {
+    final sinEmojis = validarSinEmojis(valor);
+    if (sinEmojis != null) return sinEmojis;
     if (valor == null || valor.isEmpty) return 'Ingresa tu contraseña.';
     return null;
   }
@@ -213,6 +218,7 @@ class _TarjetaLogin extends StatelessWidget {
                     controller: usuario,
                     enabled: !cargando,
                     keyboardType: TextInputType.emailAddress,
+                    inputFormatters: formattersSinEmojis,
                     textInputAction: TextInputAction.next,
                     autofillHints: const [AutofillHints.username],
                     autocorrect: false,
@@ -228,6 +234,7 @@ class _TarjetaLogin extends StatelessWidget {
                     focusNode: focoContrasena,
                     enabled: !cargando,
                     obscureText: !verContrasena,
+                    inputFormatters: formattersSinEmojis,
                     textInputAction: TextInputAction.done,
                     autofillHints: const [AutofillHints.password],
                     decoration: decoracion(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errores/error_negocio.dart';
+import '../../../../core/validacion/sin_emojis.dart';
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
 import '../../datos/ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
@@ -84,6 +85,7 @@ class _PasoMaterialesState extends ConsumerState<PasoMateriales> {
             ]),
             const SizedBox(height: 12),
             TextField(
+              inputFormatters: formattersSinEmojis,
               onChanged: _buscar,
               decoration: InputDecoration(
                 hintText: _pestana == 0

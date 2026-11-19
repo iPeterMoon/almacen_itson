@@ -1,5 +1,9 @@
+import '../../../core/validacion/sin_emojis.dart';
+
 /// Validación de cantidad (Escenario 7). Solo mejora la experiencia: el servidor vuelve a validar.
 String? validarCantidad(String? valor) {
+  final sinEmojis = validarSinEmojis(valor);
+  if (sinEmojis != null) return sinEmojis;
   final texto = (valor ?? '').trim().replaceAll(',', '.');
   if (texto.isEmpty) return 'La cantidad debe ser un número mayor a cero.';
   final n = double.tryParse(texto);

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errores/error_negocio.dart';
+import '../../../core/validacion/sin_emojis.dart';
 import '../../autenticacion/presentacion/sesion_controlador.dart';
 import '../datos/modelos.dart';
 import '../datos/ventanilla_repositorio.dart';
@@ -141,10 +142,12 @@ class EntregaController extends Notifier<EntregaState> {
         solicitante: valor ? null : _sin,
       );
 
-  void setNombreSinRegistro(String v) => state = state.copyWith(nombreSinRegistro: v);
-  void setUnidadSinRegistro(String v) => state = state.copyWith(unidadSinRegistro: v);
+  void setNombreSinRegistro(String v) =>
+      state = state.copyWith(nombreSinRegistro: quitarEmojis(v));
+  void setUnidadSinRegistro(String v) =>
+      state = state.copyWith(unidadSinRegistro: quitarEmojis(v));
   void setAutorizo(String? id) => state = state.copyWith(autorizoId: id);
-  void setNumeroSolicitud(String v) => state = state.copyWith(numeroSolicitud: v);
+  void setNumeroSolicitud(String v) => state = state.copyWith(numeroSolicitud: quitarEmojis(v));
 
   // --- Paso 2: materiales y activos ---
 
@@ -321,12 +324,12 @@ class EntregaController extends Notifier<EntregaState> {
   /// Escenario 5: comentario por material (o activo) antes de confirmar.
   void comentarMaterial(String codigo, String texto) => state = state.copyWith(materiales: [
         for (final m in state.materiales)
-          if (m.material.codigo == codigo) m.copyWith(comentario: texto.trim()) else m
+          if (m.material.codigo == codigo) m.copyWith(comentario: quitarEmojis(texto).trim()) else m
       ]);
 
   void comentarActivo(String codigo, String texto) => state = state.copyWith(activos: [
         for (final a in state.activos)
-          if (a.activo.codigo == codigo) a.copyWith(comentario: texto.trim()) else a
+          if (a.activo.codigo == codigo) a.copyWith(comentario: quitarEmojis(texto).trim()) else a
       ]);
 
   // --- Paso 4: firmas y confirmación ---
@@ -351,15 +354,16 @@ class EntregaController extends Notifier<EntregaState> {
       return;
     }
     state = state.copyWith(enviando: true, error: null, stockInsuficiente: null);
+    final numero = quitarEmojis(state.numeroSolicitud.trim());
     try {
       final resumen = await _repo.registrarEntrega(SolicitudEntrega(
         solicitanteId: state.sinRegistro ? null : state.solicitante?.id,
         solicitante: state.sinRegistro ? null : state.solicitante,
-        nombreSinRegistro: state.sinRegistro ? state.nombreSinRegistro.trim() : null,
-        unidadSinRegistro: state.sinRegistro ? state.unidadSinRegistro.trim() : null,
+        nombreSinRegistro: state.sinRegistro ? quitarEmojis(state.nombreSinRegistro.trim()) : null,
+        unidadSinRegistro: state.sinRegistro ? quitarEmojis(state.unidadSinRegistro.trim()) : null,
         autorizoId: state.autorizoId,
         autorizoNombre: _nombreAutorizador(state.autorizoId),
-        numeroSolicitud: state.numeroSolicitud.trim().isEmpty ? null : state.numeroSolicitud.trim(),
+        numeroSolicitud: numero.isEmpty ? null : numero,
         materiales: state.materiales.where((m) => m.entregado).toList(),
         activos: state.activos.where((a) => a.entregado).toList(),
         firmaEntrega: fe,
@@ -431,7 +435,7 @@ final entregaControllerProvider =
 class ConsultaNotifier extends Notifier<String> {
   @override
   String build() => '';
-  void set(String valor) => state = valor;
+  void set(String valor) => state = quitarEmojis(valor);
 }
 
 final consultaSolicitantesProvider =
@@ -517,7 +521,7 @@ class FiltroMaterialesNotifier extends Notifier<FiltroMateriales> {
   @override
   FiltroMateriales build() => const FiltroMateriales();
 
-  void setConsulta(String v) => state = state.copyWith(consulta: v);
+  void setConsulta(String v) => state = state.copyWith(consulta: quitarEmojis(v));
   void setCategoria(String? v) => state = state.copyWith(categoria: v);
   void setTipo(String? v) => state = state.copyWith(tipo: v);
   void setAlmacen(String? v) => state = state.copyWith(almacen: v);
