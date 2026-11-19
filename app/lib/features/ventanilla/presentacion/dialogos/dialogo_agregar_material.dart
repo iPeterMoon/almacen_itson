@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errores/error_negocio.dart';
-import '../../../../core/validacion/sin_emojis.dart';
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
@@ -42,11 +42,15 @@ class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial>
     super.dispose();
   }
 
-  double? get _valor => double.tryParse(_cantidad.text.trim().replaceAll(',', '.'));
+  // La cantidad es entera (AI-67); el controlador la sigue recibiendo como double.
+  double? get _valor => int.tryParse(_cantidad.text.trim())?.toDouble();
 
-  void _ajustar(double delta) {
+  // − y + van de 1 en 1, sin bajar de 1 ni pasar del máximo del campo.
+  void _ajustar(int delta) {
     final nuevo = (_valor ?? 0) + delta;
-    if (nuevo > 0) setState(() => _cantidad.text = formatearCantidad(nuevo));
+    if (nuevo >= 1 && nuevo <= cantidadMaxima) {
+      setState(() => _cantidad.text = formatearCantidad(nuevo));
+    }
   }
 
   Future<void> _agregar() async {
@@ -148,8 +152,13 @@ class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial>
                     Expanded(
                       child: TextFormField(
                         controller: _cantidad,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: formattersSinEmojis,
+                        // Teclado sin punto decimal; solo deja escribir dígitos, hasta 4 (AI-67).
+                        // Los dígitos también dejan fuera los emojis.
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(digitosCantidad),
+                        ],
                         textAlign: TextAlign.center,
                         validator: validarCantidad,
                         decoration: InputDecoration(
