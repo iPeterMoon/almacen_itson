@@ -26,7 +26,7 @@ Los nombres deben entenderse sin explicación. Sin prefijos ni abreviaturas (nad
 2. **Las reglas de negocio viven en la base de datos cuando se puede:** NOT NULL, UNIQUE, CHECK, FOREIGN KEY. Lo que no se puede expresar ahí (por ejemplo, periodicidad de entregas) lo documentas como regla de la capa de servicio.
 3. **Normaliza hasta 3FN** y solo desnormaliza con una razón medible (rendimiento de una consulta concreta de una pantalla). Cada desnormalización se documenta.
 4. **Nunca guardes un dato que se puede calcular de forma confiable** (días de retraso, estado "Vencido", existencia total del campus) salvo que haya una razón de rendimiento o histórica, y entonces lo dices.
-5. **El historial no se borra.** Movimientos, préstamos, autorizaciones y firmas son inmutables; se corrigen con un nuevo movimiento (ajuste), no con UPDATE ni DELETE.
+5. **El historial no se borra.** Movimientos, préstamos, motivos de excepción y firmas son inmutables; se corrigen con un nuevo movimiento (ajuste), no con UPDATE ni DELETE.
 6. **Si algo es ambiguo, lo preguntas** en una lista de preguntas abiertas en lugar de inventarlo. Sigues diseñando con el supuesto más razonable y lo marcas como supuesto.
 
 ## Flujo de trabajo
@@ -111,7 +111,7 @@ Usa este contexto cuando el trabajo sea para este proyecto. Si el usuario compar
 
 **Arquitectura:** monolito modular evolutivo, una base de datos relacional, API REST, app móvil, caché para el catálogo. Módulos: 1 Catálogo e Inventario, 2 Ventanilla y Entregas, 3 Préstamos y Herramientas, 4 Reportes y Análisis, 5 Alertas y Notificaciones, 6 Usuarios y Roles. Base de datos: Supabase (PostgreSQL); aplica la sección Supabase de este skill. La app móvil **no** se conecta directo a Supabase: pasa por la API REST del servidor NestJS (`servidor/`), que llama a la base con el token del usuario. Por eso RLS en todas las tablas y funciones RPC para toda operación que modifique existencias, folios o estados siguen siendo obligatorias: `auth.uid()` y las políticas funcionan dentro de las funciones.
 
-**Lo que ya existe:** 9 migraciones en `supabase/migrations/` con las tablas, funciones, vistas y RLS de las HU 1 a 10. Antes de diseñar algo nuevo, lee esas migraciones y extiéndelas con una migración nueva; no rehagas el modelo.
+**Lo que ya existe:** 18 migraciones en `supabase/migrations/` con las tablas, funciones, vistas y RLS de las HU 1 a 10. Antes de diseñar algo nuevo, lee esas migraciones y extiéndelas con una migración nueva; no rehagas el modelo.
 
 **Organización física:** unidades (Obregón, Guaymas, Navojoa) → campus (Náinari, Centro) → almacenes (Almacén 1, 2, 3, Dormitorios…) → ubicación descriptiva opcional (por ejemplo E1F1, "Primer piso"). El catálogo de productos es único y centralizado; la existencia es por ubicación y la del campus es la suma.
 
@@ -121,7 +121,7 @@ Usa este contexto cuando el trabajo sea para este proyecto. Si el usuario compar
 - HU3 Consulta: búsqueda por código, nombre estándar o alias; filtros por categoría, unidad, tipo y almacén; solo datos del campus del usuario; detalle con última entrada y última salida.
 - HU4 Reingreso de sobrantes: entrada ligada a la boleta de origen; la cantidad reingresada no puede superar lo entregado menos lo ya reingresado.
 - HU5 Ajuste: nueva cantidad y motivo obligatorio; se registra la diferencia en el historial general de movimientos.
-- HU6 Entrega en ventanilla: boleta con folio, solicitante registrado o sin registro (nombre y unidad/campus en texto), número de solicitud opcional (ej. OT-9981), comentario por material, unidad de entrega por renglón, firma de quien recibe y de quien entrega, validación de stock, periodicidad por insumo y límite por zona; si excede periodicidad o límite, requiere motivo y autorización (Pendiente, Autorizada, Rechazada).
+- HU6 Entrega en ventanilla: boleta con folio, solicitante registrado o sin registro (nombre y unidad/campus en texto), número de solicitud opcional (ej. OT-9981), comentario por material, unidad de entrega por renglón, firma de quien recibe y de quien entrega, validación de stock, periodicidad por insumo y límite por zona; si excede periodicidad o límite, se sugiere pedir autorización fuera del sistema, se exige el motivo y la boleta se entrega de inmediato como ENTREGADA (sin estados de autorización). El campo opcional `autorizo_nombre` acepta texto libre (máximo 200 caracteres); `/usuarios/supervisores` solo da sugerencias.
 - HU7 Alta de activo: código de activo único, modelo, número de serie, ubicación; estado inicial "Disponible". En Figma además: marca y valor.
 - HU8 Préstamo: solo activos del campus y "Disponible"; estados del activo: Disponible, En préstamo, En reparación, Robo/Extravío (Figma también muestra "De baja"); tiempo de préstamo en días y fecha prevista calculada; número de solicitud y autorizador opcionales; firmas; advertencia si el solicitante tiene un préstamo vencido; una misma boleta puede combinar entrega de material y préstamo de herramientas.
 - HU9 Devolución: fecha y hora automáticas, firmas, condición (buen estado o dañado con descripción → "En reparación"), días de retraso guardados en el historial del trabajador, reporte de robo o extravío con declaración.

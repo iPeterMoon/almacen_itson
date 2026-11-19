@@ -18,7 +18,7 @@ Actúas como un desarrollador backend senior de NestJS (TypeScript). Construyes 
 
 ## Principios
 
-1. **La base de datos manda en las reglas de negocio.** Stock, periodicidad, folios, autorizaciones y permisos ya están en funciones de PostgreSQL probadas. El servidor NO las reimplementa: las invoca con `rpc` y traduce el resultado. En el servidor va lo que la base no hace: orquestación entre pasos, caché, subida de firmas, formato de respuestas, validación de la forma de la petición, push.
+1. **La base de datos manda en las reglas de negocio.** Stock, periodicidad, límite por zona, folios y permisos ya están en funciones de PostgreSQL probadas. El servidor NO las reimplementa: las invoca con `rpc` y traduce el resultado. En el servidor va lo que la base no hace: orquestación entre pasos, caché, subida de firmas, formato de respuestas, validación de la forma de la petición, push.
 2. **El servidor actúa en nombre del usuario.** Cada petición lleva el JWT de Supabase Auth del usuario; el servidor lo valida y crea un cliente de Supabase con ese token, para que `auth.uid()` y RLS funcionen dentro de las funciones. **Prohibido usar la clave `service_role` para operaciones de usuarios** (anularía permisos por rol y campus y rompería la auditoría). `service_role` solo en tareas internas sin usuario (por ejemplo un job de alertas), y documentado en el código.
 3. **Capas con responsabilidades fijas.** Un módulo solo usa a otro a través de su servicio exportado, nunca de su repositorio.
 4. **Una funcionalidad = un módulo de Nest**, estructura por dominio, no por tipo de archivo.
@@ -79,7 +79,7 @@ servidor/
 
 ## Base de datos que consume el servidor
 
-- **Funciones (RPC):** inventario `registrar_entrada`, `registrar_reingreso`, `registrar_ajuste`, `buscar_productos`; ventanilla `validar_material`, `crear_boleta`, `resolver_autorizacion`, `confirmar_entrega`; préstamos `validar_activo`, `registrar_activo`, `cambiar_estado_activo`, `registrar_devolucion`, `reportar_robo_extravio`; alertas `obtener_notificaciones`.
+- **Funciones (RPC):** inventario `registrar_entrada`, `registrar_reingreso`, `registrar_ajuste`, `buscar_productos`; ventanilla `validar_material`, `crear_boleta` (entrega en el acto, sin autorizaciones); préstamos `validar_activo`, `registrar_activo`, `cambiar_estado_activo`, `registrar_devolucion`, `reportar_robo_extravio`; alertas `obtener_notificaciones`.
 - **Vistas de lectura:** `vista_existencias_por_ubicacion`, `vista_historial_movimientos`, `vista_seguimiento_prestamos`.
 - Antes de usar una función, **consulta su firma real** en la base (`list_tables`, o `execute_sql` sobre `pg_proc`) en vez de suponer nombres de parámetros. Proyecto de Supabase: `almacenes-itson` (URL y clave publicable con `get_project_url` y `get_publishable_keys`). Las migraciones están en `supabase/migrations/`.
 - Variables de entorno: `SUPABASE_URL`, `SUPABASE_ANON_KEY`; nunca en el código ni en el repositorio.
@@ -87,8 +87,11 @@ servidor/
 ### Errores de negocio
 Las funciones lanzan `CODIGO: mensaje`. El repositorio separa el código y lanza `ErrorNegocio(codigo, mensaje)`; el filtro global lo convierte en HTTP con cuerpo `{ "codigo": "...", "mensaje": "..." }`. Mapeo base: falta de permiso → 403, no encontrado → 404, conflicto de estado o de stock → 409, datos inválidos o firma inválida → 422, error inesperado → 500 sin filtrar detalles internos. Antes de mapear, lista los códigos reales de las funciones en la base; no los inventes.
 
+### Logs
+`configurarApp` registra globalmente **toda** petición: entrada y salida con método, ruta sin cadena de consulta, estado, duración e id de correlación (también en la cabecera `X-Id-Correlacion`). `FiltroErrores` añade ese id y el código al error, y la traza cuando es inesperado. `SesionRepository` registra el `code`/`status`/mensaje real de Supabase Auth. Nunca escribas contraseñas, tokens ni cuerpos en los logs.
+
 ### Firmas digitales
-El bucket `firmas` es privado; ruta `{campusId}/{uuid}.png`, máximo 500 KB, png/jpeg/webp. La app manda la firma en base64 dentro de la misma petición (`crear_boleta`, `confirmar_entrega`, `registrar_devolucion`). El servicio valida tipo y tamaño, **la sube con el cliente del usuario**, y después llama a la función con las rutas. Para mostrarlas devuelve un enlace firmado de 60 segundos. Campus: Centro = 2, Náinari = 1 (confirmar con la tabla `campus`). Si la función falla después de subir, el archivo queda huérfano: documentarlo; no se borra (el bucket no permite borrar).
+El bucket `firmas` es privado; ruta `{campusId}/{uuid}.png`, máximo 500 KB, png/jpeg/webp. La app manda la firma en base64 dentro de la misma petición (`crear_boleta`, `registrar_devolucion`). El servicio valida tipo y tamaño, **la sube con el cliente del usuario**, y después llama a la función con las rutas. Para mostrarlas devuelve un enlace firmado de 60 segundos. Campus: Centro = 2, Náinari = 1 (confirmar con la tabla `campus`). Si la función falla después de subir, el archivo queda huérfano: documentarlo; no se borra (el bucket no permite borrar).
 
 ## Caché
 
@@ -115,6 +118,6 @@ Primera versión: la app consulta `obtener_notificaciones` al abrir. Segunda eta
 
 ## Contexto del proyecto
 
-Sistema de Almacenes ITSON (inventario, entregas en ventanilla y préstamo de herramientas). Equipo: Juan Pablo Olivarria, Pedro Luna, Alicia García, Norma Beltrán y Victoria Valenzuela (Métodos Ágiles). Base de datos en Supabase con RLS, funciones RPC, 9 migraciones y 125 pruebas locales. Historias priorizadas HU1-10: alta de producto, entradas, consulta, reingreso, ajuste, entrega en ventanilla, alta de activo, préstamo, devolución y seguimiento.
+Sistema de Almacenes ITSON (inventario, entregas en ventanilla y préstamo de herramientas). Equipo: Juan Pablo Olivarria, Pedro Luna, Alicia García, Norma Beltrán y Victoria Valenzuela (Métodos Ágiles). Base de datos en Supabase con RLS, funciones RPC, 18 migraciones y 295 pruebas del servidor. Historias priorizadas HU1-10: alta de producto, entradas, consulta, reingreso, ajuste, entrega en ventanilla, alta de activo, préstamo, devolución y seguimiento.
 
 **Pendientes de confirmar:** dónde se despliega el servidor, si habrá Redis, push con Firebase en una segunda etapa, y la lista real de almacenes por campus.

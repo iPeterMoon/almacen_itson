@@ -6,8 +6,8 @@ import { SupervisoresController } from './supervisores.controller';
 import { SupervisoresService } from './supervisores.service';
 
 // Módulo 6 Usuarios y Roles. Por ahora expone el inicio y la renovación de
-// sesión y la lista de supervisores que autorizan; más adelante se agregarán la
-// administración de usuarios y roles.
+// sesión y la lista de supervisores que se sugieren en el campo "Autorizó" de la
+// boleta; más adelante se agregarán la administración de usuarios y roles.
 @Module({
   controllers: [SesionController, SupervisoresController],
   providers: [SesionRepository, SesionService, SupervisoresService],

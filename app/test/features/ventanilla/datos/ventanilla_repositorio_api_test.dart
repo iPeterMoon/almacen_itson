@@ -399,8 +399,8 @@ void main() {
     });
   });
 
-  test('listarAutorizadores devuelve los supervisores con su UUID', () async {
-    final lista = await crearApi(ProductosFalso()).listarAutorizadores();
+  test('listarSupervisores devuelve los supervisores como sugerencias', () async {
+    final lista = await crearApi(ProductosFalso()).listarSupervisores();
 
     expect(lista.single.id, supervisorDemo.id);
     expect(lista.single.nombre, 'Supervisión Náinari');
@@ -515,7 +515,7 @@ void main() {
     final firma = Uint8List.fromList([1, 2, 3]);
     SolicitudEntrega solicitud({
       List<ItemActivo> activos = const [],
-      Autorizacion? autorizacion,
+      MotivoExcepcion? motivoExcepcion,
     }) =>
         SolicitudEntrega(
           nombreSinRegistro: 'Rosa Molina',
@@ -528,7 +528,7 @@ void main() {
               cantidad: 2,
               unidad: 'L',
               comentario: 'Baño 2',
-              autorizacion: autorizacion,
+              motivoExcepcion: motivoExcepcion,
             ),
           ],
           activos: activos,
@@ -609,17 +609,15 @@ void main() {
       expect(resumen.area, 'Servicios Generales');
     });
 
-    test('manda el motivo de la excepción y el supervisor elegido', () async {
+    test('manda el motivo de la excepción en el material, sin supervisorId', () async {
       final boletas = BoletasFalso();
-      const uuid = '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f';
 
       await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud(
-        autorizacion: const Autorizacion(
-            autorizadorId: uuid, autorizadorNombre: 'Leonel', motivo: 'Otro', detalleOtro: 'Fuga'),
+        motivoExcepcion: const MotivoExcepcion(motivo: 'Otro', detalleOtro: 'Fuga'),
       ));
 
       expect((boletas.cuerpoCreado!['materiales'] as List).single['motivoExcepcion'], 'Otro: Fuga');
-      expect(boletas.cuerpoCreado!['supervisorId'], uuid);
+      expect(boletas.cuerpoCreado!.containsKey('supervisorId'), isFalse);
     });
 
     test('las herramientas se mandan con su id y días, y salen en el resumen', () async {
@@ -649,17 +647,16 @@ void main() {
       expect(boletas.firmas, isEmpty);
     });
 
-    test('una boleta pendiente de autorización regresa su folio marcado como pendiente', () async {
+    test('toda boleta se reporta entregada, con fecha y sin estados pendientes', () async {
       final boletas = BoletasFalso(
-        creada: const BoletaCreada(boletaId: 8, folio: 'BOL-2026-000008', estado: 'PENDIENTE_AUTORIZACION'),
+        creada: const BoletaCreada(boletaId: 8, folio: 'BOL-2026-000008', estado: 'ENTREGADA'),
       );
 
       final resumen =
           await crearApi(ProductosFalso(), boletas: boletas).registrarEntrega(solicitud());
 
       expect(resumen.folio, 'BOL-2026-000008');
-      expect(resumen.autorizacionPendiente, isTrue);
-      expect(resumen.fechaHora, 'Pendiente de autorización');
+      expect(resumen.fechaHora, '08:57 a.m. 17/10/2026');
     });
 
     test('los errores del servidor salen tal cual', () async {

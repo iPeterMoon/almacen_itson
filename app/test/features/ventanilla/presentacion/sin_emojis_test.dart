@@ -1,7 +1,7 @@
 import 'package:almacen_itson/core/validacion/sin_emojis.dart';
 import 'package:almacen_itson/features/ventanilla/datos/modelos.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/dialogos/dialogo_agregar_material.dart';
-import 'package:almacen_itson/features/ventanilla/presentacion/dialogos/dialogo_autorizacion.dart';
+import 'package:almacen_itson/features/ventanilla/presentacion/dialogos/dialogo_sugerencia_autorizacion.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/dialogos/dialogo_comentario.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/entrega_controlador.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/widgets/paso_solicitante.dart';
@@ -103,14 +103,14 @@ void main() {
     await _escribir(tester, find.byType(TextField), 'Entregado😀');
   });
 
-  testWidgets('diálogo de autorización: el motivo "Otro" no conserva emojis', (tester) async {
+  testWidgets('diálogo de sugerencia: el motivo "Otro" no conserva emojis', (tester) async {
     final contenedor = ProviderContainer();
     addTearDown(contenedor.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: contenedor,
       child: MaterialApp(
         home: Scaffold(
-          body: DialogoAutorizacion(
+          body: DialogoSugerenciaAutorizacion(
             material: _material,
             cantidad: 2,
             unidad: 'Litro',

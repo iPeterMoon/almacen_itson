@@ -43,7 +43,7 @@ class PasoRevision extends ConsumerWidget {
                               CampoDato('Almacén', it.material.almacen),
                               CampoDato('Ubicación', it.material.ubicacion),
                             ],
-                            autorizada: it.autorizacion != null,
+                            conMotivo: it.motivoExcepcion != null,
                             comentario: it.comentario,
                             onComentar: () async {
                               final t = await mostrarDialogoComentario(context,
@@ -141,7 +141,7 @@ class _FichaRevision extends StatelessWidget {
     required this.campos,
     required this.onComentar,
     this.comentario,
-    this.autorizada = false,
+    this.conMotivo = false,
   });
 
   final int indice;
@@ -150,7 +150,7 @@ class _FichaRevision extends StatelessWidget {
   final List<CampoDato> campos;
   final VoidCallback onComentar;
   final String? comentario;
-  final bool autorizada;
+  final bool conMotivo;
 
   @override
   Widget build(BuildContext context) {
@@ -169,10 +169,10 @@ class _FichaRevision extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             RejillaCampos(campos: campos, anchoMinimoColumna: 150),
-            if (autorizada)
+            if (conMotivo)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Text('Entrega autorizada',
+                child: Text('Con motivo de excepción',
                     style: TextStyle(color: Colores.avisoTexto, fontSize: 12)),
               ),
             if (tieneComentario)

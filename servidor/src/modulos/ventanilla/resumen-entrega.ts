@@ -11,7 +11,8 @@ export interface LineaMaterialResumen {
   // Lo que salió del inventario, en la unidad base del producto.
   cantidadBase: number;
   comentario: string | null;
-  // Solo viene cuando el material se entregó con autorización (HU6-E8 y E10).
+  // Motivo capturado cuando el material excedió periodicidad o límite (HU6-E8 y E10).
+  // Se guarda como justificación; la entrega ya quedó registrada.
   motivoExcepcion: string | null;
 }
 

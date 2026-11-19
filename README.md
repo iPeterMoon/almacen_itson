@@ -15,7 +15,9 @@ App móvil (Flutter)  →  API REST (NestJS)  →  Base de datos (Supabase / Pos
 - La app solo habla con la API; nunca con Supabase ni guarda claves de Supabase.
 - El servidor actúa en nombre del usuario (con su token), así que los permisos por rol y campus
   los aplica la base con RLS.
-- Las reglas de negocio (stock, folios, autorizaciones) viven en funciones de PostgreSQL.
+- Las reglas de negocio (stock, folios, periodicidad y límite de zona) viven en funciones de PostgreSQL.
+- No hay autorizaciones dentro del sistema: cuando se excede una regla se sugiere pedir autorización
+  fuera de la app, se exige el motivo y la boleta se entrega de inmediato como `ENTREGADA`.
 
 ## Carpetas
 
@@ -33,11 +35,10 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 | ------ | -------------------------------- | --------------------------------------------------------------- |
 | `POST` | `/api/v1/boletas/validar-material` | Valida existencia, periodicidad y límite de zona antes de agregar |
 | `POST` | `/api/v1/boletas/firmas`           | Sube una firma al bucket privado `firmas` y devuelve su ruta     |
-| `POST` | `/api/v1/boletas`                  | Crea la boleta; entrega en el acto o pide autorización           |
+| `POST` | `/api/v1/boletas`                  | Crea la boleta y la entrega en el acto con dos firmas            |
 | `GET`  | `/api/v1/boletas`                  | Lista las boletas de los campus del usuario                      |
-| `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas y autorización              |
-| `POST` | `/api/v1/boletas/:id/autorizacion` | El supervisor autoriza o rechaza                                 |
-| `POST` | `/api/v1/boletas/:id/entrega`      | Confirma la entrega con las dos firmas                           |
+| `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas, motivo y quien autorizó    |
+| `GET`  | `/api/v1/boletas/:id/resumen`      | Resumen de la entrega para la pantalla de confirmación           |
 | `GET`  | `/api/v1/entregas`                 | Historial de material entregado por solicitante, insumo y zona   |
 
 Todas requieren `Authorization: Bearer <token>`. El contrato completo, con ejemplos y roles,
@@ -60,7 +61,7 @@ números, espacios y `. - / # '`), `pagina` y `limite` (8 por defecto, máximo 5
 | Método | Ruta                          | Qué hace                                                              |
 | ------ | ----------------------------- | --------------------------------------------------------------------- |
 | `GET`  | `/api/v1/trabajadores`        | Solicitantes registrados con sus zonas (ventanilla)                    |
-| `GET`  | `/api/v1/usuarios/supervisores` | Supervisores que pueden autorizar una excepción (usuarios y roles)    |
+| `GET`  | `/api/v1/usuarios/supervisores` | Supervisores registrados: solo sugerencias para el campo "Autorizó"   |
 | `GET`  | `/api/v1/activos`             | Herramientas por código, nombre o serie; `estado=DISPONIBLE` para prestar (préstamos) |
 | `POST` | `/api/v1/activos/validar`     | Valida un activo antes de prestarlo: estado, custodio, fecha prevista y vencidos del solicitante |
 
@@ -110,8 +111,8 @@ funcionan igual con cualquiera.
 ### Opción A: base de pruebas en la nube
 
 Proyecto de Supabase `almacenes-itson-pruebas`, compartido por el equipo y **solo con datos de
-prueba** (no captures datos reales). Ya tiene las 15 migraciones, `seed.sql`,
-`seed_desarrollo.sql` y `seeds/entrega_demo.sql`.
+prueba** (no captures datos reales). Ya tiene `seed.sql`, `seed_desarrollo.sql` y
+`seeds/entrega_demo.sql`; las migraciones nuevas del repo hay que aplicarlas también allí.
 
 En `servidor/.env`:
 
@@ -226,7 +227,7 @@ python supabase/pruebas/probar.py      # corre los escenarios de HU1 a HU10
 
 La primera vez descarga la imagen `postgres:16` y crea el contenedor `almacenes-pruebas`
 (publicado solo en `127.0.0.1:54329`, usuario y contraseña `postgres`, base `almacenes`).
-Cada caso imprime `PASA` o `FALLA` con el error, y al final el total (`174/174 casos pasan`).
+Cada caso imprime `PASA` o `FALLA` con el error, y al final el total (`169/169 casos pasan`).
 Corre `reiniciar.sh` antes de cada `probar.py`, porque las pruebas dejan datos en la base.
 Para borrar el contenedor: `docker rm -f almacenes-pruebas`.
 

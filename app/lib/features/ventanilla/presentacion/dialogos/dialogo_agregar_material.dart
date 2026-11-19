@@ -8,7 +8,7 @@ import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
 import '../entrega_controlador.dart';
 import '../validadores.dart';
-import 'dialogo_autorizacion.dart';
+import 'dialogo_sugerencia_autorizacion.dart';
 
 Future<void> mostrarDialogoAgregarMaterial(BuildContext context, MaterialCatalogo material) =>
     showDialog<void>(context: context, builder: (_) => DialogoAgregarMaterial(material: material));
@@ -69,16 +69,16 @@ class _DialogoAgregarMaterialState extends ConsumerState<DialogoAgregarMaterial>
         Navigator.pop(context);
         return;
       }
-      // Hay restricción: se pide motivo y autorización sobre este mismo diálogo.
-      final autorizacion = await showDialog<Autorizacion>(
+      // Hay restricción: se sugiere la autorización externa y se exige el motivo.
+      final motivo = await showDialog<MotivoExcepcion>(
         context: context,
-        builder: (_) => DialogoAutorizacion(
+        builder: (_) => DialogoSugerenciaAutorizacion(
             material: widget.material, cantidad: cantidad, unidad: _unidad, alerta: alerta),
       );
       if (!mounted) return;
-      if (autorizacion != null) {
-        controlador.agregarMaterialAutorizado(
-            material: widget.material, cantidad: cantidad, unidad: _unidad, autorizacion: autorizacion);
+      if (motivo != null) {
+        controlador.agregarMaterialConMotivo(
+            material: widget.material, cantidad: cantidad, unidad: _unidad, motivoExcepcion: motivo);
         Navigator.pop(context);
       } else {
         setState(() => _cargando = false);
