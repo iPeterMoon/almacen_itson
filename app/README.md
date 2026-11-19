@@ -13,6 +13,10 @@ flutter analyze
 flutter test
 ```
 
+`API_URL` puede ir con o sin `/api/v1` ("http://10.0.2.2:3000" también funciona): la app agrega el
+prefijo automáticamente. Si da 404, revisa el log del servidor: la ruta debe empezar con
+`/api/v1/...`.
+
 > Por ahora la app solo abre una pantalla en blanco: es la estructura base.
 
 ## Paquetes acordados

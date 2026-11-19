@@ -5,9 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // (10.0.2.2 es la computadora vista desde el emulador de Android).
 const String _urlApiCompilada = String.fromEnvironment('API_URL');
 
-// Devuelve la URL sin la diagonal final, para que las rutas de los repositorios
-// ("/catalogo/productos") se unan sin dobles diagonales. Falla con un mensaje
-// claro si se olvidó el --dart-define, en vez de llamar a una URL vacía.
+const String _prefijoApi = '/api/v1';
+
+// Devuelve la URL base sin la diagonal final y con el prefijo de la API, para
+// que las rutas de los repositorios ("/usuarios/sesion") caigan siempre en
+// /api/v1/... Acepta API_URL con o sin prefijo: si se olvidó, la agrega en vez
+// de dejar que el servidor responda 404.
 String leerUrlApi([String valor = _urlApiCompilada]) {
   final url = valor.trim();
   if (url.isEmpty) {
@@ -16,7 +19,14 @@ String leerUrlApi([String valor = _urlApiCompilada]) {
       '--dart-define=API_URL=http://10.0.2.2:3000/api/v1',
     );
   }
-  return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+
+  final sinDiagonal = url.replaceAll(RegExp(r'/+$'), '');
+  final raiz = sinDiagonal.endsWith(_prefijoApi)
+      ? sinDiagonal.substring(0, sinDiagonal.length - _prefijoApi.length)
+      : sinDiagonal.endsWith('/api')
+          ? sinDiagonal.substring(0, sinDiagonal.length - '/api'.length)
+          : sinDiagonal;
+  return '$raiz$_prefijoApi';
 }
 
 final proveedorUrlApi = Provider<String>((ref) => leerUrlApi());
