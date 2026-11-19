@@ -1,0 +1,78 @@
+name: Migraciones
+
+# Aplica las migraciones pendientes de supabase/migrations cuando el CI pasa en
+# main (es decir, tras hacer merge de un PR aprobado): primero al proyecto de
+# pruebas y, si sale bien, al principal. Sin migraciones pendientes no hace nada.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Nunca dos despliegues a la vez ni se cancela uno a medias.
+concurrency:
+  group: migraciones
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    name: Proyecto de pruebas
+    # Solo si el CI terminó bien en un push a main (o si se lanza a mano).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment: pruebas
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El commit que probó el CI, no el último de main.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Vincular proyecto
+        run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+
+      - name: Migraciones pendientes
+        run: supabase migration list
+
+      - name: Aplicar migraciones
+        run: supabase db push --yes
+
+  principal:
+    name: Proyecto principal
+    needs: pruebas
+    runs-on: ubuntu-latest
+    environment: principal
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El commit que probó el CI, no el último de main.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Vincular proyecto
+        run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+
+      - name: Migraciones pendientes
+        run: supabase migration list
+
+      - name: Aplicar migraciones
+        run: supabase db push --yes
