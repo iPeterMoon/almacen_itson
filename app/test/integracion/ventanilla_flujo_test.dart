@@ -381,7 +381,7 @@ void main() {
           return RespuestaApi.error(
             409,
             'STOCK_INSUFICIENTE',
-            'Existencia insuficiente de Jabón líquido: se solicitaron 6 Litro y solo hay 4 Litro en el campus.',
+            'Existencia insuficiente de Jabón líquido: se solicitaron 6 Litro y solo se pueden entregar 4 Litro en el campus.',
             {
               'productoId': 12,
               'codigo': 'JAB-001',

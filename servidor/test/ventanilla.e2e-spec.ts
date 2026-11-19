@@ -452,11 +452,11 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
         .send({ productoId: 12, cantidad: 4, presentacionId: 4 })
         .expect(200);
 
-      // 1.3 L en presentaciones de medio litro = 2.6.
+      // 1.3 L alcanza para 2 presentaciones completas de medio litro.
       expect(res.body).toMatchObject({
         disponible: 1.3,
         stockSuficiente: false,
-        cantidadSugerida: 2.6,
+        cantidadSugerida: 2,
       });
     });
 
@@ -741,7 +741,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       base.funcion('crear_boleta', () =>
         fallo('STOCK_INSUFICIENTE: No hay existencia suficiente para el producto 12.'),
       );
-      // El papel alcanza; el jabón solo tiene 1.3 L (2.6 presentaciones de medio litro).
+      // El papel alcanza; el jabón solo tiene 1.3 L (2 presentaciones completas de medio litro).
       simularExistencia({ 12: 1.3, 20: 100 });
 
       const res = await http()
@@ -759,17 +759,17 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       expect(res.body).toEqual({
         codigo: 'STOCK_INSUFICIENTE',
         mensaje:
-          'Existencia insuficiente de Jabón líquido: se solicitaron 6 Medio litro y solo hay ' +
-          '2.6 Medio litro en el campus.',
+          'Existencia insuficiente de Jabón líquido: se solicitaron 6 Medio litro y solo se pueden entregar ' +
+          '2 Medio litro en el campus.',
         datos: {
           productoId: 12,
           codigo: 'JAB-001',
           nombre: 'Jabón líquido',
           solicitado: 6,
-          disponible: 2.6,
+          disponible: 2,
           unidad: 'Medio litro',
           disponibleBase: 1.3,
-          cantidadSugerida: 2.6,
+          cantidadSugerida: 2,
         },
       });
       // Revalida con el mismo solicitante y zona que la boleta.

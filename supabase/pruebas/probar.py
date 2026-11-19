@@ -78,6 +78,9 @@ caso("HU1 E5", "Presentaciones con factor a unidad base", CEN,
 caso("HU1 E5", "Conversión: 2 galones = 7.57 L", CEN,
      "select convertir_a_unidad_base(p.id, pr.id, 2) from productos p join presentaciones_producto pr on pr.producto_id=p.id "
      "where p.codigo='CD-123' and pr.nombre='Galón'", contiene="7.57")
+caso("HU1 E5", "Conversión con cantidad decimal se rechaza", CEN,
+     "select convertir_a_unidad_base(p.id, pr.id, 1.5) from productos p join presentaciones_producto pr on pr.producto_id=p.id "
+     "where p.codigo='CD-123' and pr.nombre='Galón'", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("HU1 E6", "Producto nuevo aparece con existencia 0", CEN,
      "select existencia = 0 from buscar_productos('CD-500')", contiene="t")
 caso("Seg", "Usuario sin sesión no puede dar de alta", "anon",
@@ -117,6 +120,9 @@ caso("HU2 E6", "Cantidad 0 se rechaza", CEN,
 caso("HU2 E6", "Cantidad negativa se rechaza", CEN,
      f"select * from registrar_entrada({P1},{A1},-3,'REINGRESO_TRASPASO', p_tipo_origen=>'UNIDAD', p_origen_unidad_id=>{GUAYMAS})",
      espera="CANTIDAD_INVALIDA")
+caso("HU2 E6", "Cantidad decimal se rechaza", CEN,
+     f"select * from registrar_entrada({P1},{A1},1.5,'COMPRA', p_numero_factura=>'F-DEC', p_numero_partida=>'P-DEC', "
+     "p_proveedor_nuevo=>'Proveedor Decimal')", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("HU2 E7", "Producto no registrado", CEN,
      f"select * from registrar_entrada(999999,{A1},5,'REINGRESO_TRASPASO', p_tipo_origen=>'UNIDAD', p_origen_unidad_id=>{GUAYMAS})",
      espera="PRODUCTO_NO_REGISTRADO")
@@ -269,8 +275,10 @@ caso("HU4 E1", "Reingreso válido de 1 L con folio REI", CEN,
 caso("HU4 E1", "Reingreso queda ligado a la boleta", CEN,
      f"select b.folio from entradas e join boletas_materiales m on m.id=e.boleta_material_id "
      "join boletas b on b.id=m.boleta_id where e.folio='REI-2026-0001'", contiene="BOL-2026-0001")
-caso("HU4 E2", "Segundo reingreso de 1.5 L rebasa lo pendiente (1 L)", CEN,
-     f"select * from registrar_reingreso({BM},{A1},1.5)", espera="REINGRESO_EXCEDE")
+caso("HU4 E2", "Segundo reingreso de 2 unidades rebasa lo pendiente (1)", CEN,
+     f"select * from registrar_reingreso({BM},{A1},2)", espera="REINGRESO_EXCEDE")
+caso("HU4", "Reingreso con cantidad decimal se rechaza", CEN,
+     f"select * from registrar_reingreso({BM},{A1},1.5)", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("Seg", "Náinari no reingresa una boleta de Centro", NAI,
      f"select * from registrar_reingreso({BM},{AN},1)", espera="CAMPUS_DISTINTO")
 caso("HU3 E5", "Detalle con fecha de última salida", CEN,
@@ -351,7 +359,7 @@ caso("HU4", "No se reingresa material de una boleta no entregada", CEN,
      f"select * from registrar_reingreso({BM_RECH},{A1},1)", espera="BOLETA_NO_ENTREGADA")
 
 caso("HU6 E2", "Solicitante sin registro con nombre y unidad", CEN,
-     boleta(f'[{{"producto_id":{P1},"cantidad":0.5,"comentario":"Para limpieza de oficina"}}]',
+     boleta(f'[{{"producto_id":{P1},"cantidad":1,"comentario":"Para limpieza de oficina"}}]',
             f", p_solicitante_nombre=>'Rosa Molina', p_solicitante_unidad=>'Navojoa', p_numero_solicitud=>'OT-9981', {FIRMAS}"),
      contiene="ENTREGADA")
 caso("HU6 E3/E5", "Guarda número de solicitud y comentario", CEN,
@@ -365,6 +373,11 @@ caso("HU6 E6", "Existencia insuficiente", CEN,
 caso("HU6 E7", "Cantidad cero", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":0}}]', f", p_solicitante_nombre=>'X', p_solicitante_unidad=>'Y', {FIRMAS}"),
      espera="CANTIDAD_INVALIDA")
+caso("HU6 E7", "Cantidad decimal se rechaza", CEN,
+     boleta(f'[{{"producto_id":{P1},"cantidad":1.5}}]', f", p_solicitante_nombre=>'X', p_solicitante_unidad=>'Y', {FIRMAS}"),
+     espera="CANTIDAD_ENTERA_REQUERIDA")
+caso("HU6", "Validación con cantidad decimal se rechaza", CEN,
+     f"select * from validar_material({P1}, 1.5)", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("HU6 E7", "Entrega en presentación: 2 medios litros = 1 L", CEN,
      f"select 1 from crear_boleta(p_materiales=>('[{{\"producto_id\":{P1},\"cantidad\":2,"
      f"\"presentacion_id\":'||(select id from presentaciones_producto where nombre='Medio litro')||'}}]')::jsonb, "
