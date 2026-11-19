@@ -80,7 +80,7 @@ jobs:
       # Aplica migraciones y seeds sobre la imagen real de Supabase (Postgres 17).
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.2.0
 
       - name: Aplicar migraciones en Supabase local
         run: supabase db start
