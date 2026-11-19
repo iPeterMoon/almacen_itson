@@ -31,8 +31,11 @@ export class ActivosController {
     summary: 'Valida un activo antes de prestarlo',
     description:
       'Devuelve el estado del activo, su custodio y fecha prevista si está prestado, y si el ' +
-      'solicitante tiene préstamos vencidos. `prestable` es true solo si está DISPONIBLE; ' +
-      'un vencido es una alerta, no un bloqueo. No crea ni modifica nada.',
+      'solicitante tiene préstamos vencidos. `prestable` es true solo si está DISPONIBLE. ' +
+      'Con trabajadorId, `prestamosAbiertos` lista los activos que el solicitante ya tiene ' +
+      'prestados con su seguimiento (VIGENTE, PROXIMO_A_VENCER o VENCIDO) y `mismoNombre` ' +
+      'si es del mismo nombre que este activo, para avisar al agregarlo. Ni un vencido ni ' +
+      'otro préstamo del mismo nombre bloquean. No crea ni modifica nada.',
   })
   @ApiOkResponse({
     description: 'Resultado de la validación.',
@@ -51,6 +54,16 @@ export class ActivosController {
         custodio: 'Juan Pérez Soto',
         fechaPrevista: '2026-11-20T18:00:00.000Z',
         solicitanteConVencido: true,
+        prestamosAbiertos: [
+          {
+            prestamo: 'PRE-2026-0004',
+            codigo: 'TAL-002',
+            nombre: 'Taladro inalámbrico',
+            fechaPrevista: '2026-11-18T18:00:00.000Z',
+            seguimiento: 'VENCIDO',
+            mismoNombre: true,
+          },
+        ],
       },
     },
   })

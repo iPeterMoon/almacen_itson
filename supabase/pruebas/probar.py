@@ -440,6 +440,30 @@ caso("HU8 E5", "Validación advierte que el solicitante tiene un vencido", CEN,
 caso("HU8 E5", "Se presta con advertencia registrada (1 día)", CEN,
      prestamo(JUAN, ACT200, 1), contiene='"solicitante_con_vencido": true')
 
+# Varios activos con el mismo nombre: se prestan; la app solo avisa con los
+# préstamos abiertos del trabajador (POST /activos/validar los lee de la vista).
+caso("HU8", "Otros tres taladros", CEN,
+     activo('ACT-201', 'Taladro', 'DCD771', 'DCD771-1') + "; " + activo('ACT-202', 'Taladro', 'DCD771', 'DCD771-2')
+     + "; " + activo('ACT-203', 'Taladro', 'DCD771', 'DCD771-3'),
+     contiene="DISPONIBLE")
+ACT201 = admin("select id from activos where codigo='ACT-201'")
+ACT202 = admin("select id from activos where codigo='ACT-202'")
+ACT203 = admin("select id from activos where codigo='ACT-203'")
+caso("HU8", "La vista lista los préstamos abiertos de Juan con su seguimiento", CEN,
+     f"select string_agg(codigo||':'||seguimiento, ',' order by fecha_prevista) from vista_seguimiento_prestamos "
+     f"where trabajador_id={JUAN} and estado='ACTIVO'", contiene="ACT-104:VENCIDO,ACT-200:PROXIMO_A_VENCER")
+caso("HU8", "Un taladro con el mismo nombre que el que ya tiene sigue prestable", CEN,
+     f"select estado from validar_activo('ACT-201', {JUAN})", contiene="DISPONIBLE")
+caso("HU8", "Se presta otro taladro a quien ya tiene uno", CEN,
+     prestamo(JUAN, ACT201, 2), contiene="ENTREGADA")
+caso("HU8", "Dos taladros en la misma boleta", CEN,
+     f"select estado from crear_boleta(p_herramientas=>'[{{\"activo_id\":{ACT202},\"dias_prestamo\":2}},"
+     f"{{\"activo_id\":{ACT203},\"dias_prestamo\":2}}]', p_trabajador_id=>{MARIA}, {FIRMAS})",
+     contiene="ENTREGADA")
+caso("HU8", "María queda con dos préstamos abiertos de taladro", CEN,
+     f"select count(*) from vista_seguimiento_prestamos where trabajador_id={MARIA} and estado='ACTIVO' "
+     f"and herramienta='Taladro'", contiene="2")
+
 # ---------- HU10: seguimiento ----------
 caso("HU10 E1", "Vencido con 2 días de retraso", CEN,
      "select seguimiento||'|'||dias_retraso from vista_seguimiento_prestamos where codigo='ACT-104'", contiene="VENCIDO|2")

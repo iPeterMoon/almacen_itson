@@ -71,6 +71,7 @@ describe('POST /api/v1/activos/validar (e2e)', () => {
 
   it('un activo disponible responde 200 con prestable y sin custodio ni motivo', async () => {
     base.funcion('validar_activo', () => ok([VALIDACION]));
+    base.tabla('vista_seguimiento_prestamos', () => ok([]));
 
     const res = await http()
       .post(RUTA)
@@ -89,6 +90,7 @@ describe('POST /api/v1/activos/validar (e2e)', () => {
       },
       prestable: true,
       solicitanteConVencido: false,
+      prestamosAbiertos: [],
     });
     expect(base.supabase.clienteDeUsuario).toHaveBeenCalledWith('valido');
     expect(base.rpc).toHaveBeenCalledWith('validar_activo', {
@@ -97,7 +99,51 @@ describe('POST /api/v1/activos/validar (e2e)', () => {
     });
   });
 
+  it('avisa los préstamos abiertos del trabajador, aunque sean del mismo nombre, sin bloquear', async () => {
+    base.funcion('validar_activo', () => ok([VALIDACION]));
+    base.tabla('vista_seguimiento_prestamos', () =>
+      ok([
+        {
+          folio: 'PRE-2026-0004',
+          codigo: 'TAL-002',
+          herramienta: 'Taladro inalámbrico',
+          fecha_prevista: '2026-11-18T18:00:00.000Z',
+          seguimiento: 'VENCIDO',
+        },
+      ]),
+    );
+
+    const res = await http()
+      .post(RUTA)
+      .set(comoAlmacenista())
+      .send({ codigo: 'TAL-001', trabajadorId: 15 })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      prestable: true,
+      prestamosAbiertos: [
+        {
+          prestamo: 'PRE-2026-0004',
+          codigo: 'TAL-002',
+          nombre: 'Taladro inalámbrico',
+          fechaPrevista: '2026-11-18T18:00:00.000Z',
+          seguimiento: 'VENCIDO',
+          mismoNombre: true,
+        },
+      ],
+    });
+    expect(res.body).not.toHaveProperty('motivo');
+    const [consulta] = base.consultasA('vista_seguimiento_prestamos');
+    expect(consulta.llamadas).toEqual(
+      expect.arrayContaining([
+        ['eq', 'trabajador_id', 15],
+        ['eq', 'estado', 'ACTIVO'],
+      ]),
+    );
+  });
+
   it('un activo prestado responde 200 con el custodio, la fecha y el motivo PRESTADO', async () => {
+    base.tabla('vista_seguimiento_prestamos', () => ok([]));
     base.funcion('validar_activo', () =>
       ok([
         {

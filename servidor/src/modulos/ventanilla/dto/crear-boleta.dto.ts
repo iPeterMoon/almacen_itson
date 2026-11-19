@@ -1,16 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayUnique,
   IsArray,
   IsInt,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { LARGO_COMENTARIO, LARGO_NOMBRE, LARGO_REFERENCIA } from '../../../comun/dto/limites';
+import {
+  DIAS_PRESTAMO_MAX,
+  LARGO_COMENTARIO,
+  LARGO_NOMBRE,
+  LARGO_REFERENCIA,
+} from '../../../comun/dto/limites';
 
 // Un renglón de material dentro de la boleta. La cantidad se captura en la
 // presentación elegida y la base la convierte a unidad base.
@@ -60,14 +67,23 @@ export class HerramientaSolicitadaDto {
   @Min(1)
   activoId: number;
 
-  @ApiProperty({ example: 3, description: 'Días naturales del préstamo.' })
-  @IsInt()
-  @Min(1)
+  @ApiProperty({
+    example: 3,
+    minimum: 1,
+    maximum: DIAS_PRESTAMO_MAX,
+    description: `Días naturales del préstamo (de 1 a ${DIAS_PRESTAMO_MAX}).`,
+  })
+  @IsInt({ message: 'Los días de préstamo deben ser un número entero.' })
+  @Min(1, { message: 'El préstamo debe ser de al menos 1 día.' })
+  @Max(DIAS_PRESTAMO_MAX, {
+    message: `El préstamo no puede ser de más de ${DIAS_PRESTAMO_MAX} días.`,
+  })
   diasPrestamo: number;
 }
 
 // Cuerpo para crear una boleta de un solo solicitante. Puede incluir materiales,
-// herramientas o ambos; la función crear_boleta valida las demás reglas.
+// herramientas o ambos (al menos uno, lo revisa BoletasService.crear); la función
+// crear_boleta valida las demás reglas.
 export class CrearBoletaDto {
   @ApiPropertyOptional({ type: [MaterialSolicitadoDto] })
   @IsOptional()
@@ -76,9 +92,15 @@ export class CrearBoletaDto {
   @Type(() => MaterialSolicitadoDto)
   materiales?: MaterialSolicitadoDto[];
 
-  @ApiPropertyOptional({ type: [HerramientaSolicitadaDto] })
+  @ApiPropertyOptional({
+    type: [HerramientaSolicitadaDto],
+    description: 'Cada activo solo puede aparecer una vez en la boleta.',
+  })
   @IsOptional()
   @IsArray()
+  @ArrayUnique((herramienta: HerramientaSolicitadaDto | null) => herramienta?.activoId, {
+    message: 'No se puede prestar el mismo activo dos veces en una boleta.',
+  })
   @ValidateNested({ each: true })
   @Type(() => HerramientaSolicitadaDto)
   herramientas?: HerramientaSolicitadaDto[];

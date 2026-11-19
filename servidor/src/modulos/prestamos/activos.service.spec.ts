@@ -9,13 +9,30 @@ function crear(respuesta: RespuestaFalsa) {
   return { ...falso, servicio: new ActivosService(falso.supabase) };
 }
 
-// validar_activo es una RPC, así que necesita un cliente falso con rpc (el de
-// crearSupabaseFalso solo simula consultas con from).
-function crearConRpc(rpc: jest.Mock) {
-  const clienteDeUsuario = jest.fn(() => ({ rpc }));
+// validar_activo es una RPC y los préstamos abiertos se leen con from, así que el
+// cliente falso lleva los dos (el de crearSupabaseFalso solo simula from).
+function crearConRpc(rpc: jest.Mock, prestamos: RespuestaFalsa = { data: [], error: null }) {
+  const { consulta, from } = crearSupabaseFalso(prestamos);
+  const clienteDeUsuario = jest.fn(() => ({ rpc, from }));
   const supabase = { clienteDeUsuario } as unknown as SupabaseService;
-  return { rpc, clienteDeUsuario, servicio: new ActivosService(supabase) };
+  return { rpc, from, consulta, clienteDeUsuario, servicio: new ActivosService(supabase) };
 }
+
+const PRESTAMO_TALADRO = {
+  folio: 'PRE-2026-0004',
+  codigo: 'TAL-002',
+  herramienta: ' TALADRO  inalámbrico ',
+  fecha_prevista: '2026-11-18T18:00:00.000Z',
+  seguimiento: 'VENCIDO',
+};
+
+const PRESTAMO_PINZAS = {
+  folio: 'PRE-2026-0007',
+  codigo: 'PIN-001',
+  herramienta: 'Pinzas de presión',
+  fecha_prevista: '2026-11-25T18:00:00.000Z',
+  seguimiento: 'VIGENTE',
+};
 
 const taladro = {
   id: 1,
@@ -127,6 +144,7 @@ describe('ActivosService', () => {
         },
         prestable: true,
         solicitanteConVencido: false,
+        prestamosAbiertos: [],
       });
     });
 
@@ -202,6 +220,7 @@ describe('ActivosService', () => {
         custodio: 'Juan Pérez Soto',
         fechaPrevista: '2026-11-20T18:00:00.000Z',
         solicitanteConVencido: false,
+        prestamosAbiertos: [],
       });
     });
 
@@ -232,6 +251,67 @@ describe('ActivosService', () => {
 
       expect(resultado).toMatchObject({ prestable: true, solicitanteConVencido: true });
       expect(resultado).not.toHaveProperty('motivo');
+    });
+
+    it('lista los préstamos abiertos del trabajador sin bloquear el préstamo', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_ACTIVO], error: null });
+      const { servicio, from, consulta } = crearConRpc(rpc, {
+        data: [PRESTAMO_TALADRO, PRESTAMO_PINZAS],
+        error: null,
+      });
+
+      const resultado = await servicio.validarActivo('token', {
+        codigo: 'TAL-001',
+        trabajadorId: 15,
+      });
+
+      expect(from).toHaveBeenCalledWith('vista_seguimiento_prestamos');
+      expect(consulta.eq).toHaveBeenCalledWith('trabajador_id', 15);
+      expect(consulta.eq).toHaveBeenCalledWith('estado', 'ACTIVO');
+      expect(consulta.order).toHaveBeenCalledWith('fecha_prevista', { ascending: true });
+      expect(resultado.prestable).toBe(true);
+      expect(resultado).not.toHaveProperty('motivo');
+      expect(resultado.prestamosAbiertos).toEqual([
+        {
+          prestamo: 'PRE-2026-0004',
+          codigo: 'TAL-002',
+          nombre: ' TALADRO  inalámbrico ',
+          fechaPrevista: '2026-11-18T18:00:00.000Z',
+          seguimiento: 'VENCIDO',
+          // Mismo nombre sin distinguir mayúsculas ni espacios: solo se avisa.
+          mismoNombre: true,
+        },
+        {
+          prestamo: 'PRE-2026-0007',
+          codigo: 'PIN-001',
+          nombre: 'Pinzas de presión',
+          fechaPrevista: '2026-11-25T18:00:00.000Z',
+          seguimiento: 'VIGENTE',
+          mismoNombre: false,
+        },
+      ]);
+    });
+
+    it('sin trabajadorId no consulta préstamos y devuelve la lista vacía', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_ACTIVO], error: null });
+      const { servicio, from } = crearConRpc(rpc);
+
+      const resultado = await servicio.validarActivo('token', { codigo: 'TAL-001' });
+
+      expect(from).not.toHaveBeenCalled();
+      expect(resultado.prestamosAbiertos).toEqual([]);
+    });
+
+    it('un error al leer los préstamos abiertos sale como error', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_ACTIVO], error: null });
+      const { servicio } = crearConRpc(rpc, {
+        data: null,
+        error: { message: 'SIN_PERMISO: No.' },
+      });
+
+      await expect(
+        servicio.validarActivo('token', { codigo: 'TAL-001', trabajadorId: 15 }),
+      ).rejects.toBeInstanceOf(ErrorNegocio);
     });
 
     it('falla si la base no devuelve la fila de validación', async () => {
