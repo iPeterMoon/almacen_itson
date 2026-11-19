@@ -177,13 +177,14 @@ export class BoletasService {
   }
 
   // HU6-E6: convierte lo disponible (unidad base) a la presentación que capturó el almacenista.
-  // esto solo sugiere un valor para la pantalla.
+  // La cantidad sugerida también son presentaciones completas, así que se redondea
+  // hacia abajo. La cantidad base resultante sí puede tener decimales.
   private async cantidadSugerida(
     cliente: ReturnType<SupabaseService['clienteDeUsuario']>,
     dto: ValidarMaterialDto,
     disponible: number,
   ): Promise<number> {
-    if (!dto.presentacionId) return disponible;
+    if (!dto.presentacionId) return Math.floor(disponible);
 
     const { data, error } = await cliente
       .from('presentaciones_producto')
@@ -198,13 +199,19 @@ export class BoletasService {
         'La presentación no corresponde al producto.',
       );
     }
-    // Se redondea hacia abajo a 3 decimales para nunca ofrecer más de lo que hay.
-    return Math.floor((disponible / Number(data.factor_a_base)) * 1000) / 1000;
+    // Se redondea hacia abajo a presentaciones completas para nunca ofrecer de más.
+    // El cociente se redondea a 6 decimales para absorber el error de IEEE-754:
+    // 34.065 / 3.785 da 8.999999999999998 y perdería un galón completo.
+    const presentaciones = disponible / Number(data.factor_a_base);
+    return Math.floor(Number(presentaciones.toFixed(6)));
   }
 
   // Traduce el DTO de la API al JSON que espera crear_boleta. La base decide el estado
   // final, descuenta inventario y genera folio dentro de una sola transacción.
   async crear(token: string, dto: CrearBoletaDto) {
+    for (const material of dto.materiales ?? []) {
+      this.validarCantidadEntera(material.cantidad);
+    }
     const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('crear_boleta', {
       // La API usa camelCase; las funciones RPC esperan snake_case.
       p_materiales: (dto.materiales ?? []).map((material) => ({

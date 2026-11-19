@@ -635,8 +635,8 @@ describe('BoletasService', () => {
       expect(cliente.from).toHaveBeenCalledWith('presentaciones_producto');
     });
 
-    it('redondea hacia abajo la cantidad sugerida para no ofrecer de más', async () => {
-      // 5 litros entre 3.7854 litros por galón son 1.3208... galones: se ofrece 1.32.
+    it('sugiere solo presentaciones completas, no fracciones', async () => {
+      // 5 litros entre 3.7854 litros por galón son 1.3208... galones: se ofrece 1.
       const servicio = crearServicio(clienteConStockInsuficiente(5, 3.7854));
 
       const resultado = await servicio.validarMaterial('token', {
@@ -645,8 +645,22 @@ describe('BoletasService', () => {
         presentacionId: 9,
       });
 
-      expect(resultado.cantidadSugerida).toBe(1.32);
+      expect(resultado.cantidadSugerida).toBe(1);
     });
+
+    it('no pierde una presentación por el error de punto flotante', async () => {
+      // 9 galones de 3.785 L son 34.065 L, pero en JS la división da 8.999999999999998.
+      const servicio = crearServicio(clienteConStockInsuficiente(34.065, 3.785));
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 20,
+        presentacionId: 9,
+      });
+
+      expect(resultado.cantidadSugerida).toBe(9);
+    });
+
     it('trata presentacionId null como si no hubiera presentación', async () => {
       const rpc = jest.fn().mockResolvedValue({
         data: [{ ...VALIDACION_MATERIAL, disponible: 4, stock_suficiente: false }],
