@@ -11,9 +11,11 @@ import '../../datos/ventanilla_repositorio_api.dart' show minimoCaracteresBusque
 import '../dialogos/dialogo_agregar_material.dart';
 import '../dialogos/dialogo_lista_materiales.dart';
 import '../entrega_controlador.dart';
+import 'seleccion_activos.dart';
 
 /// Paso 2: "Selecciona material o equipo a entregar".
 /// Materiales: búsqueda + "Más comunes"/"Todos" + filtros de categoría, tipo y almacén.
+/// Activos (HU8): búsqueda + tablas "Seleccionados" y "Resultados" (ver seleccion_activos.dart).
 class PasoMateriales extends ConsumerStatefulWidget {
   const PasoMateriales({super.key});
 
@@ -24,22 +26,35 @@ class PasoMateriales extends ConsumerStatefulWidget {
 class _PasoMaterialesState extends ConsumerState<PasoMateriales> {
   int _pestana = 0;
   Timer? _espera;
+  final _campo = TextEditingController();
 
   @override
   void dispose() {
     _espera?.cancel();
+    _campo.dispose();
     super.dispose();
   }
 
   void _buscar(String texto) {
     _espera?.cancel();
+    // La pestaña se toma al escribir, no a los 300 ms: si se cambia de pestaña
+    // mientras tanto, la búsqueda se guarda donde se escribió.
+    final pestana = _pestana;
     _espera = Timer(const Duration(milliseconds: 300), () {
-      if (_pestana == 0) {
+      if (pestana == 0) {
         ref.read(filtroMaterialesProvider.notifier).setConsulta(texto);
       } else {
         ref.read(consultaActivosProvider.notifier).set(texto);
       }
     });
+  }
+
+  // Cada pestaña recuerda su propia búsqueda: el campo muestra la de la pestaña elegida.
+  void _cambiarPestana(int pestana) {
+    if (pestana == _pestana) return;
+    setState(() => _pestana = pestana);
+    _campo.text =
+        pestana == 0 ? ref.read(filtroMaterialesProvider).consulta : ref.read(consultaActivosProvider);
   }
 
   @override
@@ -75,28 +90,29 @@ class _PasoMaterialesState extends ConsumerState<PasoMateriales> {
                   child: BotonPestana(
                       texto: 'Materiales',
                       seleccionado: _pestana == 0,
-                      onTap: () => setState(() => _pestana = 0))),
+                      onTap: () => _cambiarPestana(0))),
               const SizedBox(width: 12),
               Expanded(
                   child: BotonPestana(
                       texto: 'Activos',
                       seleccionado: _pestana == 1,
-                      onTap: () => setState(() => _pestana = 1))),
+                      onTap: () => _cambiarPestana(1))),
             ]),
             const SizedBox(height: 12),
             TextField(
+              controller: _campo,
               inputFormatters: formattersSinEmojis,
               onChanged: _buscar,
               decoration: InputDecoration(
                 hintText: _pestana == 0
                     ? 'Buscar por código o concepto/alias del material'
-                    : 'Buscar por código, equipo o número de serie',
+                    : 'Buscar por código de activo o nombre del equipo',
                 suffixIcon: const Icon(Icons.search),
               ),
             ),
             const SizedBox(height: 12),
             if (_pestana == 0) const _FiltrosMateriales(),
-            if (_pestana == 0) const _ResultadosMateriales() else const _ResultadosActivos(),
+            if (_pestana == 0) const _ResultadosMateriales() else const SeleccionActivos(),
           ]),
         ),
       ],
@@ -231,51 +247,6 @@ class _ResultadosMateriales extends ConsumerWidget {
                     total: pagina.total,
                     onCambiar: ref.read(paginaMaterialesProvider.notifier).set,
                   ),
-                ]),
-        );
-  }
-}
-
-class _ResultadosActivos extends ConsumerWidget {
-  const _ResultadosActivos();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final e = ref.watch(entregaControllerProvider);
-    final c = ref.read(entregaControllerProvider.notifier);
-    return ref.watch(activosProvider).when(
-          loading: () => const Padding(
-              padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
-          error: (_, _) =>
-              const AvisoCaja(tipo: TipoAviso.error, mensaje: 'No se pudo cargar los activos.'),
-          data: (lista) => lista.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('No hay activos con ese criterio.',
-                      style: TextStyle(color: Colores.textoSuave)))
-              : ContenedorLista(children: [
-                  for (var i = 0; i < lista.length; i++)
-                    Builder(builder: (context) {
-                      final a = lista[i];
-                      final agregado = e.activos.any((x) => x.activo.codigo == a.codigo);
-                      return FilaRegistro(
-                        indice: i,
-                        resaltada: agregado,
-                        campos: [
-                          CampoDato('Equipo', a.equipo),
-                          CampoDato('Código', a.codigo),
-                          CampoDato('Modelo', a.modelo),
-                          CampoDato('N° Serie', a.serie),
-                        ],
-                        trailing: Icon(agregado ? Icons.check_circle : Icons.add_circle_outline,
-                            color: agregado ? Colores.exitoOscuro : Colores.primario),
-                        onTap: () {
-                          c.agregarActivo(a);
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text('${a.equipo} agregado (1 día).')));
-                        },
-                      );
-                    }),
                 ]),
         );
   }

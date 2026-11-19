@@ -23,7 +23,7 @@ const minimoCaracteresBusqueda = 2;
 // - opcionesFiltros: GET /catalogo/categorias y /catalogo/almacenes.
 // - buscarSolicitantes: GET /trabajadores.
 // - listarAutorizadores: GET /usuarios/supervisores.
-// - buscarActivos: GET /activos?estado=DISPONIBLE.
+// - buscarActivos: GET /activos (todos los estados, paginado).
 // - validarMaterial: POST /boletas/validar-material.
 // - registrarEntrega: POST /boletas/firmas, POST /boletas y GET /boletas/:id.
 class VentanillaRepositorioApi implements VentanillaRepositorio {
@@ -155,14 +155,23 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
     return [for (final s in lista) Autorizador(id: s.id, nombre: s.nombre)];
   }
 
-  // Solo activos DISPONIBLE: los demás no se pueden prestar. La lista de la
-  // pantalla no tiene paginador, así que se piden hasta 20.
+  // Activos del campus en cualquier estado: la tabla muestra cuáles están disponibles,
+  // en préstamo o fuera de servicio, y solo deja seleccionar los disponibles. Igual
+  // que en materiales, con 1 carácter no se llama al servidor (pide 2 o más).
   @override
-  Future<List<ActivoCatalogo>> buscarActivos(String consulta) async {
+  Future<Pagina<ActivoCatalogo>> buscarActivos(String consulta,
+      {int pagina = 1, int porPagina = 5}) async {
     final texto = consulta.trim();
-    if (texto.isNotEmpty && texto.length < minimoCaracteresBusqueda) return const [];
-    final r = await _activos.buscar(texto: texto, estado: 'DISPONIBLE', limite: 20);
-    return r.datos.map(aActivoCatalogo).toList(growable: false);
+    if (texto.isNotEmpty && texto.length < minimoCaracteresBusqueda) {
+      return Pagina(items: const [], total: 0, pagina: pagina, porPagina: porPagina);
+    }
+    final r = await _activos.buscar(texto: texto, pagina: pagina, limite: porPagina);
+    return Pagina(
+      items: r.datos.map(aActivoCatalogo).toList(growable: false),
+      total: r.total,
+      pagina: pagina,
+      porPagina: porPagina,
+    );
   }
 
   // POST /boletas/validar-material. Si no alcanza la existencia lanza
@@ -378,6 +387,7 @@ ActivoCatalogo aActivoCatalogo(Activo a) => ActivoCatalogo(
       serie: a.numeroSerie,
       almacen: a.almacen ?? '-',
       ubicacion: a.ubicacion ?? '-',
+      estado: a.estado,
     );
 
 // Etiquetas que usa la pantalla para el tipo de producto.

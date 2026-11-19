@@ -406,15 +406,40 @@ void main() {
     expect(lista.single.nombre, 'Supervisión Náinari');
   });
 
-  test('buscarActivos pide solo los disponibles y guarda el id del activo', () async {
-    final activos = ActivosFalso();
+  group('buscarActivos', () {
+    test('pide la página sin filtrar por estado y guarda el id y el estado del activo', () async {
+      final activos = ActivosFalso(activos: [taladro, rotomartillo, sierraEnReparacion], total: 20);
 
-    final lista = await crearApi(ProductosFalso(), activos: activos).buscarActivos('tal');
+      final r = await crearApi(ProductosFalso(), activos: activos)
+          .buscarActivos('tal', pagina: 2, porPagina: 8);
 
-    expect(activos.ultimaConsulta, (texto: 'tal', estado: 'DISPONIBLE', limite: 20));
-    expect(lista.single.activoId, 3);
-    expect(lista.single.equipo, 'Taladro inalámbrico');
-    expect(lista.single.serie, 'SN-TAL-001');
+      expect(activos.ultimaConsulta, (texto: 'tal', estado: null, pagina: 2, limite: 8));
+      expect(r.total, 20);
+      expect(r.pagina, 2);
+      expect(r.items.map((a) => a.estado), ['DISPONIBLE', 'EN_PRESTAMO', 'EN_REPARACION']);
+      expect(r.items.map((a) => a.disponible), [true, false, false]);
+      expect(r.items.first.activoId, 3);
+      expect(r.items.first.equipo, 'Taladro inalámbrico');
+      expect(r.items.first.serie, 'SN-TAL-001');
+    });
+
+    test('con 1 carácter no llama al servidor', () async {
+      final activos = ActivosFalso();
+
+      final r = await crearApi(ProductosFalso(), activos: activos).buscarActivos('t');
+
+      expect(r.items, isEmpty);
+      expect(activos.llamadas, 0);
+    });
+
+    test('sin texto lista los activos', () async {
+      final activos = ActivosFalso();
+
+      final r = await crearApi(ProductosFalso(), activos: activos).buscarActivos('');
+
+      expect(activos.ultimaConsulta!.texto, '');
+      expect(r.items, hasLength(1));
+    });
   });
 
   group('validarMaterial', () {

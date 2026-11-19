@@ -284,9 +284,21 @@ class EntregaController extends Notifier<EntregaState> {
           if (m.material.codigo == codigo) m.copyWith(unidad: unidad) else m
       ]);
 
+  /// Agrega un equipo a la boleta con 1 día de préstamo. Solo se agregan los
+  /// disponibles; el servidor vuelve a validarlo al confirmar (HU8, Escenarios 2 y 3).
   void agregarActivo(ActivoCatalogo activo) {
+    if (!activo.disponible) return;
     if (state.activos.any((a) => a.activo.codigo == activo.codigo)) return;
     state = state.copyWith(activos: [...state.activos, ItemActivo(activo: activo)]);
+  }
+
+  /// Casilla "Agregar" de la tabla de activos: marca o desmarca el equipo.
+  void alternarActivo(ActivoCatalogo activo) {
+    if (state.activos.any((a) => a.activo.codigo == activo.codigo)) {
+      quitarActivo(activo.codigo);
+    } else {
+      agregarActivo(activo);
+    }
   }
 
   void quitarActivo(String codigo) => state =
@@ -463,6 +475,16 @@ class PaginaMaterialesNotifier extends Notifier<int> {
   void set(int pagina) => state = pagina;
 }
 
+class PaginaActivosNotifier extends Notifier<int> {
+  @override
+  int build() {
+    ref.watch(consultaActivosProvider);
+    return 1;
+  }
+
+  void set(int pagina) => state = pagina;
+}
+
 final paginaSolicitantesProvider =
     NotifierProvider<PaginaSolicitantesNotifier, int>(PaginaSolicitantesNotifier.new);
 final paginaMaterialesProvider =
@@ -554,7 +576,14 @@ final materialesProvider = FutureProvider.autoDispose<Pagina<MaterialCatalogo>>(
 
 final consultaActivosProvider =
     NotifierProvider<ConsultaNotifier, String>(ConsultaNotifier.new);
-final activosProvider = FutureProvider.autoDispose<List<ActivoCatalogo>>((ref) {
+final paginaActivosProvider =
+    NotifierProvider<PaginaActivosNotifier, int>(PaginaActivosNotifier.new);
+
+/// Activos del campus (HU8) con su estado, paginados como la tabla de materiales.
+final activosProvider = FutureProvider.autoDispose<Pagina<ActivoCatalogo>>((ref) {
   final q = ref.watch(consultaActivosProvider);
-  return ref.watch(ventanillaRepositorioProvider).buscarActivos(q);
+  final p = ref.watch(paginaActivosProvider);
+  return ref
+      .watch(ventanillaRepositorioProvider)
+      .buscarActivos(q, pagina: p, porPagina: registrosPorPagina);
 });

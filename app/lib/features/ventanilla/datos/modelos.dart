@@ -102,6 +102,13 @@ class MaterialCatalogo {
       );
 }
 
+// Estados de un activo, iguales a los del servidor (GET /activos).
+const estadoActivoDisponible = 'DISPONIBLE';
+const estadoActivoEnPrestamo = 'EN_PRESTAMO';
+const estadoActivoEnReparacion = 'EN_REPARACION';
+const estadoActivoRoboExtravio = 'ROBO_EXTRAVIO';
+const estadoActivoDeBaja = 'DE_BAJA';
+
 class ActivoCatalogo {
   const ActivoCatalogo({
     required this.codigo,
@@ -111,6 +118,7 @@ class ActivoCatalogo {
     required this.almacen,
     required this.ubicacion,
     this.activoId,
+    this.estado = estadoActivoDisponible,
   });
 
   // Id del activo en el servidor; el repositorio simulado no lo usa.
@@ -121,6 +129,11 @@ class ActivoCatalogo {
   final String serie;
   final String almacen;
   final String ubicacion;
+  // Estado tal como lo manda el servidor (ver las constantes estadoActivo...).
+  final String estado;
+
+  // Solo un activo disponible se puede prestar (HU8, Escenarios 2 y 3).
+  bool get disponible => estado == estadoActivoDisponible;
 }
 
 class Autorizacion {

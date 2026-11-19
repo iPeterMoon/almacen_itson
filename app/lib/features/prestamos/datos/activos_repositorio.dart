@@ -45,8 +45,8 @@ class ActivosRepositorio {
 
   final Dio _dio;
 
-  // [estado] 'DISPONIBLE' trae solo los que se pueden prestar.
-  Future<PaginaApi<Activo>> buscar({String? texto, String? estado, int? limite}) async {
+  // [estado] 'DISPONIBLE' trae solo los que se pueden prestar; sin estado trae todos.
+  Future<PaginaApi<Activo>> buscar({String? texto, String? estado, int? pagina, int? limite}) async {
     final t = texto?.trim();
     try {
       final respuesta = await _dio.get<Map<String, dynamic>>(
@@ -54,6 +54,7 @@ class ActivosRepositorio {
         queryParameters: {
           if (t != null && t.isNotEmpty) 'texto': t,
           'estado': ?estado,
+          'pagina': ?pagina,
           'limite': ?limite,
         },
       );

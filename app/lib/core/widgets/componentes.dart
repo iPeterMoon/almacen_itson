@@ -444,10 +444,12 @@ class SelectorCompacto<T> extends StatelessWidget {
 }
 
 /// Un dato con etiqueta pequeña arriba y valor abajo (ej. "Almacén" / "Dormitorios").
+/// Si trae [widget] (una etiqueta de estado, un contador...), se dibuja en lugar del texto.
 class CampoDato {
-  const CampoDato(this.etiqueta, this.valor);
+  const CampoDato(this.etiqueta, this.valor, {this.widget});
   final String etiqueta;
   final String valor;
+  final Widget? widget;
 }
 
 /// Rejilla de campos "etiqueta / valor" con columnas del mismo ancho.
@@ -483,11 +485,13 @@ class RejillaCampos extends StatelessWidget {
                 Text(campos[i].etiqueta,
                     style: const TextStyle(fontSize: 12, color: Colores.textoSuave)),
                 const SizedBox(height: 2),
-                Text(campos[i].valor,
-                    style: TextStyle(
-                        fontSize: (destacarPrimero && i == 0) ? 16 : 14.5,
-                        fontWeight: (destacarPrimero && i == 0) ? FontWeight.w700 : FontWeight.w400,
-                        color: Colores.texto)),
+                campos[i].widget ??
+                    Text(campos[i].valor,
+                        style: TextStyle(
+                            fontSize: (destacarPrimero && i == 0) ? 16 : 14.5,
+                            fontWeight:
+                                (destacarPrimero && i == 0) ? FontWeight.w700 : FontWeight.w400,
+                            color: Colores.texto)),
               ]),
             ),
         ],
@@ -550,6 +554,57 @@ class FilaRegistro extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// Contador "-  1  +" del prototipo (días de préstamo). Botones de 48 px para tableta.
+/// Con [onMenos] o [onMas] en null el botón correspondiente se deshabilita.
+class ContadorCompacto extends StatelessWidget {
+  const ContadorCompacto({
+    super.key,
+    required this.valor,
+    required this.onMenos,
+    required this.onMas,
+    this.etiquetaMenos = 'Disminuir',
+    this.etiquetaMas = 'Aumentar',
+    this.sufijo,
+  });
+
+  final int valor;
+  final VoidCallback? onMenos;
+  final VoidCallback? onMas;
+  final String etiquetaMenos;
+  final String etiquetaMas;
+  final String? sufijo; // ej. "días"
+
+  @override
+  Widget build(BuildContext context) {
+    // Wrap: si el campo es angosto, el sufijo baja a otra línea en vez de desbordarse.
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colores.borde),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(
+                tooltip: etiquetaMenos, onPressed: onMenos, icon: const Icon(Icons.remove, size: 18)),
+            SizedBox(
+                width: 28,
+                child: Text('$valor',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 15, color: Colores.texto))),
+            IconButton(
+                tooltip: etiquetaMas, onPressed: onMas, icon: const Icon(Icons.add, size: 18)),
+          ]),
+        ),
+        if (sufijo != null) Text(sufijo!, style: const TextStyle(color: Colores.textoSuave)),
+      ],
     );
   }
 }

@@ -60,17 +60,49 @@ const taladro = Activo(
   ubicacion: 'E1F1',
 );
 
+// Activos de ejemplo con los demás estados (HU8, Escenarios 2 y 3).
+const rotomartillo = Activo(
+  id: 4,
+  codigo: '912391',
+  nombre: 'Rotomartillo SDS Plus',
+  modelo: 'Bosch GBH 2-28',
+  numeroSerie: 'KRC-112233445',
+  estado: 'EN_PRESTAMO',
+  almacen: 'Principal',
+  ubicacion: 'E1F2',
+);
+
+const sierraEnReparacion = Activo(
+  id: 5,
+  codigo: '912401',
+  nombre: 'Sierra circular',
+  modelo: 'Makita 5007MG',
+  numeroSerie: 'MK-445566',
+  estado: 'EN_REPARACION',
+  almacen: 'Principal',
+  ubicacion: 'E1F3',
+);
+
 class ActivosFalso implements ActivosRepositorio {
-  ActivosFalso({this.activos = const [taladro]});
+  ActivosFalso({this.activos = const [taladro], this.total, this.error});
 
   final List<Activo> activos;
-  ({String? texto, String? estado, int? limite})? ultimaConsulta;
+  // Total que responde el servidor falso; si no se indica, los activos recibidos.
+  final int? total;
+  final Object? error;
+  ({String? texto, String? estado, int? pagina, int? limite})? ultimaConsulta;
   var llamadas = 0;
 
   @override
-  Future<PaginaApi<Activo>> buscar({String? texto, String? estado, int? limite}) async {
+  Future<PaginaApi<Activo>> buscar({String? texto, String? estado, int? pagina, int? limite}) async {
     llamadas++;
-    ultimaConsulta = (texto: texto, estado: estado, limite: limite);
-    return PaginaApi(datos: activos, total: activos.length, pagina: 1, limite: limite ?? 8);
+    ultimaConsulta = (texto: texto, estado: estado, pagina: pagina, limite: limite);
+    if (error != null) throw error!;
+    return PaginaApi(
+      datos: activos,
+      total: total ?? activos.length,
+      pagina: pagina ?? 1,
+      limite: limite ?? 8,
+    );
   }
 }
