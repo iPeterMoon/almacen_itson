@@ -188,6 +188,21 @@ cd app && flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1   # term
 La primera compilación de Android puede tardar 10 minutos o más; el aviso "SDK XML version 4" no es
 un error. Inicia sesión con `almacen.nainari@itson.mx` / `demo1234`.
 
+### Logs de la API
+
+Toda llamada deja dos líneas en la terminal del servidor: una al entrar y otra al terminar, con
+método, ruta, estado HTTP, duración, id de correlación y (cuando hay sesión) el id del usuario:
+
+```text
+[Peticiones] → POST /api/v1/usuarios/sesion id=e98d2f2f
+[Peticiones] [e98d2f2f] POST /api/v1/usuarios/sesion 401 42ms
+```
+
+Los errores se registran con el mismo id: `FiltroErrores` escribe el código y la ruta, y si el fallo
+fue inesperado incluye la traza. En el inicio de sesión, `SesionRepository` añade el código y mensaje
+reales de Supabase Auth. Nunca se registran contraseñas, tokens ni la cadena de consulta; el id
+también se devuelve en la cabecera `X-Id-Correlacion` para poder reportar un fallo concreto.
+
 ## Datos de ejemplo para ventanilla
 
 `supabase/seeds/entrega_demo.sql` carga un escenario completo para probar la entrega de
