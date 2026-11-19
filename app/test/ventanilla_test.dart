@@ -8,18 +8,49 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('validarCantidad (Escenario 7)', () {
-    test('rechaza vacío, no numérico, cero y negativos', () {
-      expect(validarCantidad(''), isNotNull);
-      expect(validarCantidad('abc'), isNotNull);
-      expect(validarCantidad('0'), 'La cantidad debe ser mayor a cero.');
-      expect(validarCantidad('-2'), 'La cantidad debe ser mayor a cero.');
+  group('validarCantidad (Escenario 7, AI-67)', () {
+    test('acepta enteros de 1 a 9999', () {
+      expect(validarCantidad('1'), isNull);
+      expect(validarCantidad('25'), isNull);
+      expect(validarCantidad(' 7 '), isNull, reason: 'ignora espacios al inicio y al final');
+      expect(validarCantidad('9999'), isNull);
     });
 
-    test('acepta números positivos con punto o coma', () {
-      expect(validarCantidad('1'), isNull);
-      expect(validarCantidad('0.5'), isNull);
-      expect(validarCantidad('2,5'), isNull);
+    test('vacío pide escribir la cantidad', () {
+      expect(validarCantidad(''), 'Escribe la cantidad.');
+      expect(validarCantidad('   '), 'Escribe la cantidad.');
+      expect(validarCantidad(null), 'Escribe la cantidad.');
+    });
+
+    test('cero o solo ceros dice que debe ser mayor a cero', () {
+      expect(validarCantidad('0'), 'La cantidad debe ser mayor a cero.');
+      expect(validarCantidad('0000'), 'La cantidad debe ser mayor a cero.');
+      expect(validarCantidad('00000000'), 'La cantidad debe ser mayor a cero.');
+    });
+
+    test('negativos dicen que debe ser mayor a cero', () {
+      expect(validarCantidad('-2'), 'La cantidad debe ser mayor a cero.');
+      expect(validarCantidad('-0.5'), 'La cantidad debe ser mayor a cero.');
+    });
+
+    test('rechaza ceros a la izquierda', () {
+      expect(validarCantidad('007'), 'Escribe la cantidad sin ceros a la izquierda.');
+      expect(validarCantidad('0001'), 'Escribe la cantidad sin ceros a la izquierda.');
+    });
+
+    test('rechaza decimales y lo que no es un número entero', () {
+      for (final valor in ['0.5', '2,5', '2.0', '1.', 'abc', '1e5', 'NaN', 'Infinity', '1 2', '+3']) {
+        expect(validarCantidad(valor), 'La cantidad debe ser un número entero.', reason: valor);
+      }
+    });
+
+    test('más de 4 dígitos supera el máximo', () {
+      expect(validarCantidad('10000'), 'La cantidad máxima es 9999.');
+      expect(validarCantidad('99999999999999999999'), 'La cantidad máxima es 9999.');
+    });
+
+    test('emojis', () {
+      expect(validarCantidad('2😀'), 'No se permiten emojis.');
     });
   });
 
