@@ -91,10 +91,11 @@ export class CacheActivosService {
 
   // Campus + generación + filtro + texto + página. El texto ya viene recortado
   // por el DTO; no se pasa a minúsculas para no depender de cómo compare ILIKE
-  // los acentos en la base.
+  // los acentos en la base. El filtro es el estado que de verdad se consulta:
+  // soloPrestables prevalece y equivale a estado=DISPONIBLE (ver ActivosService).
   private clave(campusId: number, dto: ListarActivosDto) {
     const consulta = [
-      dto.estado ?? '',
+      dto.soloPrestables ? 'DISPONIBLE' : (dto.estado ?? ''),
       dto.texto ?? '',
       dto.pagina ?? 1,
       dto.limite ?? LIMITE_LISTA_POR_DEFECTO,

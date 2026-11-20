@@ -64,6 +64,25 @@ describe('CacheActivosService', () => {
     expect(cargar).toHaveBeenCalledTimes(4);
   });
 
+  it('soloPrestables no comparte respuesta con la búsqueda sin filtro', async () => {
+    await cache.buscar(ALMACENISTA_NAINARI, { texto: 'tal' }, cargar);
+    await cache.buscar(ALMACENISTA_NAINARI, { texto: 'tal', soloPrestables: true }, cargar);
+
+    expect(cargar).toHaveBeenCalledTimes(2);
+  });
+
+  it('soloPrestables y estado=DISPONIBLE comparten respuesta: piden lo mismo', async () => {
+    await cache.buscar(ALMACENISTA_NAINARI, DISPONIBLES, cargar);
+    await cache.buscar(ALMACENISTA_NAINARI, { texto: 'tal', soloPrestables: true }, cargar);
+    await cache.buscar(
+      ALMACENISTA_NAINARI,
+      { texto: 'tal', estado: 'EN_REPARACION', soloPrestables: true },
+      cargar,
+    );
+
+    expect(cargar).toHaveBeenCalledTimes(1);
+  });
+
   it('la página y el límite por defecto valen igual que si se mandan', async () => {
     await cache.buscar(ALMACENISTA_NAINARI, DISPONIBLES, cargar);
     await cache.buscar(ALMACENISTA_NAINARI, { ...DISPONIBLES, pagina: 1, limite: 8 }, cargar);

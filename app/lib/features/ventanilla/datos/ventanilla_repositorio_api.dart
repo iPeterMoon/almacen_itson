@@ -152,13 +152,13 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   @override
   Future<List<Supervisor>> listarSupervisores() => _supervisores.listar();
 
-  // Solo activos DISPONIBLE: los demás no se pueden prestar. La lista de la
-  // pantalla no tiene paginador, así que se piden hasta 20.
+  // Solo activos DISPONIBLE: los demás no se pueden prestar. Sin paginador, se
+  // usa el límite por defecto del servidor (8), que es lo que cabe en la tablet.
   @override
   Future<List<ActivoCatalogo>> buscarActivos(String consulta) async {
     final texto = consulta.trim();
     if (texto.isNotEmpty && texto.length < minimoCaracteresBusqueda) return const [];
-    final r = await _activos.buscar(texto: texto, estado: 'DISPONIBLE', limite: 20);
+    final r = await _activos.buscar(texto: texto, soloPrestables: true);
     return r.datos.map(aActivoCatalogo).toList(growable: false);
   }
 

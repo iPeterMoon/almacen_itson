@@ -9,7 +9,7 @@ export interface RespuestaFalsa {
   count?: number | null;
 }
 
-const METODOS = ['select', 'eq', 'in', 'ilike', 'or', 'order', 'range'] as const;
+const METODOS = ['select', 'eq', 'in', 'ilike', 'or', 'not', 'order', 'range'] as const;
 type Metodo = (typeof METODOS)[number];
 
 export type ConsultaFalsa = Record<Metodo, jest.Mock> & PromiseLike<RespuestaFalsa>;

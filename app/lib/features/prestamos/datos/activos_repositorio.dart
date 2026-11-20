@@ -45,14 +45,21 @@ class ActivosRepositorio {
 
   final Dio _dio;
 
-  // [estado] 'DISPONIBLE' trae solo los que se pueden prestar.
-  Future<PaginaApi<Activo>> buscar({String? texto, String? estado, int? limite}) async {
+  // [soloPrestables] true trae solo los DISPONIBLE, para la boleta.
+  // [estado] se conserva por compatibilidad con quienes aún filtran por estado.
+  Future<PaginaApi<Activo>> buscar({
+    String? texto,
+    bool? soloPrestables,
+    String? estado,
+    int? limite,
+  }) async {
     final t = texto?.trim();
     try {
       final respuesta = await _dio.get<Map<String, dynamic>>(
         '/activos',
         queryParameters: {
           if (t != null && t.isNotEmpty) 'texto': t,
+          'soloPrestables': ?soloPrestables,
           'estado': ?estado,
           'limite': ?limite,
         },

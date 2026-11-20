@@ -92,10 +92,13 @@ export class ActivosController {
   @ApiOperation({
     summary: 'Busca activos de los campus del usuario',
     description:
-      'Búsqueda parcial por código, nombre o número de serie, ordenada por nombre. ' +
-      'Con estado=DISPONIBLE devuelve solo los que se pueden prestar. El "id" es el ' +
-      'activoId de POST /boletas. La respuesta se guarda 10 min por campus y se descarta ' +
-      'al entregar una boleta con herramientas (la del supervisor jefe no se guarda).',
+      'Búsqueda parcial y sin distinguir mayúsculas por código, nombre o número de serie, ' +
+      'ordenada por nombre; si el código coincide exacto, ese activo va primero en toda ' +
+      'la búsqueda, aunque por nombre cayera fuera de la página solicitada. ' +
+      'Con estado=DISPONIBLE o soloPrestables=true devuelve solo los que se pueden prestar ' +
+      '(soloPrestables prevalece si ambos vienen). El "id" es el activoId de POST /boletas. ' +
+      'Límite 8 por defecto, máximo 50. La respuesta se guarda 10 min por campus y se ' +
+      'descarta al entregar una boleta con herramientas (la del supervisor jefe no se guarda).',
   })
   @ApiOkResponse({
     description: 'Página de activos.',

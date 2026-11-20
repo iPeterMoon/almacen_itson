@@ -23,6 +23,7 @@ import type { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { BoletasService } from './boletas.service';
 import { ConfirmacionService } from './confirmacion.service';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
+import { HistorialBoletasDto } from './dto/historial-boletas.dto';
 import { ListarBoletasDto } from './dto/listar-boletas.dto';
 import { SubirFirmaDto } from './dto/subir-firma.dto';
 import { ValidarMaterialDto } from './dto/validar-material.dto';
@@ -100,6 +101,22 @@ export class BoletasController {
   @ApiOkResponse({ description: 'Página de boletas, más recientes primero.' })
   listar(@UsuarioActual() usuario: UsuarioAutenticado, @Query() dto: ListarBoletasDto) {
     return this.boletas.listar(usuario.token, dto);
+  }
+
+  // Va antes de ':id': si no, Nest tomaría "historial" como el id de una boleta.
+  @Get('historial')
+  @ApiOperation({
+    summary: 'Historial de boletas con búsqueda por solicitante o folio',
+    description:
+      'Parámetros: q (solicitante o folio, mínimo 2 caracteres), pagina y porPagina. ' +
+      'Sin coincidencias responde 200 con datos [] y total 0.',
+  })
+  @ApiOkResponse({
+    description:
+      '{ datos: [{ id, folio, solicitanteNombre, dependencia, entregadoEn, autorizoNombre }], total }',
+  })
+  historial(@UsuarioActual() usuario: UsuarioAutenticado, @Query() dto: HistorialBoletasDto) {
+    return this.boletas.historial(usuario.token, dto);
   }
 
   // El detalle incluye las relaciones que el front necesita para pintar la boleta completa.
