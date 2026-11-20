@@ -428,6 +428,20 @@ caso("HU8 E3", "A reparación (cambio manual con motivo)", CEN,
 caso("HU8 E3", "Herramienta en reparación no se presta", CEN, prestamo(MARIA, ACT300, 2), espera="ACTIVO_NO_DISPONIBLE")
 caso("HU8 E4", "Código no registrado", CEN, "select * from validar_activo('NO-EXISTE')", espera="ACTIVO_NO_ENCONTRADO")
 caso("Seg", "Centro no encuentra activos de Náinari", CEN, "select * from validar_activo('ACT-N01')", espera="ACTIVO_NO_ENCONTRADO")
+
+# validar_activo (AI-84): lo que responde según el estado del activo.
+VALIDAR = ("select codigo||'|'||estado||'|'||coalesce(custodio_actual, 'sin custodio')||'|'||"
+           "coalesce(to_char(fecha_prevista, 'YYYY-MM-DD'), 'sin fecha') from validar_activo('{}')")
+caso("HU8 AI-84", "Disponible: sus datos sin custodio ni fecha prevista", CEN,
+     VALIDAR.format('ACT-200'), contiene="ACT-200|DISPONIBLE|sin custodio|sin fecha")
+caso("HU8 AI-84", "Prestado: custodio y fecha prevista (hoy + 3 días)", CEN,
+     VALIDAR.format('ACT-104'),
+     contiene="ACT-104|EN_PRESTAMO|Juan Pérez Soto|" + admin("select to_char(now() + interval '3 days', 'YYYY-MM-DD')"))
+caso("HU8 AI-84", "En reparación: devuelve su estado, sin custodio", CEN,
+     VALIDAR.format('ACT-300'), contiene="ACT-300|EN_REPARACION|sin custodio|sin fecha")
+caso("HU8 AI-84", "De baja: devuelve su estado, sin custodio", CEN,
+     f"select cambiar_estado_activo({ACT300}, 'DE_BAJA', 'Motor quemado'); " + VALIDAR.format('ACT-300'),
+     contiene="ACT-300|DE_BAJA|sin custodio|sin fecha")
 caso("HU8", "Solo personal registrado recibe herramientas", CEN,
      f"select * from crear_boleta(p_herramientas=>'[{{\"activo_id\":{ACT200},\"dias_prestamo\":1}}]', "
      f"p_solicitante_nombre=>'X', p_solicitante_unidad=>'Y', {FIRMAS})", espera="HERRAMIENTA_SIN_SOLICITANTE")
@@ -508,6 +522,8 @@ caso("HU9 E4", "Activo queda Robo/Extravío y conserva custodio", CEN,
      f"select a.estado||'|'||v.custodio||'|'||v.estado from activos a join vista_seguimiento_prestamos v on v.activo_id=a.id "
      f"where a.id={ACT104} and v.prestamo_id={PR_M}", contiene="ROBO_EXTRAVIO|María Sánchez|ROBO_EXTRAVIO")
 caso("HU9 E4", "Un activo robado no se presta", CEN, prestamo(JUAN, ACT104, 2), espera="ACTIVO_NO_DISPONIBLE")
+caso("HU8 AI-84", "Robo/Extravío: devuelve su estado; sin préstamo activo no hay custodio", CEN,
+     VALIDAR.format('ACT-104'), contiene="ACT-104|ROBO_EXTRAVIO|sin custodio|sin fecha")
 caso("HU7", "Bitácora de estados del rotomartillo", CEN,
      f"select string_agg(estado_nuevo, '>' order by id) from historial_estados_activo where activo_id={ACT104}",
      contiene="DISPONIBLE>EN_PRESTAMO>DISPONIBLE>EN_PRESTAMO>ROBO_EXTRAVIO")
