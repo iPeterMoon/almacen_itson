@@ -47,15 +47,6 @@ class Solicitante {
       );
 }
 
-class Autorizador {
-  const Autorizador({required this.id, required this.nombre});
-  final String id;
-  final String nombre;
-
-  factory Autorizador.fromJson(Map<String, dynamic> j) =>
-      Autorizador(id: j['id'] as String, nombre: j['nombre'] as String);
-}
-
 class MaterialCatalogo {
   const MaterialCatalogo({
     required this.codigo,
@@ -138,21 +129,15 @@ class ActivoCatalogo {
   bool get disponible => estado == estadoActivoDisponible;
 }
 
-class Autorizacion {
-  const Autorizacion({
-    required this.autorizadorId,
-    required this.autorizadorNombre,
-    required this.motivo,
-    this.detalleOtro,
-  });
+/// Motivo obligatorio cuando un material excede periodicidad o límite de zona.
+/// La entrega se registra de inmediato; no hay autorización dentro del sistema.
+class MotivoExcepcion {
+  const MotivoExcepcion({required this.motivo, this.detalleOtro});
 
-  final String autorizadorId;
-  final String autorizadorNombre;
   final String motivo;
   final String? detalleOtro;
 
   Map<String, dynamic> toJson() => {
-        'autorizadorId': autorizadorId,
         'motivo': motivo,
         if (detalleOtro != null && detalleOtro!.isNotEmpty) 'detalleOtro': detalleOtro,
       };
@@ -190,7 +175,7 @@ class ItemMaterial {
     required this.unidad,
     this.entregado = true,
     this.comentario,
-    this.autorizacion,
+    this.motivoExcepcion,
   });
 
   final MaterialCatalogo material;
@@ -198,7 +183,7 @@ class ItemMaterial {
   final String unidad;
   final bool entregado;
   final String? comentario;
-  final Autorizacion? autorizacion;
+  final MotivoExcepcion? motivoExcepcion;
 
   String get cantidadTexto => '${formatearCantidad(cantidad)} $unidad';
 
@@ -207,7 +192,7 @@ class ItemMaterial {
     String? unidad,
     bool? entregado,
     String? comentario,
-    Autorizacion? autorizacion,
+    MotivoExcepcion? motivoExcepcion,
   }) =>
       ItemMaterial(
         material: material,
@@ -215,7 +200,7 @@ class ItemMaterial {
         unidad: unidad ?? this.unidad,
         entregado: entregado ?? this.entregado,
         comentario: comentario ?? this.comentario,
-        autorizacion: autorizacion ?? this.autorizacion,
+        motivoExcepcion: motivoExcepcion ?? this.motivoExcepcion,
       );
 
   Map<String, dynamic> toJson() => {
@@ -223,7 +208,7 @@ class ItemMaterial {
         'cantidad': cantidad,
         'unidad': unidad,
         if (comentario != null && comentario!.isNotEmpty) 'comentario': comentario,
-        if (autorizacion != null) 'autorizacion': autorizacion!.toJson(),
+        if (motivoExcepcion != null) 'motivoExcepcion': motivoExcepcion!.toJson(),
       };
 }
 
@@ -261,7 +246,6 @@ class SolicitudEntrega {
     this.solicitante,
     this.nombreSinRegistro,
     this.unidadSinRegistro,
-    this.autorizoId,
     this.autorizoNombre,
     this.numeroSolicitud,
     required this.materiales,
@@ -275,8 +259,7 @@ class SolicitudEntrega {
   final Solicitante? solicitante;
   final String? nombreSinRegistro;
   final String? unidadSinRegistro;
-  final String? autorizoId;
-  // Nombre de quien autorizó (campo "Autorizó (Opcional)"); el servidor guarda el nombre.
+  // Nombre de quien autorizó (opcional, texto libre; puede no estar registrado).
   final String? autorizoNombre;
   final String? numeroSolicitud;
   final List<ItemMaterial> materiales;
@@ -290,7 +273,8 @@ class SolicitudEntrega {
           'nombre': nombreSinRegistro,
           'unidad': unidadSinRegistro,
         },
-        if (autorizoId != null) 'autorizoId': autorizoId,
+        if (autorizoNombre != null && autorizoNombre!.isNotEmpty)
+          'autorizoNombre': autorizoNombre,
         if (numeroSolicitud != null && numeroSolicitud!.isNotEmpty)
           'numeroSolicitud': numeroSolicitud,
         'materiales': materiales.map((m) => m.toJson()).toList(),
@@ -318,12 +302,10 @@ class ResumenEntrega {
     required this.entregadoPor,
     required this.materiales,
     required this.activos,
-    this.autorizacionPendiente = false,
+    this.autorizoNombre,
+    this.motivos = const [],
   });
 
-  // true si algún material excedió periodicidad o límite: la boleta quedó
-  // registrada con su folio pero el material no ha salido hasta que la autoricen.
-  final bool autorizacionPendiente;
   final String folio;
   final String recibidoPor;
   final String area;
@@ -331,6 +313,8 @@ class ResumenEntrega {
   final String entregadoPor;
   final List<LineaResumen> materiales;
   final List<LineaResumen> activos;
+  final String? autorizoNombre;
+  final List<String> motivos;
 }
 
 /// Detalle del error STOCK_INSUFICIENTE (Escenario 6).

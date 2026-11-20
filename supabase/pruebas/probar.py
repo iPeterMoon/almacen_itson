@@ -1,5 +1,5 @@
 """Prueba los escenarios de HU1 a HU5 contra la base local, como usuarios reales de la app."""
-import os, subprocess, sys
+import os, subprocess, sys, time
 
 sys.stdout.reconfigure(encoding="utf-8")
 # Corre psql dentro del contenedor que levanta reiniciar.sh
@@ -78,6 +78,9 @@ caso("HU1 E5", "Presentaciones con factor a unidad base", CEN,
 caso("HU1 E5", "Conversión: 2 galones = 7.57 L", CEN,
      "select convertir_a_unidad_base(p.id, pr.id, 2) from productos p join presentaciones_producto pr on pr.producto_id=p.id "
      "where p.codigo='CD-123' and pr.nombre='Galón'", contiene="7.57")
+caso("HU1 E5", "Conversión con cantidad decimal se rechaza", CEN,
+     "select convertir_a_unidad_base(p.id, pr.id, 1.5) from productos p join presentaciones_producto pr on pr.producto_id=p.id "
+     "where p.codigo='CD-123' and pr.nombre='Galón'", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("HU1 E6", "Producto nuevo aparece con existencia 0", CEN,
      "select existencia = 0 from buscar_productos('CD-500')", contiene="t")
 caso("Seg", "Usuario sin sesión no puede dar de alta", "anon",
@@ -117,6 +120,9 @@ caso("HU2 E6", "Cantidad 0 se rechaza", CEN,
 caso("HU2 E6", "Cantidad negativa se rechaza", CEN,
      f"select * from registrar_entrada({P1},{A1},-3,'REINGRESO_TRASPASO', p_tipo_origen=>'UNIDAD', p_origen_unidad_id=>{GUAYMAS})",
      espera="CANTIDAD_INVALIDA")
+caso("HU2 E6", "Cantidad decimal se rechaza", CEN,
+     f"select * from registrar_entrada({P1},{A1},1.5,'COMPRA', p_numero_factura=>'F-DEC', p_numero_partida=>'P-DEC', "
+     "p_proveedor_nuevo=>'Proveedor Decimal')", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("HU2 E7", "Producto no registrado", CEN,
      f"select * from registrar_entrada(999999,{A1},5,'REINGRESO_TRASPASO', p_tipo_origen=>'UNIDAD', p_origen_unidad_id=>{GUAYMAS})",
      espera="PRODUCTO_NO_REGISTRADO")
@@ -269,8 +275,10 @@ caso("HU4 E1", "Reingreso válido de 1 L con folio REI", CEN,
 caso("HU4 E1", "Reingreso queda ligado a la boleta", CEN,
      f"select b.folio from entradas e join boletas_materiales m on m.id=e.boleta_material_id "
      "join boletas b on b.id=m.boleta_id where e.folio='REI-2026-0001'", contiene="BOL-2026-0001")
-caso("HU4 E2", "Segundo reingreso de 1.5 L rebasa lo pendiente (1 L)", CEN,
-     f"select * from registrar_reingreso({BM},{A1},1.5)", espera="REINGRESO_EXCEDE")
+caso("HU4 E2", "Segundo reingreso de 2 unidades rebasa lo pendiente (1)", CEN,
+     f"select * from registrar_reingreso({BM},{A1},2)", espera="REINGRESO_EXCEDE")
+caso("HU4", "Reingreso con cantidad decimal se rechaza", CEN,
+     f"select * from registrar_reingreso({BM},{A1},1.5)", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("Seg", "Náinari no reingresa una boleta de Centro", NAI,
      f"select * from registrar_reingreso({BM},{AN},1)", espera="CAMPUS_DISTINTO")
 caso("HU3 E5", "Detalle con fecha de última salida", CEN,
@@ -289,7 +297,7 @@ caso("HU5", "Ajuste sin diferencia se rechaza", CEN,
      f"select * from registrar_ajuste({P1},{A1},12,'Recuento','E1F1')", espera="SIN_DIFERENCIA")
 caso("HU5", "Ajuste a cantidad negativa se rechaza", CEN,
      f"select * from registrar_ajuste({P1},{A1},-1,'Error','E1F1')", espera="CANTIDAD_INVALIDA")
-# ---------- HU6: periodicidad, límite de zona y autorización ----------
+# ---------- HU6: periodicidad, límite de zona y sugerencia de autorización ----------
 def boleta(materiales, extra=""):
     return f"select estado||'|'||folio from crear_boleta(p_materiales=>'{materiales}'{extra})"
 
@@ -301,28 +309,23 @@ caso("HU6 E8", "Validación muestra periodicidad no cumplida (faltan 5 días)", 
      f"from validar_material({P1}, 1, p_trabajador_id=>{JUAN})", contiene="true|5|true")
 caso("HU6 E8", "Sin motivo no se puede entregar antes de tiempo", CEN,
      boleta(m1, f", p_trabajador_id=>{JUAN}, {FIRMAS}"), espera="MOTIVO_EXCEPCION_REQUERIDO")
-caso("HU6 E8", "Con motivo pero sin supervisor", CEN,
-     boleta(m1_motivo, f", p_trabajador_id=>{JUAN}, {FIRMAS}"), espera="AUTORIZADOR_REQUERIDO")
-caso("HU6 E8", "Con motivo y supervisor queda pendiente", CEN,
-     boleta(m1_motivo, f", p_trabajador_id=>{JUAN}, p_supervisor_id=>'{SUP}'"), contiene="PENDIENTE_AUTORIZACION|BOL-2026-0002")
-caso("HU6 E8", "Pendiente no descuenta existencia (sigue 12 en E1F1)", CEN,
-     f"select cantidad from vista_existencias_por_ubicacion where producto_id={P1} and ubicacion='E1F1'", contiene="12.000")
-caso("HU6 E8", "El supervisor recibe el aviso", SUP,
-     "select string_agg(tipo, ',') from obtener_notificaciones()", contiene="AUTORIZACION_PENDIENTE")
-B2 = admin("select id from boletas where folio='BOL-2026-0002'")
-caso("Seg", "El almacenista no puede autorizarse a sí mismo", CEN,
-     f"select resolver_autorizacion({B2}, true)", espera="SIN_PERMISO")
-caso("HU6 E8", "No se entrega antes de autorizar", CEN,
-     f"select confirmar_entrega({B2}, '{CEN_ID}/r.png', '{CEN_ID}/e.png')", espera="BOLETA_NO_AUTORIZADA")
-caso("HU6 E8", "Supervisor autoriza", SUP,
-     f"select resolver_autorizacion({B2}, true, 'Autorizado por derrame')", contiene="AUTORIZADA")
-caso("HU6 E8", "El almacenista recibe aviso de la resolución", CEN,
-     "select string_agg(tipo, ',') from obtener_notificaciones()", contiene="AUTORIZACION_RESUELTA")
-caso("HU6 E1", "Confirmar sin firmas se rechaza", CEN,
-     f"select confirmar_entrega({B2}, '', '{CEN_ID}/e.png')", espera="FIRMAS_REQUERIDAS")
-caso("HU6 E1", "Confirmar entrega autorizada descuenta 1 L (12 a 11)", CEN,
-     f"select confirmar_entrega({B2}, '{CEN_ID}/r.png', '{CEN_ID}/e.png'); "
+caso("HU6 E8", "Con motivo se entrega de inmediato y devuelve la alerta", CEN,
+     f"select estado||'|'||folio||'|'||coalesce(alertas->0->>'excede_periodicidad','') "
+     f"from crear_boleta(p_materiales=>'{m1_motivo}', p_trabajador_id=>{JUAN}, {FIRMAS})",
+     contiene="ENTREGADA|BOL-2026-0002|true")
+caso("HU6 E8", "Descuenta existencia en el acto (12 a 11 en E1F1)", CEN,
      f"select cantidad from vista_existencias_por_ubicacion where producto_id={P1} and ubicacion='E1F1'", contiene="11.000")
+caso("HU6 E8", "No se generan avisos de autorización", CEN,
+     "select count(*) from notificaciones where tipo like 'AUTORIZACION%'", contiene="0")
+caso("Estructura", "No existe la tabla autorizaciones", CEN,
+     "select coalesce(to_regclass('public.autorizaciones')::text,'NO_EXISTE')", contiene="NO_EXISTE")
+caso("Estructura", "No existen las RPC de autorización ni de entrega en dos pasos", CEN,
+     "select coalesce(to_regprocedure('public.resolver_autorizacion(bigint,boolean,text)')::text,'NO_EXISTE')"
+     "||'|'||coalesce(to_regprocedure('public.confirmar_entrega(bigint,text,text)')::text,'NO_EXISTE')",
+     contiene="NO_EXISTE|NO_EXISTE")
+caso("HU6 E1", "Las firmas siguen siendo obligatorias", CEN,
+     f"select * from crear_boleta(p_materiales=>'{m1}', p_trabajador_id=>{JUAN}, "
+     f"p_firma_recibe=>'', p_firma_entrega=>'{CEN_ID}/e.png')", espera="FIRMAS_REQUERIDAS")
 
 # Pasan 6 días desde las entregas de Juan
 admin("update boletas set entregado_en = entregado_en - interval '6 days' where trabajador_id is not null")
@@ -331,27 +334,26 @@ caso("HU6 E9", "Periodicidad cumplida (hace 6 días, intervalo 5)", CEN,
      contiene="false|false")
 caso("HU6 E9", "María nunca lo ha recibido: sin restricción", CEN,
      f"select excede_periodicidad::text from validar_material({P1}, 1, p_trabajador_id=>{MARIA})", contiene="false")
-caso("HU6 E1", "Entrega a Juan de 2 L sin autorización", CEN,
+caso("HU6 E1", "Entrega a Juan de 2 L", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":2}}]', f", p_trabajador_id=>{JUAN}, {FIRMAS}"), contiene="ENTREGADA")
 caso("HU6 E10", "Límite de zona: 3 L cada 5 días, ya van 2, María pide 2", CEN,
      f"select excede_limite||'|'||limite_cantidad||'|'||entregado_periodo "
      f"from validar_material({P1}, 2, p_trabajador_id=>{MARIA})", contiene="true|3.000|2.000")
 caso("HU6 E10", "Excede límite sin motivo se rechaza", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":2}}]', f", p_trabajador_id=>{MARIA}, {FIRMAS}"), espera="MOTIVO_EXCEPCION_REQUERIDO")
-caso("HU6 E10", "Con motivo queda pendiente", CEN,
+caso("HU6 E10", "Con motivo se entrega de inmediato, sin supervisor en el sistema", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":2,"motivo_excepcion":"Evento en el edificio"}}]',
-            f", p_trabajador_id=>{MARIA}, p_supervisor_id=>'{SUP}'"), contiene="PENDIENTE_AUTORIZACION")
-BM_RECH = admin("select m.id from boletas_materiales m join boletas b on b.id=m.boleta_id "
-                "where b.estado='PENDIENTE_AUTORIZACION'")
-B_RECH = admin("select id from boletas where estado='PENDIENTE_AUTORIZACION'")
-caso("HU6", "Supervisor rechaza", SUP, f"select resolver_autorizacion({B_RECH}, false, 'No procede')", contiene="RECHAZADA")
-caso("HU6", "Una boleta rechazada no se entrega", CEN,
-     f"select confirmar_entrega({B_RECH}, '{CEN_ID}/r.png', '{CEN_ID}/e.png')", espera="BOLETA_NO_AUTORIZADA")
-caso("HU4", "No se reingresa material de una boleta no entregada", CEN,
-     f"select * from registrar_reingreso({BM_RECH},{A1},1)", espera="BOLETA_NO_ENTREGADA")
+            f", p_trabajador_id=>{MARIA}, p_autorizo_nombre=>'Supervisor externo', {FIRMAS}"),
+     contiene="ENTREGADA|BOL-")
+caso("HU6 E10", "Guarda el motivo y el nombre libre de quien autorizó", CEN,
+     "select m.motivo_excepcion||'|'||b.autorizo_nombre from boletas_materiales m "
+     "join boletas b on b.id=m.boleta_id where m.motivo_excepcion='Evento en el edificio'",
+     contiene="Evento en el edificio|Supervisor externo")
+caso("Seg", "No hay boletas pendientes ni rechazadas", CEN,
+     "select count(*) from boletas where estado<>'ENTREGADA'", contiene="0")
 
 caso("HU6 E2", "Solicitante sin registro con nombre y unidad", CEN,
-     boleta(f'[{{"producto_id":{P1},"cantidad":0.5,"comentario":"Para limpieza de oficina"}}]',
+     boleta(f'[{{"producto_id":{P1},"cantidad":1,"comentario":"Para limpieza de oficina"}}]',
             f", p_solicitante_nombre=>'Rosa Molina', p_solicitante_unidad=>'Navojoa', p_numero_solicitud=>'OT-9981', {FIRMAS}"),
      contiene="ENTREGADA")
 caso("HU6 E3/E5", "Guarda número de solicitud y comentario", CEN,
@@ -365,6 +367,11 @@ caso("HU6 E6", "Existencia insuficiente", CEN,
 caso("HU6 E7", "Cantidad cero", CEN,
      boleta(f'[{{"producto_id":{P1},"cantidad":0}}]', f", p_solicitante_nombre=>'X', p_solicitante_unidad=>'Y', {FIRMAS}"),
      espera="CANTIDAD_INVALIDA")
+caso("HU6 E7", "Cantidad decimal se rechaza", CEN,
+     boleta(f'[{{"producto_id":{P1},"cantidad":1.5}}]', f", p_solicitante_nombre=>'X', p_solicitante_unidad=>'Y', {FIRMAS}"),
+     espera="CANTIDAD_ENTERA_REQUERIDA")
+caso("HU6", "Validación con cantidad decimal se rechaza", CEN,
+     f"select * from validar_material({P1}, 1.5)", espera="CANTIDAD_ENTERA_REQUERIDA")
 caso("HU6 E7", "Entrega en presentación: 2 medios litros = 1 L", CEN,
      f"select 1 from crear_boleta(p_materiales=>('[{{\"producto_id\":{P1},\"cantidad\":2,"
      f"\"presentacion_id\":'||(select id from presentaciones_producto where nombre='Medio litro')||'}}]')::jsonb, "
@@ -432,6 +439,30 @@ caso("HU8 E5", "Validación advierte que el solicitante tiene un vencido", CEN,
      f"select solicitante_con_vencido from validar_activo('ACT-200', {JUAN})", contiene="t")
 caso("HU8 E5", "Se presta con advertencia registrada (1 día)", CEN,
      prestamo(JUAN, ACT200, 1), contiene='"solicitante_con_vencido": true')
+
+# Varios activos con el mismo nombre: se prestan; la app solo avisa con los
+# préstamos abiertos del trabajador (POST /activos/validar los lee de la vista).
+caso("HU8", "Otros tres taladros", CEN,
+     activo('ACT-201', 'Taladro', 'DCD771', 'DCD771-1') + "; " + activo('ACT-202', 'Taladro', 'DCD771', 'DCD771-2')
+     + "; " + activo('ACT-203', 'Taladro', 'DCD771', 'DCD771-3'),
+     contiene="DISPONIBLE")
+ACT201 = admin("select id from activos where codigo='ACT-201'")
+ACT202 = admin("select id from activos where codigo='ACT-202'")
+ACT203 = admin("select id from activos where codigo='ACT-203'")
+caso("HU8", "La vista lista los préstamos abiertos de Juan con su seguimiento", CEN,
+     f"select string_agg(codigo||':'||seguimiento, ',' order by fecha_prevista) from vista_seguimiento_prestamos "
+     f"where trabajador_id={JUAN} and estado='ACTIVO'", contiene="ACT-104:VENCIDO,ACT-200:PROXIMO_A_VENCER")
+caso("HU8", "Un taladro con el mismo nombre que el que ya tiene sigue prestable", CEN,
+     f"select estado from validar_activo('ACT-201', {JUAN})", contiene="DISPONIBLE")
+caso("HU8", "Se presta otro taladro a quien ya tiene uno", CEN,
+     prestamo(JUAN, ACT201, 2), contiene="ENTREGADA")
+caso("HU8", "Dos taladros en la misma boleta", CEN,
+     f"select estado from crear_boleta(p_herramientas=>'[{{\"activo_id\":{ACT202},\"dias_prestamo\":2}},"
+     f"{{\"activo_id\":{ACT203},\"dias_prestamo\":2}}]', p_trabajador_id=>{MARIA}, {FIRMAS})",
+     contiene="ENTREGADA")
+caso("HU8", "María queda con dos préstamos abiertos de taladro", CEN,
+     f"select count(*) from vista_seguimiento_prestamos where trabajador_id={MARIA} and estado='ACTIVO' "
+     f"and herramienta='Taladro'", contiene="2")
 
 # ---------- HU10: seguimiento ----------
 caso("HU10 E1", "Vencido con 2 días de retraso", CEN,
@@ -517,8 +548,8 @@ H = "select {} from vista_historial_entregas where {}"
 ZONA = admin("select id from zonas where nombre='Edificio 1800 - Planta baja'")
 caso("HU6 Hist", "Por solicitante registrado: 3 entregas de CD-123 a Juan (5 L)", CEN,
      H.format("count(*)||'|'||sum(cantidad_base)", f"trabajador_id={JUAN} and producto_id={P1}"), contiene="3|5.000")
-caso("HU6 Hist", "Boletas rechazadas o pendientes no son entregas", CEN,
-     H.format("count(*)", f"trabajador_id={MARIA}"), contiene="0")
+caso("HU6 Hist", "La entrega con excepción consta en el historial (sin estado pendiente)", CEN,
+     H.format("count(*)||'|'||sum(cantidad_base)", f"trabajador_id={MARIA}"), contiene="1|2.000")
 caso("HU6 Hist", "Por solicitante sin registro (nombre parcial)", CEN,
      H.format("tipo_solicitante||'|'||solicitante_nombre||'|'||numero_solicitud||'|'||comentario", "solicitante_nombre ilike '%rosa%'"),
      contiene="SIN_REGISTRO|Rosa Molina|OT-9981|Para limpieza de oficina")
@@ -527,9 +558,9 @@ caso("HU6 Hist", "Por insumo: guantes solo en la boleta combinada", CEN,
 caso("HU6 Hist", "Conserva la presentación entregada y su equivalente", CEN,
      H.format("presentacion||'|'||cantidad||'|'||cantidad_base||'|'||unidad_base", "solicitante_nombre='Ana'"),
      contiene="Medio litro|2.000|1.000|L")
-caso("HU6 Hist", "Por zona: 4 renglones entregados en el Edificio 1800", CEN,
-     H.format("count(*)||'|'||min(zona)", f"zona_id={ZONA}"), contiene="4|Edificio 1800 - Planta baja")
-caso("HU6 Hist", "Muestra la excepción autorizada y su motivo", CEN,
+caso("HU6 Hist", "Por zona: 5 renglones entregados en el Edificio 1800", CEN,
+     H.format("count(*)||'|'||min(zona)", f"zona_id={ZONA}"), contiene="5|Edificio 1800 - Planta baja")
+caso("HU6 Hist", "Muestra la excepción y su motivo (sin estado de autorización)", CEN,
      H.format("excede_periodicidad||'|'||motivo_excepcion", "folio='BOL-2026-0002'"), contiene="true|Derrame en baños")
 caso("HU6 Hist", "Muestra lo reingresado de cada renglón (HU4)", CEN,
      H.format("cantidad||'|'||cantidad_reingresada||'|'||entregado_por", "folio='BOL-2026-0001'"),
@@ -545,6 +576,144 @@ caso("Seg", "Sin sesión no se lee el historial", "anon", H.format("count(*)", "
 caso("Seg", "El historial no se modifica desde la app", CEN,
      "select bool_or(has_table_privilege('vista_historial_entregas', p)) "
      "from unnest(array['INSERT','UPDATE','DELETE','TRUNCATE']) p", contiene="f")
+
+# ---------- HU8: boleta combinada, todo o nada (AI-50) ----------
+# Materiales y herramientas se registran en una sola transacción: si algo falla no
+# queda boleta, ni salida de material, ni préstamo. Usa su propio material, activos
+# y personal para no mover los conteos de las secciones anteriores.
+def en_paralelo(sql_a, sql_b, user, retraso=0.5):
+    """Corre dos consultas en sesiones distintas; la segunda empieza `retraso` segundos después.
+    Devuelve (ok, salida, segundos) de cada una."""
+    pre = f"set role authenticated; set request.jwt.claim.sub = '{user}';"
+    def lanzar(sql):
+        return time.monotonic(), subprocess.Popen(PSQL + ["-c", pre + sql], stdout=subprocess.PIPE,
+                                                  stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+    sesiones = [lanzar(sql_a)]
+    time.sleep(retraso)
+    sesiones.append(lanzar(sql_b))
+    res = []
+    for inicio, p in sesiones:
+        salida = p.communicate()[0].strip()
+        res.append((p.returncode == 0, salida, time.monotonic() - inicio))
+    return res
+
+
+def como_cen(sql):
+    ok, out = run(sql, CEN)
+    if not ok:
+        sys.exit("Fallo en preparación: " + out)
+    return out.splitlines()[-1]
+
+
+admin(f"""
+set request.jwt.claim.sub = '{CEN}';
+insert into productos (codigo, nombre_estandar, unidad_base_id, categoria_id, tipo, creado_por)
+values ('CD-800', 'Bolsas para basura', {PZA}, {PAP}, 'SERVICIOS_GENERALES', '{CEN}');
+insert into trabajadores (nombre, tipo, compania, dependencia, campus_id) values
+ ('Rosa Elena Valdez', 'ITSON', null, 'MANTENIMIENTO', {CEN_ID}),
+ ('Mario Félix Ortega', 'ITSON', null, 'MANTENIMIENTO', {CEN_ID});
+insert into trabajadores_zonas select t.id, {ZONA} from trabajadores t
+ where t.nombre in ('Rosa Elena Valdez', 'Mario Félix Ortega');
+""")
+P8 = admin("select id from productos where codigo='CD-800'")
+ROSA = admin("select id from trabajadores where nombre='Rosa Elena Valdez'")
+MARIO = admin("select id from trabajadores where nombre='Mario Félix Ortega'")
+admin(f"set role authenticated; set request.jwt.claim.sub = '{CEN}'; "
+      f"select 1 from registrar_entrada({P8},{A1},10,'REINGRESO_TRASPASO', p_tipo_origen=>'UNIDAD', p_origen_unidad_id=>{GUAYMAS}); "
+      + "; ".join(activo(c, n, m, s) for c, n, m, s in [
+          ('ACT-501', 'Nivel láser', 'GLL 3-80', 'NL-1'), ('ACT-502', 'Multímetro', 'F117', 'MM-1'),
+          ('ACT-503', 'Pinza amperimétrica', 'F323', 'PA-1'), ('ACT-504', 'Escalera de tijera', 'T-6', 'ET-1'),
+          ('ACT-505', 'Detector de voltaje', 'VT-1', 'DV-1')]))
+NL, MM, PA, ET, DV = admin("select string_agg(id::text, ',' order by codigo) from activos "
+                           "where codigo in ('ACT-501','ACT-502','ACT-503','ACT-504','ACT-505')").split(",")
+
+
+def combinada(personal, materiales, herramientas, campos="estado||'|'||alertas::text"):
+    """Boleta con materiales [(producto, cantidad[, motivo])] y herramientas [activo] (2 días)."""
+    mats = ",".join(f'{{"producto_id":{p},"cantidad":{c}' + (f',"motivo_excepcion":"{r[0]}"' if r else "") + "}"
+                    for p, c, *r in materiales)
+    hers = ",".join(f'{{"activo_id":{a},"dias_prestamo":2}}' for a in herramientas)
+    return (f"select {campos} from crear_boleta(p_materiales=>'[{mats}]', "
+            f"p_herramientas=>'[{hers}]', p_trabajador_id=>{personal}, {FIRMAS})")
+
+
+# Fotografía de lo que una boleta fallida no debe cambiar
+FOTO = ("select (select existencia from buscar_productos('CD-800'))"
+        "||'|'||(select count(*) from boletas)"
+        "||'|'||(select count(*) from prestamos)"
+        "||'|'||(select count(*) from movimientos_inventario)"
+        "||'|'||(select string_agg(estado, ',' order by codigo) from activos where codigo like 'ACT-50%')")
+
+caso("HU8 Comb", "Boleta combinada: 3 bolsas + nivel láser + multímetro", CEN,
+     combinada(ROSA, [(P8, 3)], [NL, MM]), contiene="ENTREGADA")
+caso("HU8 Comb", "Descuenta el material (10 a 7)", CEN,
+     "select existencia from buscar_productos('CD-800')", contiene="7.000")
+caso("HU8 Comb", "Abre un préstamo PRE por herramienta, a nombre de Rosa", CEN,
+     "select count(*)||'|'||bool_and(folio like 'PRE-%')||'|'||min(custodio) from vista_seguimiento_prestamos "
+     f"where activo_id in ({NL},{MM}) and estado='ACTIVO'", contiene="2|true|Rosa Elena Valdez")
+caso("HU8 Comb", "Las dos herramientas quedan En préstamo", CEN,
+     f"select string_agg(estado, ',') from activos where id in ({NL},{MM})", contiene="EN_PRESTAMO,EN_PRESTAMO")
+caso("HU8 Comb", "Material y préstamos quedan en la misma boleta", CEN,
+     "select count(distinct bm.id)||'|'||count(distinct bh.id) from boletas b "
+     "join boletas_materiales bm on bm.boleta_id=b.id join boletas_herramientas bh on bh.boleta_id=b.id "
+     f"where b.trabajador_id={ROSA}", contiene="1|2")
+
+admin(f"set role authenticated; set request.jwt.claim.sub = '{CEN}'; "
+      f"select cambiar_estado_activo({PA}, 'EN_REPARACION', 'Display dañado')")
+ANTES = como_cen(FOTO)
+caso("HU8 Comb", "Herramienta en reparación: la boleta combinada se rechaza", CEN,
+     combinada(MARIO, [(P8, 2)], [ET, PA]), espera="ACTIVO_NO_DISPONIBLE")
+caso("HU8 Comb", "Herramienta prestada: la boleta combinada se rechaza", CEN,
+     combinada(MARIO, [(P8, 2)], [ET, NL]), espera="ACTIVO_PRESTADO")
+caso("HU8 Comb", "Sin stock de un material: la boleta combinada se rechaza", CEN,
+     combinada(MARIO, [(P8, 1), (P3, 500)], [ET]), espera="STOCK_INSUFICIENTE")
+caso("HU8 Comb", "Los rechazos no dejan boleta, salida, préstamo ni cambio de estado", CEN,
+     FOTO, contiene=ANTES)
+caso("HU8 Comb", "La escalera de la boleta rechazada sigue Disponible y sin préstamo", CEN,
+     f"select a.estado||'|'||count(p.id) from activos a left join prestamos p on p.activo_id=a.id "
+     f"where a.id={ET} group by a.estado", contiene="DISPONIBLE|0")
+
+# Dos ventanillas prestan el mismo detector al mismo tiempo. La primera retiene su
+# transacción 2 s. La segunda espera el folio BOL que la primera tiene bloqueado y,
+# cuando la primera confirma, ya ve el detector prestado a Rosa. Si llegara a
+# pasar esa revisión, ejecutar_entrega bloquea la fila del activo y el índice
+# prestamos_activo_abierto_uk impide el segundo préstamo abierto.
+ANTES_CARRERA = como_cen("select existencia from buscar_productos('CD-800')")
+(ok_a, out_a, _), (ok_b, out_b, espera_b) = en_paralelo(
+    combinada(ROSA, [(P8, 1)], [DV]) + "; select pg_sleep(2);",
+    combinada(MARIO, [(P8, 1)], [DV]), CEN)
+resultados.append((ok_a and "ENTREGADA" in out_a and not ok_b and "prestado a Rosa Elena Valdez" in out_b
+                    and espera_b > 1,
+                   "HU8 Comb", "Dos boletas simultáneas con el mismo activo: solo gana la primera",
+                   f"A: {out_a.splitlines()[-1] if out_a else ''} / B ({espera_b:.1f} s): "
+                   f"{out_b.splitlines()[-1] if out_b else ''}"[:110]))
+caso("HU8 Comb", "Un solo préstamo abierto del detector, a nombre de Rosa", CEN,
+     f"select count(*)||'|'||min(custodio) from vista_seguimiento_prestamos where activo_id={DV} and estado='ACTIVO'",
+     contiene="1|Rosa Elena Valdez")
+caso("HU8 Comb", "La boleta perdedora no descontó su material", CEN,
+     f"select {ANTES_CARRERA} - existencia from buscar_productos('CD-800')", contiene="1.000")
+caso("HU8 Comb", "El índice impide un segundo préstamo abierto del mismo activo", None,
+     "with nueva as (insert into boletas_herramientas (boleta_id, activo_id, dias_prestamo) "
+     f"  select b.id, {DV}, 1 from boletas b where b.trabajador_id={ROSA} order by b.id limit 1 returning id) "
+     "insert into prestamos (folio, boleta_herramienta_id, activo_id, dias_prestamo, fecha_prevista, creado_por) "
+     f"select 'PRE-DUPLICADO', id, {DV}, 1, now() + interval '1 day', '{CEN}' from nueva",
+     espera="prestamos_activo_abierto_uk")
+
+# Material que excede el límite de la zona junto con una herramienta: sin
+# autorizaciones en el sistema, con el motivo se entrega todo en el acto.
+admin(f"insert into limites_material_zona values ({ZONA}, {P8}, 1, 30)")
+ANTES = como_cen(FOTO)
+caso("HU8 Comb", "Excede el límite sin motivo: no se presta la herramienta", CEN,
+     combinada(MARIO, [(P8, 2)], [ET]), espera="MOTIVO_EXCEPCION_REQUERIDO")
+caso("HU8 Comb", "El rechazo por motivo no deja nada registrado", CEN, FOTO, contiene=ANTES)
+caso("HU8 Comb", "Con motivo se entrega en el acto con su préstamo y la alerta", CEN,
+     combinada(MARIO, [(P8, 2, 'Limpieza profunda')], [ET], "estado||'|'||(alertas->0->>'excede_limite')"),
+     contiene="ENTREGADA|true")
+caso("HU8 Comb", "La boleta con excepción ya tiene préstamo y la escalera En préstamo", CEN,
+     "select b.estado||'|'||a.estado||'|'||p.estado||'|'||bm.motivo_excepcion from boletas b "
+     "join boletas_herramientas bh on bh.boleta_id=b.id join prestamos p on p.boleta_herramienta_id=bh.id "
+     "join activos a on a.id=bh.activo_id join boletas_materiales bm on bm.boleta_id=b.id "
+     f"where b.trabajador_id={MARIO} and a.id={ET}", contiene="ENTREGADA|EN_PRESTAMO|ACTIVO|Limpieza profunda")
 
 cuadre = admin("""select count(*) from existencias e where e.cantidad <>
   (select coalesce(sum(m.cantidad),0) from movimientos_inventario m where m.producto_id=e.producto_id and m.ubicacion_id=e.ubicacion_id)""")

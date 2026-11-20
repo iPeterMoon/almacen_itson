@@ -5,9 +5,11 @@ import 'package:signature/signature.dart';
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
 import '../entrega_controlador.dart';
+import 'campo_autorizo.dart';
 
-/// Paso 4 (Escenario 1): firma de quien entrega y de quien recibe, y quién autorizó.
-/// Las firmas se mandan como PNG en base64 junto con la boleta; la app no sube archivos.
+/// Paso 4 (Escenario 1): firma de quien entrega y de quien recibe, y constancia
+/// opcional de quién autorizó (texto libre). Las firmas se mandan como PNG en
+/// base64 junto con la boleta; la app no sube archivos.
 class PasoConfirmacion extends ConsumerStatefulWidget {
   const PasoConfirmacion({super.key});
 
@@ -51,21 +53,18 @@ class _PasoConfirmacionState extends ConsumerState<PasoConfirmacion> {
     final c = ref.read(entregaControllerProvider.notifier);
     final almacenista = ref.watch(almacenistaActualProvider);
 
-    // "Autorizado por": quien se eligió en "Autorizó (Opcional)" del paso 1, más quienes
-    // autorizaron excepciones de materiales (periodicidad o límite de zona). Sin repetidos.
-    final catalogo = ref.watch(autorizadoresProvider).value ?? const [];
-    final autorizadores = <String>{
-      if (e.autorizoId != null)
-        ...catalogo.where((a) => a.id == e.autorizoId).map((a) => a.nombre),
-      ...e.autorizadoPor,
-    }.toList();
-
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
+        const TarjetaSeccion(
+          titulo: 'Autorización (opcional)',
+          subtitulo: 'Captura el nombre de quien autorizó la entrega, si aplica.',
+          child: CampoAutorizo(),
+        ),
+        const SizedBox(height: 12),
         TarjetaSeccion(
-          titulo: 'Firmas y autorización',
-          subtitulo: 'Revisa las firmas y el estado de autorización.',
+          titulo: 'Firmas y confirmación',
+          subtitulo: 'Revisa las firmas antes de registrar la entrega.',
           child: Column(children: [
             _BloqueFirma(
               etiqueta: 'Entregado por:',
@@ -80,22 +79,6 @@ class _PasoConfirmacionState extends ConsumerState<PasoConfirmacion> {
               controlador: _recibe,
               alLimpiar: () => c.setFirmaRecibe(null),
             ),
-            if (autorizadores.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16), border: Border.all(color: Colores.borde)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Autorizado por',
-                      style: TextStyle(color: Colores.textoSuave, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(autorizadores.join(', '),
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                ]),
-              ),
-            ],
             if (e.error != null) ...[
               const SizedBox(height: 12),
               AvisoCaja(tipo: TipoAviso.error, mensaje: e.error!),

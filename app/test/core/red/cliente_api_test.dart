@@ -136,6 +136,16 @@ void main() {
       expect(leerUrlApi('http://10.0.2.2:3000/api/v1/'), 'http://10.0.2.2:3000/api/v1');
     });
 
+    test('agrega el prefijo si API_URL llegó sin él', () {
+      expect(leerUrlApi('http://10.0.2.2:3000'), 'http://10.0.2.2:3000/api/v1');
+      expect(leerUrlApi('http://10.0.2.2:3000/'), 'http://10.0.2.2:3000/api/v1');
+      expect(leerUrlApi('http://10.0.2.2:3000/api'), 'http://10.0.2.2:3000/api/v1');
+    });
+
+    test('no duplica el prefijo', () {
+      expect(leerUrlApi('http://10.0.2.2:3000/api/v1'), 'http://10.0.2.2:3000/api/v1');
+    });
+
     test('falla con un mensaje claro si falta API_URL', () {
       expect(
         () => leerUrlApi(''),

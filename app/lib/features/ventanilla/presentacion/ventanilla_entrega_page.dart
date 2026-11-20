@@ -6,7 +6,7 @@ import '../../../core/errores/error_negocio.dart';
 import '../../../core/widgets/componentes.dart';
 import '../datos/dias_prestamo.dart';
 import '../datos/modelos.dart';
-import 'dialogos/dialogo_autorizacion.dart';
+import 'dialogos/dialogo_sugerencia_autorizacion.dart';
 import 'dialogos/dialogo_stock_y_resumen.dart';
 import 'entrega_controlador.dart';
 import 'widgets/indicador_pasos.dart';
@@ -35,7 +35,7 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
 
   // Al salir del paso 1 con materiales ya agregados (se regresó a cambiar el
   // solicitante) se vuelven a validar con el nuevo solicitante. Los que ahora
-  // rompen una regla piden motivo y autorización; si se cancela, se quitan.
+  // rompen una regla vuelven a pedir el motivo; si se cancela, se quitan.
   Future<void> _siguiente() async {
     final c = ref.read(entregaControllerProvider.notifier);
     final e = ref.read(entregaControllerProvider);
@@ -49,17 +49,17 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
       final pendientes = await c.revalidarMateriales();
       for (final (item, alerta) in pendientes) {
         if (!mounted) return;
-        final autorizacion = await showDialog<Autorizacion>(
+        final motivo = await showDialog<MotivoExcepcion>(
           context: context,
-          builder: (_) => DialogoAutorizacion(
+          builder: (_) => DialogoSugerenciaAutorizacion(
               material: item.material, cantidad: item.cantidad, unidad: item.unidad, alerta: alerta),
         );
-        if (autorizacion != null) {
-          c.autorizarMaterial(item.material.codigo, autorizacion);
+        if (motivo != null) {
+          c.establecerMotivoExcepcion(item.material.codigo, motivo);
         } else {
           c.quitarMaterial(item.material.codigo);
           mensajero.showSnackBar(SnackBar(
-              content: Text('Se quitó ${item.material.concepto}: requiere autorización.')));
+              content: Text('Se quitó ${item.material.concepto}: requiere un motivo.')));
         }
       }
       c.avanzar();

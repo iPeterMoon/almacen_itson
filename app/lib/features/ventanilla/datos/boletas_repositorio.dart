@@ -52,13 +52,12 @@ class ValidacionMaterial {
       );
 }
 
-// Respuesta de POST /boletas. [estado] es 'ENTREGADA' o 'PENDIENTE_AUTORIZACION':
-// lo decide la base, no la app.
+// Respuesta de POST /boletas. Toda boleta se entrega en el acto: no hay estados
+// de autorización. [estado] siempre es 'ENTREGADA'.
 class BoletaCreada {
   const BoletaCreada({required this.boletaId, required this.folio, required this.estado});
 
   static const entregada = 'ENTREGADA';
-  static const pendienteAutorizacion = 'PENDIENTE_AUTORIZACION';
 
   final int boletaId;
   final String folio;

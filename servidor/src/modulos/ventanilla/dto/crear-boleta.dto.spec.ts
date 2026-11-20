@@ -44,12 +44,15 @@ describe('CrearBoletaDto', () => {
       ]);
     });
 
-    // HU6 E7: cada cantidad se captura con su unidad de medida (hasta 3 decimales).
-    it('acepta hasta 3 decimales y rechaza 4', async () => {
-      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 0.125 }] })).toEqual([]);
-      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 0.1234 }] })).toEqual([
+    // HU6 E7: la cantidad son presentaciones completas, no fracciones.
+    it('rechaza cantidades con decimales', async () => {
+      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 0.5 }] })).toEqual([
         'materiales.0.cantidad',
       ]);
+      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 1.5 }] })).toEqual([
+        'materiales.0.cantidad',
+      ]);
+      expect(await erroresDe({ materiales: [{ productoId: 12, cantidad: 2 }] })).toEqual([]);
     });
 
     // HU6 E5: comentario por material, opcional.
@@ -99,6 +102,62 @@ describe('CrearBoletaDto', () => {
         'herramientas.0.diasPrestamo',
       ]);
     });
+
+    it('rechaza un activoId que no sea entero positivo', async () => {
+      expect(await erroresDe({ herramientas: [{ activoId: 0, diasPrestamo: 3 }] })).toEqual([
+        'herramientas.0.activoId',
+      ]);
+      expect(await erroresDe({ herramientas: [{ activoId: 1.5, diasPrestamo: 3 }] })).toEqual([
+        'herramientas.0.activoId',
+      ]);
+    });
+
+    it('acepta de 1 a 30 días de préstamo', async () => {
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 1 }] })).toEqual([]);
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 30 }] })).toEqual([]);
+    });
+
+    it('rechaza más de 30 días o días con decimales', async () => {
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 31 }] })).toEqual([
+        'herramientas.0.diasPrestamo',
+      ]);
+      expect(await erroresDe({ herramientas: [{ activoId: 8, diasPrestamo: 2.5 }] })).toEqual([
+        'herramientas.0.diasPrestamo',
+      ]);
+    });
+
+    it('rechaza el mismo activo dos veces en la boleta', async () => {
+      expect(
+        await erroresDe({
+          herramientas: [
+            { activoId: 8, diasPrestamo: 3 },
+            { activoId: 8, diasPrestamo: 5 },
+          ],
+        }),
+      ).toEqual(['herramientas']);
+    });
+
+    it('acepta activos distintos en la misma boleta', async () => {
+      expect(
+        await erroresDe({
+          herramientas: [
+            { activoId: 8, diasPrestamo: 3 },
+            { activoId: 9, diasPrestamo: 3 },
+          ],
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  // HU8 E6: materiales y herramientas pueden ir en la misma boleta.
+  it('acepta una boleta combinada de materiales y herramientas', async () => {
+    expect(
+      await erroresDe({
+        materiales: [{ productoId: 12, cantidad: 2 }],
+        herramientas: [{ activoId: 8, diasPrestamo: 3 }],
+        trabajadorId: 15,
+      }),
+    ).toEqual([]);
   });
 
   describe('solicitante', () => {
@@ -155,13 +214,42 @@ describe('CrearBoletaDto', () => {
       expect(await erroresDe({ trabajadorId: 0 })).toEqual(['trabajadorId']);
     });
 
-    it('exige que el supervisor sea un UUID válido', async () => {
-      expect(await erroresDe({ supervisorId: 'no-es-uuid' })).toEqual(['supervisorId']);
-      expect(await erroresDe({ supervisorId: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f' })).toEqual([]);
+    it('acepta nombres con letras y espacios en autorizoNombre', async () => {
+      expect(await erroresDe({ autorizoNombre: 'Persona no registrada' })).toEqual([]);
+      expect(await erroresDe({ autorizoNombre: 'José Áñez' })).toEqual([]);
+    });
+
+    it('rechaza números y signos en autorizoNombre', async () => {
+      expect(await erroresDe({ autorizoNombre: 'Supervisor 123' })).toEqual(['autorizoNombre']);
+      expect(await erroresDe({ autorizoNombre: 'Ana-María' })).toEqual(['autorizoNombre']);
+      expect(await erroresDe({ autorizoNombre: '' })).toEqual([]);
+    });
+
+    it('ya no acepta supervisorId', async () => {
+      expect(await erroresDe({ supervisorId: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f' })).toEqual([
+        'supervisorId',
+      ]);
+    });
+
+    it('acepta las dos rutas de firma y rechaza rutas de más de 500 caracteres', async () => {
+      const firmas = { firmaRecibe: '2/firma-recibe.png', firmaEntrega: '2/firma-entrega.png' };
+      expect(await erroresDe(firmas)).toEqual([]);
+      expect(await erroresDe({ ...firmas, firmaRecibe: 'a'.repeat(501) })).toEqual(['firmaRecibe']);
+      expect(await erroresDe({ ...firmas, firmaEntrega: 'a'.repeat(501) })).toEqual([
+        'firmaEntrega',
+      ]);
+    });
+
+    it('rechaza firmas que no sean texto', async () => {
+      expect(await erroresDe({ firmaRecibe: 1, firmaEntrega: true })).toEqual([
+        'firmaEntrega',
+        'firmaRecibe',
+      ]);
     });
   });
 
-  it('acepta una boleta vacía porque las reglas las aplica la base', async () => {
+  // La boleta vacía la rechaza BoletasService.crear, no el DTO.
+  it('el DTO no rechaza una boleta vacía', async () => {
     expect(await erroresDe({})).toEqual([]);
   });
 

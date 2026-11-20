@@ -27,8 +27,6 @@ const USUARIOS = {
 } as const;
 type TokenDePrueba = keyof typeof USUARIOS;
 
-const SUPERVISOR_UUID = '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f';
-
 const PRODUCTOS: Record<number, { codigo: string; nombre_estandar: string; unidad: string }> = {
   12: { codigo: 'JAB-001', nombre_estandar: 'Jabón líquido', unidad: 'Litro' },
   20: { codigo: 'PAP-010', nombre_estandar: 'Papel higiénico', unidad: 'Pieza' },
@@ -156,18 +154,6 @@ function filaDetalle(boleta: BoletaGuardada) {
       };
     }),
     boletas_herramientas: [],
-    autorizaciones: boleta.excede_periodicidad
-      ? [
-          {
-            id: 1,
-            supervisor_id: SUPERVISOR_UUID,
-            estado: boleta.estado === 'PENDIENTE_AUTORIZACION' ? 'PENDIENTE' : 'AUTORIZADA',
-            comentario: null,
-            solicitado_en: '2026-11-12T17:55:00.000Z',
-            resuelto_en: null,
-          },
-        ]
-      : null,
   };
 }
 
@@ -290,7 +276,6 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       ['get', '/api/v1/boletas'],
       ['post', '/api/v1/boletas'],
       ['post', '/api/v1/boletas/validar-material'],
-      ['post', '/api/v1/boletas/7/entrega'],
     ] as const)('%s %s responde 401 sin token y no toca la base', async (metodo, ruta) => {
       const res = await http()[metodo](ruta).expect(401);
 
@@ -302,14 +287,10 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       await http().get('/api/v1/entregas').set('Authorization', 'Bearer caducado').expect(401);
     });
 
-    it('un almacenista no puede autorizar boletas (403) y la RPC no se llama', async () => {
-      const res = await http()
-        .post('/api/v1/boletas/7/autorizacion')
-        .set(como('almacenista'))
-        .send({ autorizar: true })
-        .expect(403);
-
-      expect(res.body).toMatchObject({ codigo: 'SIN_PERMISO' });
+    it('ya no existen las rutas de autorización ni de entrega en dos pasos', async () => {
+      for (const ruta of ['/api/v1/boletas/7/autorizacion', '/api/v1/boletas/7/entrega']) {
+        await http().post(ruta).set(como('almacenista')).send({}).expect(404);
+      }
       expect(base.rpc).not.toHaveBeenCalled();
     });
 
@@ -452,11 +433,11 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
         .send({ productoId: 12, cantidad: 4, presentacionId: 4 })
         .expect(200);
 
-      // 1.3 L en presentaciones de medio litro = 2.6.
+      // 1.3 L alcanza para 2 presentaciones completas de medio litro.
       expect(res.body).toMatchObject({
         disponible: 1.3,
         stockSuficiente: false,
-        cantidadSugerida: 2.6,
+        cantidadSugerida: 2,
       });
     });
 
@@ -609,7 +590,6 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
         p_zona_id: 3,
         p_numero_solicitud: 'OT-9981',
         p_autorizo_nombre: undefined,
-        p_supervisor_id: undefined,
         p_firma_recibe: '2/firma-recibe.png',
         p_firma_entrega: '2/firma-entrega.png',
         p_campus_id: undefined,
@@ -701,47 +681,69 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       });
     });
 
-    it('si excede la periodicidad queda pendiente de autorización, sin resumen ni lectura de la boleta (E8)', async () => {
-      base.funcion('crear_boleta', () =>
-        ok([
+    it('si excede la periodicidad entrega en el acto, devuelve alertas y guarda el motivo (E8)', async () => {
+      base.funcion('crear_boleta', () => {
+        boletas.set(
+          9,
+          boletaDePrueba({
+            id: 9,
+            folio: 'BOL-2026-000009',
+            excede_periodicidad: true,
+            autorizo_nombre: 'Leonel Lares',
+            materiales: [
+              {
+                producto_id: 12,
+                presentacion_id: 4,
+                cantidad: 2,
+                comentario: null,
+                motivo_excepcion: 'Fuga urgente',
+              },
+            ],
+          }),
+        );
+        return ok([
           {
             boleta_id: 9,
             folio: 'BOL-2026-000009',
-            estado: 'PENDIENTE_AUTORIZACION',
+            estado: 'ENTREGADA',
             alertas: [{ productoId: 12, tipo: 'PERIODICIDAD', diasFaltantes: 2 }],
           },
-        ]),
-      );
+        ]);
+      });
 
       const res = await http()
         .post('/api/v1/boletas')
         .set(como('almacenista'))
         .send({
           ...CUERPO_REGISTRADO,
-          supervisorId: SUPERVISOR_UUID,
-          materiales: [{ productoId: 12, cantidad: 2, motivoExcepcion: 'Fuga urgente' }],
+          autorizoNombre: 'Leonel Lares',
+          materiales: [
+            { productoId: 12, cantidad: 2, presentacionId: 4, motivoExcepcion: 'Fuga urgente' },
+          ],
         })
         .expect(201);
 
-      expect(base.rpc.mock.calls[0][1]).toMatchObject({
-        p_supervisor_id: SUPERVISOR_UUID,
+      const params = base.rpc.mock.calls[0][1];
+      expect(params).toMatchObject({
+        p_autorizo_nombre: 'Leonel Lares',
         p_materiales: [expect.objectContaining({ motivo_excepcion: 'Fuga urgente' })],
       });
-      expect(res.body).toEqual({
-        boletaId: 9,
-        folio: 'BOL-2026-000009',
-        estado: 'PENDIENTE_AUTORIZACION',
+      expect(params).not.toHaveProperty('p_supervisor_id');
+      expect(res.body).toMatchObject({
+        estado: 'ENTREGADA',
         alertas: [{ productoId: 12, tipo: 'PERIODICIDAD', diasFaltantes: 2 }],
-        resumen: null,
+        resumen: {
+          autorizoNombre: 'Leonel Lares',
+          materiales: [expect.objectContaining({ motivoExcepcion: 'Fuga urgente' })],
+        },
       });
-      expect(base.consultasA('boletas')).toHaveLength(0);
     });
 
     it('con stock insuficiente responde 409 con el renglón que falló y la cantidad sugerida (E6)', async () => {
       base.funcion('crear_boleta', () =>
         fallo('STOCK_INSUFICIENTE: No hay existencia suficiente para el producto 12.'),
       );
-      // El papel alcanza; el jabón solo tiene 1.3 L (2.6 presentaciones de medio litro).
+      // El papel alcanza; el jabón solo tiene 1.3 L (2 presentaciones completas de medio litro).
       simularExistencia({ 12: 1.3, 20: 100 });
 
       const res = await http()
@@ -759,17 +761,17 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       expect(res.body).toEqual({
         codigo: 'STOCK_INSUFICIENTE',
         mensaje:
-          'Existencia insuficiente de Jabón líquido: se solicitaron 6 Medio litro y solo hay ' +
-          '2.6 Medio litro en el campus.',
+          'Existencia insuficiente de Jabón líquido: se solicitaron 6 Medio litro y solo se pueden entregar ' +
+          '2 Medio litro en el campus.',
         datos: {
           productoId: 12,
           codigo: 'JAB-001',
           nombre: 'Jabón líquido',
           solicitado: 6,
-          disponible: 2.6,
+          disponible: 2,
           unidad: 'Medio litro',
           disponibleBase: 1.3,
-          cantidadSugerida: 2.6,
+          cantidadSugerida: 2,
         },
       });
       // Revalida con el mismo solicitante y zona que la boleta.
@@ -831,7 +833,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       });
     });
 
-    it('rechaza con 400 un material anidado inválido o un supervisor que no es UUID', async () => {
+    it('rechaza con 400 un material anidado inválido o el campo supervisorId eliminado', async () => {
       for (const cuerpo of [
         { ...CUERPO_REGISTRADO, materiales: [{ productoId: 12, cantidad: -1 }] },
         { ...CUERPO_REGISTRADO, materiales: [{ productoId: 12 }] },
@@ -845,10 +847,21 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Flujo con autorización: crear → autorizar → entregar (E8, E10, E1)
+  // Excepción de periodicidad o límite: motivo + entrega inmediata (E8, E10, E1)
   // -------------------------------------------------------------------------
 
-  describe('flujo completo con autorización del supervisor', () => {
+  describe('excepción de periodicidad o límite', () => {
+    const CON_EXCEPCION = {
+      trabajadorId: 15,
+      zonaId: 3,
+      autorizoNombre: 'Supervisor externo',
+      materiales: [
+        { productoId: 12, cantidad: 2, presentacionId: 4, motivoExcepcion: 'Fuga urgente' },
+      ],
+      firmaRecibe: '2/recibe.png',
+      firmaEntrega: '2/entrega.png',
+    };
+
     beforeEach(() => {
       base.funcion('crear_boleta', () => {
         boletas.set(
@@ -856,12 +869,8 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
           boletaDePrueba({
             id: 9,
             folio: 'BOL-2026-000009',
-            estado: 'PENDIENTE_AUTORIZACION',
             excede_periodicidad: true,
-            firma_recibe_path: null,
-            firma_entrega_path: null,
-            entregado_en: null,
-            entregado_por: null,
+            autorizo_nombre: 'Supervisor externo',
             materiales: [
               {
                 producto_id: 12,
@@ -874,196 +883,52 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
           }),
         );
         return ok([
-          { boleta_id: 9, folio: 'BOL-2026-000009', estado: 'PENDIENTE_AUTORIZACION', alertas: [] },
+          {
+            boleta_id: 9,
+            folio: 'BOL-2026-000009',
+            estado: 'ENTREGADA',
+            alertas: [{ producto_id: 12, excede_periodicidad: true }],
+          },
         ]);
       });
-      base.funcion('resolver_autorizacion', (p) => {
-        const boleta = boletas.get(Number(p.p_boleta_id));
-        if (!boleta) return fallo('BOLETA_NO_EXISTE: La boleta no existe.');
-        if (boleta.estado !== 'PENDIENTE_AUTORIZACION') {
-          return fallo('AUTORIZACION_RESUELTA: La autorización ya fue resuelta.');
-        }
-        boleta.estado = p.p_autorizar ? 'AUTORIZADA' : 'RECHAZADA';
-        return ok(boleta.estado);
-      });
-      base.funcion('confirmar_entrega', (p) => {
-        const boleta = boletas.get(Number(p.p_boleta_id));
-        if (!boleta) return fallo('BOLETA_NO_EXISTE: La boleta no existe.');
-        if (boleta.estado !== 'AUTORIZADA') {
-          return fallo(`BOLETA_NO_AUTORIZADA: La boleta está ${boleta.estado}.`);
-        }
-        Object.assign(boleta, {
-          estado: 'ENTREGADA',
-          firma_recibe_path: p.p_firma_recibe,
-          firma_entrega_path: p.p_firma_entrega,
-          entregado_en: '2026-11-12T19:00:00.000Z',
-          entregado_por: USUARIOS.almacenista.id,
-        });
-        return ok(boleta.folio);
-      });
     });
 
-    const FIRMAS = { firmaRecibe: '2/recibe.png', firmaEntrega: '2/entrega.png' };
-
-    async function crearPendiente() {
-      await http()
+    it('entrega en el acto con alertas, motivo y "autorizó" de texto libre', async () => {
+      const res = await http()
         .post('/api/v1/boletas')
         .set(como('almacenista'))
-        .send({
-          trabajadorId: 15,
-          zonaId: 3,
-          supervisorId: SUPERVISOR_UUID,
-          materiales: [
-            { productoId: 12, cantidad: 2, presentacionId: 4, motivoExcepcion: 'Fuga urgente' },
-          ],
-        })
+        .send(CON_EXCEPCION)
         .expect(201);
-    }
 
-    it('la boleta pendiente no se puede entregar ni tiene resumen hasta que se autoriza', async () => {
-      await crearPendiente();
-
-      const entrega = await http()
-        .post('/api/v1/boletas/9/entrega')
-        .set(como('almacenista'))
-        .send(FIRMAS)
-        .expect(409);
-      expect(entrega.body).toMatchObject({ codigo: 'BOLETA_NO_AUTORIZADA' });
-
-      const resumen = await http()
-        .get('/api/v1/boletas/9/resumen')
-        .set(como('almacenista'))
-        .expect(409);
-      expect(resumen.body).toEqual({
-        codigo: 'BOLETA_NO_ENTREGADA',
-        mensaje: 'La boleta BOL-2026-000009 aún no se entrega; está pendiente_autorizacion.',
-      });
-    });
-
-    it('supervisor autoriza, almacenista entrega con firmas y el resumen incluye el motivo', async () => {
-      await crearPendiente();
-
-      const autorizacion = await http()
-        .post('/api/v1/boletas/9/autorizacion')
-        .set(como('supervisor'))
-        .send({ autorizar: true, comentario: 'Urgente' })
-        .expect(200);
-      expect(autorizacion.body).toEqual({ boletaId: 9, estado: 'AUTORIZADA' });
-      expect(base.rpc).toHaveBeenCalledWith('resolver_autorizacion', {
-        p_boleta_id: 9,
-        p_autorizar: true,
-        p_comentario: 'Urgente',
-      });
-
-      const entrega = await http()
-        .post('/api/v1/boletas/9/entrega')
-        .set(como('almacenista'))
-        .send(FIRMAS)
-        .expect(200);
-      expect(base.rpc).toHaveBeenCalledWith('confirmar_entrega', {
-        p_boleta_id: 9,
-        p_firma_recibe: '2/recibe.png',
-        p_firma_entrega: '2/entrega.png',
-      });
-      expect(entrega.body).toMatchObject({
-        boletaId: 9,
+      expect(res.body.estado).toBe('ENTREGADA');
+      expect(res.body.alertas).toEqual([{ producto_id: 12, excede_periodicidad: true }]);
+      expect(res.body.resumen).toMatchObject({
         folio: 'BOL-2026-000009',
-        estado: 'ENTREGADA',
-        resumen: {
-          folio: 'BOL-2026-000009',
-          entregadoEn: '2026-11-12T19:00:00.000Z',
-          entregadoPor: 'Alicia García',
-          materiales: [
-            expect.objectContaining({ unidad: 'Medio litro', motivoExcepcion: 'Fuga urgente' }),
-          ],
-        },
+        autorizoNombre: 'Supervisor externo',
+        materiales: [expect.objectContaining({ motivoExcepcion: 'Fuga urgente' })],
       });
-
-      // El resumen se puede volver a consultar y es el mismo que se dio al entregar.
       const resumen = await http()
         .get('/api/v1/boletas/9/resumen')
         .set(como('almacenista'))
         .expect(200);
-      expect(resumen.body).toEqual(entrega.body.resumen);
-
-      // Entregar dos veces no descuenta dos veces: la base responde que ya no está autorizada.
-      await http()
-        .post('/api/v1/boletas/9/entrega')
-        .set(como('almacenista'))
-        .send(FIRMAS)
-        .expect(409);
-      // Y la autorización ya no se puede volver a resolver.
-      const otra = await http()
-        .post('/api/v1/boletas/9/autorizacion')
-        .set(como('supervisor'))
-        .send({ autorizar: false })
-        .expect(409);
-      expect(otra.body).toMatchObject({ codigo: 'AUTORIZACION_RESUELTA' });
+      expect(resumen.body).toEqual(res.body.resumen);
     });
 
-    it('si el supervisor rechaza, la boleta no se puede entregar', async () => {
-      await crearPendiente();
-
-      await http()
-        .post('/api/v1/boletas/9/autorizacion')
-        .set(como('supervisor'))
-        .send({ autorizar: false })
-        .expect(200)
-        .expect({ boletaId: 9, estado: 'RECHAZADA' });
-
-      await http()
-        .post('/api/v1/boletas/9/entrega')
-        .set(como('almacenista'))
-        .send(FIRMAS)
-        .expect(409);
-    });
-
-    it('si al entregar ya no hay stock, detalla el renglón con los datos de la boleta guardada', async () => {
-      await crearPendiente();
-      await http()
-        .post('/api/v1/boletas/9/autorizacion')
-        .set(como('supervisor'))
-        .send({ autorizar: true })
-        .expect(200);
-      base.funcion('confirmar_entrega', () => fallo('STOCK_INSUFICIENTE: Sin existencia.'));
-      simularExistencia({ 12: 0.5 });
+    it('traduce MOTIVO_EXCEPCION_REQUERIDO sin dejar nada pendiente en el sistema', async () => {
+      base.funcion('crear_boleta', () =>
+        fallo('MOTIVO_EXCEPCION_REQUERIDO: Captura el motivo de la excepción.'),
+      );
 
       const res = await http()
-        .post('/api/v1/boletas/9/entrega')
+        .post('/api/v1/boletas')
         .set(como('almacenista'))
-        .send(FIRMAS)
-        .expect(409);
+        .send({ ...CON_EXCEPCION, materiales: [{ productoId: 12, cantidad: 2 }] })
+        .expect(422);
 
-      expect(res.body.datos).toMatchObject({
-        productoId: 12,
-        solicitado: 2,
-        disponible: 1,
-        unidad: 'Medio litro',
-        cantidadSugerida: 1,
-      });
-      expect(base.rpc).toHaveBeenCalledWith(
-        'validar_material',
-        expect.objectContaining({ p_trabajador_id: 15, p_zona_id: 3, p_campus_id: 2 }),
-      );
-    });
-
-    it('exige las dos firmas para entregar', async () => {
-      const res = await http()
-        .post('/api/v1/boletas/9/entrega')
-        .set(como('almacenista'))
-        .send({ firmaRecibe: '2/recibe.png', firmaEntrega: '' })
-        .expect(400);
-
-      expect(res.body.detalles).toEqual(
-        expect.arrayContaining([expect.stringContaining('firmaEntrega')]),
-      );
-      expect(base.rpc).not.toHaveBeenCalled();
+      expect(res.body).toMatchObject({ codigo: 'MOTIVO_EXCEPCION_REQUERIDO' });
+      expect(base.consultas).toHaveLength(0);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Consulta de boletas
-  // -------------------------------------------------------------------------
 
   describe('GET /boletas y /boletas/:id', () => {
     it('lista con filtros, más recientes primero y paginación de PostgREST', async () => {
@@ -1126,29 +991,44 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       expect(consulta.llamadas).toContainEqual(['range', 20, 29]);
     });
 
-    it('el detalle normaliza la autorización y anida solicitante, zona y materiales', async () => {
+    it('el detalle anida solicitante, zona y materiales, sin relación de autorización', async () => {
       boletas.set(
         9,
-        boletaDePrueba({ id: 9, estado: 'PENDIENTE_AUTORIZACION', excede_periodicidad: true }),
+        boletaDePrueba({
+          id: 9,
+          excede_periodicidad: true,
+          autorizo_nombre: 'Leonel Lares',
+          materiales: [
+            {
+              producto_id: 12,
+              presentacion_id: 4,
+              cantidad: 2,
+              comentario: null,
+              motivo_excepcion: 'Fuga urgente',
+            },
+          ],
+        }),
       );
 
       const res = await http().get('/api/v1/boletas/9').set(como('supervisor')).expect(200);
 
       expect(res.body).toMatchObject({
         id: 9,
-        estado: 'PENDIENTE_AUTORIZACION',
+        estado: 'ENTREGADA',
+        autorizoNombre: 'Leonel Lares',
         solicitante: { trabajadorId: 15, nombre: 'Miguel Ángel Ruiz', trabajador: TRABAJADOR },
         zona: ZONA,
         firmas: { recibe: '2/firma-recibe.png', entrega: '2/firma-entrega.png' },
         materiales: [
-          expect.objectContaining({ productoId: 12, cantidadBase: 1, excedePeriodicidad: true }),
-          expect.objectContaining({ productoId: 20, presentacion: null }),
+          expect.objectContaining({
+            productoId: 12,
+            cantidadBase: 1,
+            excedePeriodicidad: true,
+            motivoExcepcion: 'Fuga urgente',
+          }),
         ],
-        autorizacion: expect.objectContaining({
-          supervisor_id: SUPERVISOR_UUID,
-          estado: 'PENDIENTE',
-        }),
       });
+      expect(res.body).not.toHaveProperty('autorizacion');
     });
 
     it('una boleta inexistente (u oculta por RLS) responde 404 BOLETA_NO_EXISTE', async () => {
@@ -1210,7 +1090,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       motivo_excepcion: 'Fuga urgente',
     };
 
-    it('combina filtros, escapa comodines y devuelve la excepción autorizada', async () => {
+    it('combina filtros, escapa comodines y devuelve el motivo de la excepción', async () => {
       base.tabla('vista_historial_entregas', () =>
         ok(
           [
@@ -1315,10 +1195,11 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       '/api/v1/boletas/firmas',
       '/api/v1/boletas/{id}',
       '/api/v1/boletas/{id}/resumen',
-      '/api/v1/boletas/{id}/autorizacion',
-      '/api/v1/boletas/{id}/entrega',
     ]) {
       expect(res.body.paths).toHaveProperty([ruta]);
+    }
+    for (const ruta of ['/api/v1/boletas/{id}/autorizacion', '/api/v1/boletas/{id}/entrega']) {
+      expect(res.body.paths).not.toHaveProperty([ruta]);
     }
   });
 });

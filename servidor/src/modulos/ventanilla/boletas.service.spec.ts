@@ -97,7 +97,6 @@ const BOLETA_DETALLE = {
       },
     },
   ],
-  autorizaciones: null,
 };
 
 describe('BoletasService', () => {
@@ -110,7 +109,7 @@ describe('BoletasService', () => {
         materiales: [{ productoId: 12, cantidad: 2, presentacionId: 4 }],
         herramientas: [{ activoId: 8, diasPrestamo: 3 }],
         trabajadorId: 15,
-        supervisorId: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
+        autorizoNombre: 'Persona no registrada',
         firmaRecibe: '2/firma-recibe.png',
         firmaEntrega: '2/firma-entrega.png',
       });
@@ -129,17 +128,105 @@ describe('BoletasService', () => {
           ],
           p_herramientas: [{ activo_id: 8, dias_prestamo: 3 }],
           p_trabajador_id: 15,
-          p_supervisor_id: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
+          p_autorizo_nombre: 'Persona no registrada',
           p_firma_recibe: '2/firma-recibe.png',
           p_firma_entrega: '2/firma-entrega.png',
         }),
       );
+      expect(rpc.mock.calls[0][1]).not.toHaveProperty('p_supervisor_id');
       expect(resultado).toEqual({
         boletaId: 7,
         folio: 'BOL-2026-000007',
         estado: 'ENTREGADA',
         alertas: [],
       });
+    });
+
+    // HU8 E6: boleta solo con herramientas.
+    it('envía una boleta solo con herramientas sin materiales', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      const resultado = await servicio.crear('token', {
+        herramientas: [
+          { activoId: 8, diasPrestamo: 3 },
+          { activoId: 9, diasPrestamo: 30 },
+        ],
+        trabajadorId: 15,
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_materiales: [],
+          p_herramientas: [
+            { activo_id: 8, dias_prestamo: 3 },
+            { activo_id: 9, dias_prestamo: 30 },
+          ],
+        }),
+      );
+      expect(resultado.estado).toBe('ENTREGADA');
+    });
+
+    it('envía una boleta solo con materiales sin herramientas', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 1 }] });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({ p_herramientas: [] }),
+      );
+    });
+
+    it.each([
+      ['sin partidas', {}],
+      ['con listas vacías', { materiales: [], herramientas: [] }],
+    ])('rechaza con 400 BOLETA_VACIA una boleta %s sin llamar a la base', async (_caso, dto) => {
+      const rpc = jest.fn();
+      const servicio = crearServicio({ rpc });
+
+      await expect(servicio.crear('token', dto)).rejects.toMatchObject({
+        codigo: 'BOLETA_VACIA',
+        estadoHttp: HttpStatus.BAD_REQUEST,
+      });
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
+    // El DTO solo rechaza el mismo activo repetido; dos activos distintos con el
+    // mismo nombre (dos taladros) se prestan en la misma boleta.
+    it('envía dos activos distintos aunque tengan el mismo nombre', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
+      const servicio = crearServicio({ rpc });
+
+      await servicio.crear('token', {
+        herramientas: [
+          { activoId: 8, diasPrestamo: 2 },
+          { activoId: 9, diasPrestamo: 2 },
+        ],
+        trabajadorId: 15,
+      });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({
+          p_herramientas: [
+            { activo_id: 8, dias_prestamo: 2 },
+            { activo_id: 9, dias_prestamo: 2 },
+          ],
+        }),
+      );
+    });
+
+    it('rechaza cantidades decimales antes de llamar a la base', async () => {
+      const rpc = jest.fn();
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.crear('token', { materiales: [{ productoId: 12, cantidad: 0.5 }] }),
+      ).rejects.toMatchObject({ codigo: 'CANTIDAD_ENTERA_REQUERIDA' });
+      expect(rpc).not.toHaveBeenCalled();
     });
 
     it('traduce los errores de la base a ErrorNegocio', async () => {
@@ -174,24 +261,22 @@ describe('BoletasService', () => {
       });
     });
 
-    it('rechaza con AUTORIZADOR_REQUERIDO si falta el supervisor', async () => {
-      const rpc = jest.fn().mockResolvedValue({
-        data: null,
-        error: { message: 'AUTORIZADOR_REQUERIDO: Selecciona el supervisor que autorizará.' },
-      });
+    it('envía autorizoNombre como texto libre, sin exigir supervisor registrado', async () => {
+      const rpc = jest.fn().mockResolvedValue({ data: [BOLETA_CREADA], error: null });
       const servicio = crearServicio({ rpc });
 
-      await expect(
-        servicio.crear('token', {
-          materiales: [{ productoId: 12, cantidad: 1, motivoExcepcion: 'Evento' }],
-        }),
-      ).rejects.toMatchObject({
-        codigo: 'AUTORIZADOR_REQUERIDO',
-        estadoHttp: HttpStatus.UNPROCESSABLE_ENTITY,
+      await servicio.crear('token', {
+        materiales: [{ productoId: 12, cantidad: 1, motivoExcepcion: 'Evento' }],
+        autorizoNombre: 'Supervisor externo',
       });
+
+      expect(rpc).toHaveBeenCalledWith(
+        'crear_boleta',
+        expect.objectContaining({ p_autorizo_nombre: 'Supervisor externo' }),
+      );
     });
 
-    it('devuelve PENDIENTE_AUTORIZACION con las alertas cuando hay excepción', async () => {
+    it('devuelve ENTREGADA con las alertas cuando hay excepción', async () => {
       const alerta = {
         producto_id: 12,
         producto: 'Cloro concentrado',
@@ -207,7 +292,7 @@ describe('BoletasService', () => {
           {
             boleta_id: 8,
             folio: 'BOL-2026-000008',
-            estado: 'PENDIENTE_AUTORIZACION',
+            estado: 'ENTREGADA',
             alertas: [alerta],
           },
         ],
@@ -218,20 +303,19 @@ describe('BoletasService', () => {
       const resultado = await servicio.crear('token', {
         materiales: [{ productoId: 12, cantidad: 1, motivoExcepcion: 'Producto dañado' }],
         trabajadorId: 15,
-        supervisorId: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
+        autorizoNombre: 'Leonel Lares',
       });
 
       expect(rpc).toHaveBeenCalledWith(
         'crear_boleta',
         expect.objectContaining({
           p_materiales: [expect.objectContaining({ motivo_excepcion: 'Producto dañado' })],
-          p_supervisor_id: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
         }),
       );
       expect(resultado).toEqual({
         boletaId: 8,
         folio: 'BOL-2026-000008',
-        estado: 'PENDIENTE_AUTORIZACION',
+        estado: 'ENTREGADA',
         alertas: [alerta],
       });
     });
@@ -242,7 +326,7 @@ describe('BoletasService', () => {
       const servicio = crearServicio({ rpc });
 
       await servicio.crear('token', {
-        materiales: [{ productoId: 12, cantidad: 0.5 }],
+        materiales: [{ productoId: 12, cantidad: 1 }],
         solicitanteNombre: 'Rosa Molina',
         solicitanteUnidad: 'Navojoa',
       });
@@ -370,13 +454,23 @@ describe('BoletasService', () => {
   });
 
   describe('validarMaterial', () => {
+    it('rechaza cantidades decimales antes de llamar a la base', async () => {
+      const rpc = jest.fn();
+      const servicio = crearServicio({ rpc });
+
+      await expect(
+        servicio.validarMaterial('token', { productoId: 12, cantidad: 1.5 }),
+      ).rejects.toMatchObject({ codigo: 'CANTIDAD_ENTERA_REQUERIDA' });
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
     it('devuelve la validación con nombres de la API', async () => {
       const rpc = jest.fn().mockResolvedValue({ data: [VALIDACION_MATERIAL], error: null });
       const servicio = crearServicio({ rpc });
 
       const resultado = await servicio.validarMaterial('token', {
         productoId: 12,
-        cantidad: 0.5,
+        cantidad: 1,
         presentacionId: 4,
         trabajadorId: 15,
         zonaId: 3,
@@ -386,7 +480,7 @@ describe('BoletasService', () => {
         'validar_material',
         expect.objectContaining({
           p_producto_id: 12,
-          p_cantidad: 0.5,
+          p_cantidad: 1,
           p_presentacion_id: 4,
           p_trabajador_id: 15,
           p_zona_id: 3,
@@ -615,8 +709,8 @@ describe('BoletasService', () => {
       expect(cliente.from).toHaveBeenCalledWith('presentaciones_producto');
     });
 
-    it('redondea hacia abajo la cantidad sugerida para no ofrecer de más', async () => {
-      // 5 litros entre 3.7854 litros por galón son 1.3208... galones: se ofrece 1.32.
+    it('sugiere solo presentaciones completas, no fracciones', async () => {
+      // 5 litros entre 3.7854 litros por galón son 1.3208... galones: se ofrece 1.
       const servicio = crearServicio(clienteConStockInsuficiente(5, 3.7854));
 
       const resultado = await servicio.validarMaterial('token', {
@@ -625,8 +719,22 @@ describe('BoletasService', () => {
         presentacionId: 9,
       });
 
-      expect(resultado.cantidadSugerida).toBe(1.32);
+      expect(resultado.cantidadSugerida).toBe(1);
     });
+
+    it('no pierde una presentación por el error de punto flotante', async () => {
+      // 9 galones de 3.785 L son 34.065 L, pero en JS la división da 8.999999999999998.
+      const servicio = crearServicio(clienteConStockInsuficiente(34.065, 3.785));
+
+      const resultado = await servicio.validarMaterial('token', {
+        productoId: 12,
+        cantidad: 20,
+        presentacionId: 9,
+      });
+
+      expect(resultado.cantidadSugerida).toBe(9);
+    });
+
     it('trata presentacionId null como si no hubiera presentación', async () => {
       const rpc = jest.fn().mockResolvedValue({
         data: [{ ...VALIDACION_MATERIAL, disponible: 4, stock_suficiente: false }],
@@ -733,111 +841,6 @@ describe('BoletasService', () => {
     });
   });
 
-  describe('resolverAutorizacion', () => {
-    it('llama a la función con la decisión y el comentario', async () => {
-      const rpc = jest.fn().mockResolvedValue({ data: 'AUTORIZADA', error: null });
-      const servicio = crearServicio({ rpc });
-
-      const resultado = await servicio.resolverAutorizacion('token', 7, {
-        autorizar: true,
-        comentario: 'Urgencia',
-      });
-
-      expect(rpc).toHaveBeenCalledWith('resolver_autorizacion', {
-        p_boleta_id: 7,
-        p_autorizar: true,
-        p_comentario: 'Urgencia',
-      });
-      expect(resultado).toEqual({ boletaId: 7, estado: 'AUTORIZADA' });
-    });
-
-    it('devuelve RECHAZADA cuando el supervisor rechaza', async () => {
-      const rpc = jest.fn().mockResolvedValue({ data: 'RECHAZADA', error: null });
-      const servicio = crearServicio({ rpc });
-
-      const resultado = await servicio.resolverAutorizacion('token', 7, {
-        autorizar: false,
-        comentario: 'No procede',
-      });
-
-      expect(resultado).toEqual({ boletaId: 7, estado: 'RECHAZADA' });
-    });
-
-    it('traduce SIN_PERMISO cuando no es el supervisor asignado', async () => {
-      const rpc = jest.fn().mockResolvedValue({
-        data: null,
-        error: { message: 'SIN_PERMISO: La autorización fue solicitada a otro supervisor.' },
-      });
-      const servicio = crearServicio({ rpc });
-
-      await expect(
-        servicio.resolverAutorizacion('token', 7, { autorizar: true }),
-      ).rejects.toMatchObject({ codigo: 'SIN_PERMISO', estadoHttp: HttpStatus.FORBIDDEN });
-    });
-
-    it('falla si la base no devuelve el estado', async () => {
-      const rpc = jest.fn().mockResolvedValue({ data: null, error: null });
-      const servicio = crearServicio({ rpc });
-
-      await expect(servicio.resolverAutorizacion('token', 7, { autorizar: true })).rejects.toThrow(
-        'La base no devolvió el estado de la boleta.',
-      );
-    });
-  });
-
-  describe('confirmarEntrega', () => {
-    it('envía las dos firmas y devuelve el folio', async () => {
-      const rpc = jest.fn().mockResolvedValue({ data: 'BOL-2026-000007', error: null });
-      const servicio = crearServicio({ rpc });
-
-      const resultado = await servicio.confirmarEntrega('token', 7, {
-        firmaRecibe: '2/firma-recibe.png',
-        firmaEntrega: '2/firma-entrega.png',
-      });
-
-      expect(rpc).toHaveBeenCalledWith('confirmar_entrega', {
-        p_boleta_id: 7,
-        p_firma_recibe: '2/firma-recibe.png',
-        p_firma_entrega: '2/firma-entrega.png',
-      });
-      expect(resultado).toEqual({
-        boletaId: 7,
-        folio: 'BOL-2026-000007',
-        estado: 'ENTREGADA',
-      });
-    });
-
-    it('traduce BOLETA_NO_AUTORIZADA si aún no se autoriza', async () => {
-      const rpc = jest.fn().mockResolvedValue({
-        data: null,
-        error: { message: 'BOLETA_NO_AUTORIZADA: La boleta está pendiente_autorizacion.' },
-      });
-      const servicio = crearServicio({ rpc });
-
-      await expect(
-        servicio.confirmarEntrega('token', 7, {
-          firmaRecibe: '2/firma-recibe.png',
-          firmaEntrega: '2/firma-entrega.png',
-        }),
-      ).rejects.toMatchObject({
-        codigo: 'BOLETA_NO_AUTORIZADA',
-        estadoHttp: HttpStatus.CONFLICT,
-      });
-    });
-
-    it('falla si la base no devuelve el folio', async () => {
-      const rpc = jest.fn().mockResolvedValue({ data: null, error: null });
-      const servicio = crearServicio({ rpc });
-
-      await expect(
-        servicio.confirmarEntrega('token', 7, {
-          firmaRecibe: '2/firma-recibe.png',
-          firmaEntrega: '2/firma-entrega.png',
-        }),
-      ).rejects.toThrow('La base no devolvió el folio de la boleta.');
-    });
-  });
-
   describe('obtener', () => {
     // Simula la cadena from(...).select(...).eq(...).maybeSingle() de PostgREST.
     function clienteConDetalle(
@@ -896,31 +899,13 @@ describe('BoletasService', () => {
       });
     });
 
-    // PostgREST entrega la relación única como objeto, pero algunas versiones la
-    // devuelven como arreglo; el detalle normaliza la autorización a un objeto.
-    it('normaliza la autorización cuando llega como arreglo', async () => {
-      const fila = {
-        ...BOLETA_DETALLE,
-        autorizaciones: [
-          {
-            id: 5,
-            supervisor_id: '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f',
-            estado: 'AUTORIZADA',
-            comentario: 'Urgencia',
-            solicitado_en: '2026-11-10T17:00:00.000Z',
-            resuelto_en: '2026-11-10T17:30:00.000Z',
-          },
-        ],
-      };
-      const maybeSingle = jest.fn().mockResolvedValue({ data: fila, error: null });
-      const eq = jest.fn().mockReturnValue({ maybeSingle });
-      const select = jest.fn().mockReturnValue({ eq });
-      const from = jest.fn().mockReturnValue({ select });
-      const servicio = crearServicio({ from });
+    it('devuelve el nombre de quien autorizó como texto libre y sin relación de autorización', async () => {
+      const servicio = crearServicio(clienteConDetalle(BOLETA_DETALLE));
 
       const resultado = await servicio.obtener('token', 7);
 
-      expect(resultado.autorizacion).toMatchObject({ id: 5, estado: 'AUTORIZADA' });
+      expect(resultado.autorizoNombre).toBe('Leonel Lares');
+      expect(resultado).not.toHaveProperty('autorizacion');
     });
 
     it('traduce los errores de la base al obtener', async () => {
@@ -939,7 +924,6 @@ describe('BoletasService', () => {
         ...BOLETA_DETALLE,
         boletas_materiales: null,
         boletas_herramientas: null,
-        autorizaciones: [],
       };
       const maybeSingle = jest.fn().mockResolvedValue({ data: fila, error: null });
       const eq = jest.fn().mockReturnValue({ maybeSingle });
@@ -951,7 +935,6 @@ describe('BoletasService', () => {
 
       expect(resultado.materiales).toEqual([]);
       expect(resultado.herramientas).toEqual([]);
-      expect(resultado.autorizacion).toBeNull();
     });
   });
 

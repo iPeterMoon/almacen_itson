@@ -10,12 +10,12 @@ export interface Supervisor {
   campusId: number;
 }
 
-// Roles que pueden autorizar una excepción; los mismos que acepta crear_boleta.
+// Roles cuyos nombres se sugieren en el campo opcional "Autorizó" de la boleta.
 const ROLES_AUTORIZAN = [Rol.Supervisor, Rol.SupervisorJefe];
 
-// Supervisores que pueden autorizar una boleta (HU6 E8/E10) y el campo "Autorizó".
-// Solo los del campus del usuario: es el campus en el que opera la ventanilla y
-// crear_boleta rechaza (AUTORIZADOR_REQUERIDO) a un supervisor de otro campus.
+// Supervisores activos del campus del usuario, usados como sugerencia en la app.
+// El campo "Autorizó" es texto libre: también se puede capturar a alguien que no
+// esté registrado en el sistema.
 @Injectable()
 export class SupervisoresService {
   constructor(private readonly supabase: SupabaseService) {}

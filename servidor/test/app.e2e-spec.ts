@@ -76,6 +76,7 @@ describe('Aplicación (e2e)', () => {
   it('GET /docs-json publica el contrato OpenAPI', async () => {
     const res = await http().get('/docs-json').expect(200);
     expect(res.body.paths).toHaveProperty('/api/v1/salud');
+    expect(res.body.paths).toHaveProperty('/api/v1/activos/validar');
   });
 
   it('rutas protegidas responden 401 sin token', async () => {

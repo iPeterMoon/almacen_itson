@@ -17,9 +17,9 @@ export class EntregasController {
   @ApiOperation({
     summary: 'Historial de material entregado por solicitante, insumo y zona',
     description:
-      'Una fila por material de una boleta ENTREGADA (las pendientes o rechazadas no ' +
-      'cuentan). Los filtros se combinan. Incluye la presentación entregada, su equivalente ' +
-      'en unidad base, la excepción autorizada si la hubo y lo reingresado después (HU4).',
+      'Una fila por material de una boleta ENTREGADA. Los filtros se combinan. Incluye la ' +
+      'presentación entregada, su equivalente en unidad base, el motivo de la excepción ' +
+      'si la hubo y lo reingresado después (HU4).',
   })
   @ApiOkResponse({
     description: 'Página del historial, más recientes primero.',

@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import type { AuthError, Session } from '@supabase/supabase-js';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { Rol } from '../../comun/tipos/usuario-autenticado';
@@ -34,6 +34,8 @@ interface FilaUsuario {
 // cliente del usuario para que RLS aplique (cada quien ve su propia fila).
 @Injectable()
 export class SesionRepository {
+  private readonly logger = new Logger(SesionRepository.name);
+
   constructor(private readonly supabase: SupabaseService) {}
 
   async iniciarSesion(usuario: string, contrasena: string): Promise<TokensSupabase> {
@@ -106,6 +108,16 @@ export class SesionRepository {
   }
 
   private errorDeAutenticacion(error: AuthError | null): ErrorNegocio {
+    // El mensaje que ve la app es genérico a propósito; el detalle de Auth se
+    // guarda aquí para diagnosticar el fallo sin exponer credenciales.
+    if (error) {
+      this.logger.warn(
+        `Supabase Auth: code=${error.code ?? '-'} status=${error.status ?? '-'} mensaje=${error.message}`,
+      );
+    } else {
+      this.logger.warn('Supabase Auth devolvió la petición sin sesión ni usuario.');
+    }
+
     if (error?.code === 'email_not_confirmed') {
       return new ErrorNegocio(
         'CORREO_NO_CONFIRMADO',

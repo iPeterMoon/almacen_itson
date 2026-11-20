@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { BoletasService } from './boletas.service';
-import { ConfirmarEntregaDto } from './dto/confirmar-entrega.dto';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
 import { ResumenEntrega } from './resumen-entrega';
 
@@ -31,9 +30,8 @@ type DetalleBoleta = Awaited<ReturnType<BoletasService['obtener']>>;
 // Servicio de confirmación de la entrega (HU6-E1 y E6).
 //
 // El descuento de stock y el folio de salida NO se calculan aquí: la función de PostgreSQL
-// (crear_boleta / confirmar_entrega) los hace en una sola transacción, de modo que si algo
-// falla no queda ni stock descontado ni boleta a medias. Este servicio orquesta lo que la
-// base no hace:
+// crear_boleta los hace en una sola transacción, de modo que si algo falla no queda ni stock
+// descontado ni boleta a medias. Este servicio orquesta lo que la base no hace:
 //   1. Pedir la confirmación a la base (con el token del usuario, para que RLS aplique).
 //   2. Armar el resumen de la entrega que ve el almacenista.
 //   3. Si la base rechaza por STOCK_INSUFICIENTE, completar el error con la existencia
@@ -47,8 +45,8 @@ export class ConfirmacionService {
     private readonly boletas: BoletasService,
   ) {}
 
-  // Crea la boleta. Si entregó en el acto (sin excepciones) devuelve también el resumen;
-  // si quedó pendiente de autorización no hubo salida de inventario y el resumen es null.
+  // Crea la boleta y devuelve también el resumen: la entrega siempre se registra en el acto,
+  // incluso cuando hubo que capturar un motivo por excepción de periodicidad o límite.
   async crearBoleta(token: string, dto: CrearBoletaDto) {
     let creada: Awaited<ReturnType<BoletasService['crear']>>;
     try {
@@ -62,35 +60,8 @@ export class ConfirmacionService {
       });
     }
 
-    const resumen =
-      creada.estado === 'ENTREGADA' ? await this.resumenSinFallar(token, creada.boletaId) : null;
+    const resumen = await this.resumenSinFallar(token, creada.boletaId);
     return { ...creada, resumen };
-  }
-
-  // Entrega una boleta ya autorizada: descuenta existencias, abre los préstamos y devuelve
-  // el folio con el resumen.
-  async confirmarEntrega(token: string, boletaId: number, dto: ConfirmarEntregaDto) {
-    let confirmada: Awaited<ReturnType<BoletasService['confirmarEntrega']>>;
-    try {
-      confirmada = await this.boletas.confirmarEntrega(token, boletaId, dto);
-    } catch (error) {
-      throw await this.completarStockInsuficiente(token, error, async () => {
-        const boleta = await this.boletas.obtener(token, boletaId);
-        return {
-          lineas: boleta.materiales.map((material) => ({
-            productoId: material.productoId,
-            cantidad: material.cantidad,
-            presentacionId: material.presentacionId,
-          })),
-          trabajadorId: boleta.solicitante.trabajadorId,
-          zonaId: boleta.zona?.id ?? null,
-          campusId: boleta.campusId,
-        };
-      });
-    }
-
-    const resumen = await this.resumenSinFallar(token, boletaId);
-    return { ...confirmada, resumen };
   }
 
   // Resumen de una boleta ya entregada. Se expone también por separado para poder
@@ -228,7 +199,7 @@ export class ConfirmacionService {
         return new ErrorNegocio(
           'STOCK_INSUFICIENTE',
           `Existencia insuficiente de ${nombre}: se solicitaron ${linea.cantidad} ${unidad} ` +
-            `y solo hay ${disponible} ${unidad} en el campus.`,
+            `y solo se pueden entregar ${disponible} ${unidad} en el campus.`,
           undefined,
           {
             productoId: linea.productoId,

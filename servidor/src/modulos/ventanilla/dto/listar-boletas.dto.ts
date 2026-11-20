@@ -11,13 +11,8 @@ import {
   Min,
 } from 'class-validator';
 
-// Estados por los que pasa una boleta. La base es la única que los cambia.
-export const ESTADOS_BOLETA = [
-  'PENDIENTE_AUTORIZACION',
-  'AUTORIZADA',
-  'RECHAZADA',
-  'ENTREGADA',
-] as const;
+// Toda boleta se entrega en el acto: no hay estados de autorización.
+export const ESTADOS_BOLETA = ['ENTREGADA'] as const;
 
 export type EstadoBoleta = (typeof ESTADOS_BOLETA)[number];
 

@@ -8,18 +8,49 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('validarCantidad (Escenario 7)', () {
-    test('rechaza vacío, no numérico, cero y negativos', () {
-      expect(validarCantidad(''), isNotNull);
-      expect(validarCantidad('abc'), isNotNull);
-      expect(validarCantidad('0'), 'La cantidad debe ser mayor a cero.');
-      expect(validarCantidad('-2'), 'La cantidad debe ser mayor a cero.');
+  group('validarCantidad (Escenario 7, AI-67)', () {
+    test('acepta enteros de 1 a 9999', () {
+      expect(validarCantidad('1'), isNull);
+      expect(validarCantidad('25'), isNull);
+      expect(validarCantidad(' 7 '), isNull, reason: 'ignora espacios al inicio y al final');
+      expect(validarCantidad('9999'), isNull);
     });
 
-    test('acepta números positivos con punto o coma', () {
-      expect(validarCantidad('1'), isNull);
-      expect(validarCantidad('0.5'), isNull);
-      expect(validarCantidad('2,5'), isNull);
+    test('vacío pide escribir la cantidad', () {
+      expect(validarCantidad(''), 'Escribe la cantidad.');
+      expect(validarCantidad('   '), 'Escribe la cantidad.');
+      expect(validarCantidad(null), 'Escribe la cantidad.');
+    });
+
+    test('cero o solo ceros dice que debe ser mayor a cero', () {
+      expect(validarCantidad('0'), 'La cantidad debe ser mayor a cero.');
+      expect(validarCantidad('0000'), 'La cantidad debe ser mayor a cero.');
+      expect(validarCantidad('00000000'), 'La cantidad debe ser mayor a cero.');
+    });
+
+    test('negativos dicen que debe ser mayor a cero', () {
+      expect(validarCantidad('-2'), 'La cantidad debe ser mayor a cero.');
+      expect(validarCantidad('-0.5'), 'La cantidad debe ser mayor a cero.');
+    });
+
+    test('rechaza ceros a la izquierda', () {
+      expect(validarCantidad('007'), 'Escribe la cantidad sin ceros a la izquierda.');
+      expect(validarCantidad('0001'), 'Escribe la cantidad sin ceros a la izquierda.');
+    });
+
+    test('rechaza decimales y lo que no es un número entero', () {
+      for (final valor in ['0.5', '2,5', '2.0', '1.', 'abc', '1e5', 'NaN', 'Infinity', '1 2', '+3']) {
+        expect(validarCantidad(valor), 'La cantidad debe ser un número entero.', reason: valor);
+      }
+    });
+
+    test('más de 4 dígitos supera el máximo', () {
+      expect(validarCantidad('10000'), 'La cantidad máxima es 9999.');
+      expect(validarCantidad('99999999999999999999'), 'La cantidad máxima es 9999.');
+    });
+
+    test('emojis', () {
+      expect(validarCantidad('2😀'), 'No se permiten emojis.');
     });
   });
 
@@ -53,21 +84,21 @@ void main() {
   });
 
   group('Selección opcional', () {
-    test('se puede deseleccionar al trabajador y a quien autorizó', () {
+    test('se puede deseleccionar al trabajador y borrar el nombre de quien autorizó', () {
       final contenedor = ProviderContainer();
       addTearDown(contenedor.dispose);
       final c = contenedor.read(entregaControllerProvider.notifier);
 
       c.seleccionarSolicitante(const Solicitante(
           id: '1', nombre: 'Pedro', dependencia: 'SG', tipo: 'ITSON', zona: 'Taller'));
-      c.setAutorizo('a1');
+      c.setAutorizoNombre('Leonel Lares');
       expect(contenedor.read(entregaControllerProvider).solicitante, isNotNull);
-      expect(contenedor.read(entregaControllerProvider).autorizoId, 'a1');
+      expect(contenedor.read(entregaControllerProvider).autorizoNombre, 'Leonel Lares');
 
       c.deseleccionarSolicitante();
-      c.setAutorizo(null);
+      c.setAutorizoNombre('');
       expect(contenedor.read(entregaControllerProvider).solicitante, isNull);
-      expect(contenedor.read(entregaControllerProvider).autorizoId, isNull);
+      expect(contenedor.read(entregaControllerProvider).autorizoNombre, isEmpty);
       expect(contenedor.read(entregaControllerProvider).puedeAvanzar(), isFalse);
     });
   });
@@ -113,7 +144,7 @@ void main() {
       expect(contenedor.read(entregaControllerProvider).materiales.first.cantidad, 0.3);
     });
 
-    test('subir la cantidad por encima del límite pide autorización y no la cambia', () async {
+    test('subir la cantidad por encima del límite pide el motivo y no la cambia', () async {
       final repo = _RepoConLimite(limite: 2);
       final contenedor = ProviderContainer(
           overrides: [ventanillaRepositorioProvider.overrideWithValue(repo)]);
@@ -125,10 +156,10 @@ void main() {
       expect(await c.cambiarCantidad(m.codigo, 3), isNotNull);
       expect(contenedor.read(entregaControllerProvider).materiales.first.cantidad, 2);
 
-      c.cambiarCantidadAutorizada(m.codigo, 3, _autorizacion);
+      c.cambiarCantidadConMotivo(m.codigo, 3, _motivo);
       final item = contenedor.read(entregaControllerProvider).materiales.first;
       expect(item.cantidad, 3);
-      expect(item.autorizacion, isNotNull);
+      expect(item.motivoExcepcion, isNotNull);
 
       // Bajar la cantidad no consulta al servidor.
       final llamadas = repo.validaciones;
@@ -136,7 +167,7 @@ void main() {
       expect(repo.validaciones, llamadas);
     });
 
-    test('al cambiar de solicitante devuelve los materiales que ahora necesitan autorización',
+    test('al cambiar de solicitante devuelve los materiales que ahora necesitan motivo',
         () async {
       final repo = _RepoConLimite(limite: 5);
       final contenedor = ProviderContainer(
@@ -151,16 +182,15 @@ void main() {
       final pendientes = await c.revalidarMateriales();
       expect(pendientes.single.$1.material.codigo, m.codigo);
 
-      c.autorizarMaterial(m.codigo, _autorizacion);
+      c.establecerMotivoExcepcion(m.codigo, _motivo);
       expect(await c.revalidarMateriales(), isEmpty);
     });
   });
 }
 
-const _autorizacion =
-    Autorizacion(autorizadorId: 'a1', autorizadorNombre: 'Leonel Lares', motivo: 'Evento');
+const _motivo = MotivoExcepcion(motivo: 'Evento');
 
-// Simulado que pide autorización cuando la cantidad pasa de [limite].
+// Simulado que reporta una alerta cuando la cantidad pasa de [limite].
 class _RepoConLimite extends VentanillaRepositorioSimulado {
   _RepoConLimite({required this.limite});
   double limite;

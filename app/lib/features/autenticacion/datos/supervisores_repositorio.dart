@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errores/error_negocio.dart';
 import '../../../core/red/cliente_api.dart';
 
-// Supervisor que puede autorizar una entrega (GET /usuarios/supervisores).
-// [id] es el UUID del usuario: se manda como supervisorId al crear la boleta.
+// Supervisor registrado (GET /usuarios/supervisores). Solo se usa como
+// sugerencia del campo libre "Autorizó": [id] no se envía al crear la boleta.
 class Supervisor {
   const Supervisor({required this.id, required this.nombre, required this.rol});
   final String id;

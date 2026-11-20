@@ -1,13 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { rangoDePagina } from '../../comun/dto/paginacion.dto';
 import { ErrorNegocio, parsearErrorBase } from '../../comun/errores/error-negocio';
 import { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { ConfirmarEntregaDto } from './dto/confirmar-entrega.dto';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
-import { EstadoBoleta, ListarBoletasDto } from './dto/listar-boletas.dto';
-import { ResolverAutorizacionDto } from './dto/resolver-autorizacion.dto';
+import { ListarBoletasDto } from './dto/listar-boletas.dto';
 import { SubirFirmaDto, TipoFirma } from './dto/subir-firma.dto';
 import { ValidarMaterialDto } from './dto/validar-material.dto';
 
@@ -70,15 +68,6 @@ interface ZonaResumen {
   piso: string | null;
 }
 
-interface AutorizacionDeBoleta {
-  id: number;
-  supervisor_id: string;
-  estado: string;
-  comentario: string | null;
-  solicitado_en: string;
-  resuelto_en: string | null;
-}
-
 interface FilaBoletaDetalle {
   id: number;
   folio: string;
@@ -100,7 +89,6 @@ interface FilaBoletaDetalle {
   zonas: ZonaResumen | null;
   boletas_materiales: MaterialDeBoleta[] | null;
   boletas_herramientas: HerramientaDeBoleta[] | null;
-  autorizaciones: AutorizacionDeBoleta[] | AutorizacionDeBoleta | null;
 }
 
 // Columnas del listado y del detalle. En el detalle se anidan las relaciones
@@ -123,8 +111,7 @@ const CAMPOS_DETALLE = `
   boletas_herramientas (
     id, activo_id, dias_prestamo, solicitante_con_vencido,
     activos ( codigo, nombre, modelo, numero_serie )
-  ),
-  autorizaciones ( id, supervisor_id, estado, comentario, solicitado_en, resuelto_en )
+  )
 `;
 
 // Reglas del bucket privado "firmas": tamaño máximo y firmas de archivo permitidas.
@@ -143,6 +130,7 @@ export class BoletasService {
 
   // Devuelve la validación en camelCase para que la app no dependa de los nombres de PostgreSQL.
   async validarMaterial(token: string, dto: ValidarMaterialDto) {
+    this.validarCantidadEntera(dto.cantidad);
     const cliente = this.supabase.clienteDeUsuario(token);
     const { data, error } = await cliente.rpc('validar_material', {
       p_producto_id: dto.productoId,
@@ -176,13 +164,14 @@ export class BoletasService {
   }
 
   // HU6-E6: convierte lo disponible (unidad base) a la presentación que capturó el almacenista.
-  // esto solo sugiere un valor para la pantalla.
+  // La cantidad sugerida también son presentaciones completas, así que se redondea
+  // hacia abajo. La cantidad base resultante sí puede tener decimales.
   private async cantidadSugerida(
     cliente: ReturnType<SupabaseService['clienteDeUsuario']>,
     dto: ValidarMaterialDto,
     disponible: number,
   ): Promise<number> {
-    if (!dto.presentacionId) return disponible;
+    if (!dto.presentacionId) return Math.floor(disponible);
 
     const { data, error } = await cliente
       .from('presentaciones_producto')
@@ -197,13 +186,27 @@ export class BoletasService {
         'La presentación no corresponde al producto.',
       );
     }
-    // Se redondea hacia abajo a 3 decimales para nunca ofrecer más de lo que hay.
-    return Math.floor((disponible / Number(data.factor_a_base)) * 1000) / 1000;
+    // Se redondea hacia abajo a presentaciones completas para nunca ofrecer de más.
+    // El cociente se redondea a 6 decimales para absorber el error de IEEE-754:
+    // 34.065 / 3.785 da 8.999999999999998 y perdería un galón completo.
+    const presentaciones = disponible / Number(data.factor_a_base);
+    return Math.floor(Number(presentaciones.toFixed(6)));
   }
 
   // Traduce el DTO de la API al JSON que espera crear_boleta. La base decide el estado
   // final, descuenta inventario y genera folio dentro de una sola transacción.
   async crear(token: string, dto: CrearBoletaDto) {
+    // Se responde 400 antes de llamar a la base; crear_boleta también lo revisa.
+    if ((dto.materiales?.length ?? 0) + (dto.herramientas?.length ?? 0) === 0) {
+      throw new ErrorNegocio(
+        'BOLETA_VACIA',
+        'Agrega al menos un material o una herramienta.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    for (const material of dto.materiales ?? []) {
+      this.validarCantidadEntera(material.cantidad);
+    }
     const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('crear_boleta', {
       // La API usa camelCase; las funciones RPC esperan snake_case.
       p_materiales: (dto.materiales ?? []).map((material) => ({
@@ -223,7 +226,6 @@ export class BoletasService {
       p_zona_id: dto.zonaId,
       p_numero_solicitud: dto.numeroSolicitud,
       p_autorizo_nombre: dto.autorizoNombre,
-      p_supervisor_id: dto.supervisorId,
       p_firma_recibe: dto.firmaRecibe,
       p_firma_entrega: dto.firmaEntrega,
       p_campus_id: dto.campusId,
@@ -238,32 +240,6 @@ export class BoletasService {
       estado: fila.estado,
       alertas: fila.alertas ?? [],
     };
-  }
-
-  // La RPC valida quién puede resolver la autorización y devuelve el nuevo estado.
-  async resolverAutorizacion(token: string, boletaId: number, dto: ResolverAutorizacionDto) {
-    const { data, error } = await this.supabase
-      .clienteDeUsuario(token)
-      .rpc('resolver_autorizacion', {
-        p_boleta_id: boletaId,
-        p_autorizar: dto.autorizar,
-        p_comentario: dto.comentario,
-      });
-    if (error) throw this.errorDeBase(error);
-    if (!data) throw new Error('La base no devolvió el estado de la boleta.');
-    return { boletaId, estado: data as EstadoBoleta };
-  }
-
-  // Confirmar es un paso aparte para las boletas que requirieron autorización.
-  async confirmarEntrega(token: string, boletaId: number, dto: ConfirmarEntregaDto) {
-    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('confirmar_entrega', {
-      p_boleta_id: boletaId,
-      p_firma_recibe: dto.firmaRecibe,
-      p_firma_entrega: dto.firmaEntrega,
-    });
-    if (error) throw this.errorDeBase(error);
-    if (!data) throw new Error('La base no devolvió el folio de la boleta.');
-    return { boletaId, folio: data, estado: 'ENTREGADA' as const };
   }
 
   // Listado paginado. Los campus permitidos los filtra RLS, no el cliente.
@@ -346,6 +322,15 @@ export class BoletasService {
     return { ruta };
   }
 
+  private validarCantidadEntera(cantidad: number): void {
+    if (!Number.isInteger(cantidad)) {
+      throw new ErrorNegocio(
+        'CANTIDAD_ENTERA_REQUERIDA',
+        'La cantidad debe ser un número entero de presentaciones completas.',
+      );
+    }
+  }
+
   private errorDeBase(error: ErrorSupabase): Error {
     // Los errores de negocio llegan como "CODIGO: mensaje"; el resto se deja como error 500.
     return parsearErrorBase(error.message) ?? new Error(error.message);
@@ -395,11 +380,6 @@ export class BoletasService {
         diasPrestamo: herramienta.dias_prestamo,
         solicitanteConVencido: herramienta.solicitante_con_vencido,
       })),
-      // PostgREST devuelve la relación única como objeto, pero algunas versiones la entregan
-      // como arreglo; se normaliza para que el contrato sea siempre el mismo.
-      autorizacion: Array.isArray(fila.autorizaciones)
-        ? (fila.autorizaciones[0] ?? null)
-        : fila.autorizaciones,
     };
   }
 

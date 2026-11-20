@@ -20,6 +20,12 @@ import 'package:signature/signature.dart';
 import '../apoyo/servidor_api_falso.dart';
 
 const _url = 'http://api.prueba/api/v1';
+
+/// Las líneas del resumen usan Text.rich (etiqueta en negrita), así que se
+/// buscan por el texto plano del TextSpan.
+Finder _lineaResumen(String texto) => find.byWidgetPredicate(
+      (w) => w is Text && (w.textSpan?.toPlainText().contains(texto) ?? false),
+    );
 const _token = 'token-de-prueba';
 const _supervisorId = '4f3c9a1e-6f1a-4f6e-9f1e-2a7b8c9d0e1f';
 
@@ -182,7 +188,7 @@ Future<void> _elegirSolicitanteRegistrado(WidgetTester tester) async {
   await _tocar(tester, find.text('Miguel Ángel Ruiz'));
 }
 
-/// Toca sin esperar a que todo se asiente: mientras el diálogo de autorización está
+/// Toca sin esperar a que todo se asiente: mientras el diálogo de sugerencia está
 /// abierto, "Agregar Material" sigue con su indicador de carga girando debajo.
 Future<void> _tocarConCarga(WidgetTester tester, Finder f) async {
   await tester.tap(f);
@@ -195,8 +201,8 @@ Future<void> _agregarJabon(WidgetTester tester, String cantidad) async {
   await _tocar(tester, find.text('Jabón de manos'));
   await tester.enterText(find.byType(TextFormField), cantidad);
   await _tocarConCarga(tester, _boton('Agregar'));
-  // Si no se abrió el diálogo de autorización, el indicador ya se detuvo.
-  if (find.text('Límite de material alcanzado (Requiere autorización)').evaluate().isEmpty) {
+  // Si no se abrió el diálogo de sugerencia, el indicador ya se detuvo.
+  if (find.text('Se sugiere solicitar autorización').evaluate().isEmpty) {
     await tester.pumpAndSettle();
   }
 }
@@ -303,38 +309,41 @@ void main() {
     ]);
   });
 
-  testWidgets('material fuera de periodicidad: pide motivo y autorización y la boleta queda pendiente (E8)',
+  testWidgets('material fuera de periodicidad: sugiere autorización externa, pide motivo y entrega de inmediato (E8)',
       (tester) async {
     final servidor = _servidorBase()
       ..en('POST /boletas/validar-material', (_) => RespuestaApi.ok(_validacion(excedePeriodicidad: true)))
       ..en('POST /boletas', (_) => const RespuestaApi.creado({
             'boletaId': 9,
             'folio': 'BOL-2026-000009',
-            'estado': 'PENDIENTE_AUTORIZACION',
-            'alertas': [],
+            'estado': 'ENTREGADA',
+            'alertas': [
+              {'productoId': 12, 'excedePeriodicidad': true}
+            ],
             'resumen': null,
-          }));
+          }))
+      ..en('GET /boletas/9',
+          (_) => const RespuestaApi.ok({'id': 9, 'entregadoEn': '2026-11-12T18:00:00.000Z'}));
     await _abrirApp(tester, servidor);
     await _elegirSolicitanteRegistrado(tester);
     await _tocar(tester, _boton('Siguiente'));
 
     await _agregarJabon(tester, '2');
 
-    // El servidor dijo que rompe la periodicidad: se muestra la regla y no se agrega sin motivo.
-    expect(find.text('Límite de material alcanzado (Requiere autorización)'), findsOneWidget);
+    // El servidor dijo que rompe la periodicidad: se sugiere pedir autorización
+    // fuera del sistema, se muestra la regla y no se agrega sin motivo.
+    expect(find.text('Se sugiere solicitar autorización'), findsOneWidget);
     expect(find.text('Periodicidad no cumplida'), findsOneWidget);
-    expect(find.text('2 Litro cada 3 días'), findsOneWidget);
-    expect(tester.widget<FilledButton>(_boton('Autorizar')).onPressed, isNull);
+    expect(find.textContaining('2 Litro cada 3 días'), findsOneWidget);
+    expect(tester.widget<FilledButton>(_boton('Continuar')).onPressed, isNull);
     await _tocarConCarga(tester, find.text('Evento'));
-    await _tocarConCarga(tester, _boton('Autorizar'));
+    await _tocarConCarga(tester, _boton('Continuar'));
     await tester.pumpAndSettle();
     expect(find.text('Agregar Material'), findsNothing);
 
     await _tocar(tester, _boton('Siguiente'));
-    expect(find.text('Entrega autorizada'), findsOneWidget);
+    expect(find.text('Con motivo de excepción'), findsOneWidget);
     await _tocar(tester, _boton('Siguiente'));
-    // Quien autoriza la excepción aparece en la pantalla de firmas.
-    expect(find.text('Leonel Lares'), findsOneWidget);
     await _firmar(tester);
     await _tocar(tester, _boton('Confirmar Entrega'));
 
@@ -342,12 +351,13 @@ void main() {
     expect(boleta['materiales'], [
       {'productoId': 12, 'cantidad': 2.0, 'motivoExcepcion': 'Evento'},
     ]);
-    expect(boleta['supervisorId'], _supervisorId);
+    expect(boleta.keys, isNot(contains('supervisorId')));
 
-    // Pendiente: el resumen lo advierte y no se pide la fecha de entrega (aún no hay).
+    // Entregada en el acto: se consulta la fecha y no aparece el aviso de pendiente.
     expect(find.text('Folio BOL-2026-000009'), findsOneWidget);
-    expect(find.textContaining('No la registres otra vez'), findsOneWidget);
-    expect(servidor.a('GET /boletas/9'), isEmpty);
+    expect(_lineaResumen('Motivo: Jabón de manos: Evento'), findsOneWidget);
+    expect(find.textContaining('No la registres otra vez'), findsNothing);
+    expect(servidor.a('GET /boletas/9'), isNotEmpty);
     expect(servidor.noSimuladas, isEmpty);
   });
 
@@ -381,7 +391,7 @@ void main() {
           return RespuestaApi.error(
             409,
             'STOCK_INSUFICIENTE',
-            'Existencia insuficiente de Jabón líquido: se solicitaron 6 Litro y solo hay 4 Litro en el campus.',
+            'Existencia insuficiente de Jabón líquido: se solicitaron 6 Litro y solo se pueden entregar 4 Litro en el campus.',
             {
               'productoId': 12,
               'codigo': 'JAB-001',
@@ -426,8 +436,12 @@ void main() {
     await _tocar(tester, find.text('Usar solicitante sin registro'));
     await tester.enterText(find.widgetWithText(TextField, 'Nombre'), 'Rosa Valdez');
     await tester.enterText(find.widgetWithText(TextField, 'Unidad/Campus'), 'Mantenimiento externo');
-    await _tocar(tester, find.text('Sin seleccionar'));
-    await _tocar(tester, find.text('Leonel Lares').last);
+    // "Autorizó" acepta texto libre, aunque el supervisor no esté registrado.
+    await tester.enterText(
+      find.byWidgetPredicate((w) =>
+          w is TextField && w.decoration?.labelText == 'Autorizó (Opcional)'),
+      'Supervisor externo',
+    );
     await _tocar(tester, _boton('Siguiente'));
 
     await _agregarJabon(tester, '1');
@@ -439,7 +453,8 @@ void main() {
     final boleta = servidor.a('POST /boletas').single.cuerpo;
     expect(boleta, containsPair('solicitanteNombre', 'Rosa Valdez'));
     expect(boleta, containsPair('solicitanteUnidad', 'Mantenimiento externo'));
-    expect(boleta, containsPair('autorizoNombre', 'Leonel Lares'));
+    expect(boleta, containsPair('autorizoNombre', 'Supervisor externo'));
+    expect(_lineaResumen('Autorizó: Supervisor externo'), findsOneWidget);
     expect(boleta.keys, isNot(contains('trabajadorId')));
     expect(boleta.keys, isNot(contains('numeroSolicitud')), reason: 'el número de solicitud es opcional');
     expect(find.text('Recibida por Rosa Valdez'), findsOneWidget);
@@ -471,4 +486,64 @@ void main() {
     expect(find.text('Iniciar sesión'), findsWidgets);
     expect(find.text('Ventanilla de entregas'), findsNothing);
   });
+
+  // AI-66: al terminar una entrega, la siguiente no arrastra la búsqueda anterior y
+  // las tablas se vuelven a pedir a la API con la existencia ya descontada.
+  for (final salida in ['+ Nueva entrega', 'Volver a ventanilla']) {
+    testWidgets('al terminar una entrega con "$salida" las tablas se recargan limpias (AI-66)',
+        (tester) async {
+      var existencia = 10;
+      final servidor = _servidorBase()
+        ..en('GET /catalogo/productos', (_) => RespuestaApi.ok({
+              'datos': [
+                {
+                  ..._jabon,
+                  'existencia': existencia,
+                  'ubicaciones': [
+                    {...(_jabon['ubicaciones']! as List).single as Map, 'cantidad': existencia},
+                  ],
+                },
+              ],
+              'total': 1,
+              'pagina': 1,
+              'limite': 8,
+            }));
+      await _abrirApp(tester, servidor);
+      await _elegirSolicitanteRegistrado(tester);
+      await _tocar(tester, _boton('Siguiente'));
+      expect(find.text('10 Litro'), findsWidgets);
+      await _agregarJabon(tester, '2');
+      await _revisarFirmarYConfirmar(tester);
+      expect(find.text('Folio BOL-2026-000007'), findsOneWidget);
+
+      // El servidor ya descontó las 2 piezas de la entrega.
+      existencia = 8;
+      final trabajadoresAntes = servidor.a('GET /trabajadores').length;
+      final productosAntes = servidor.a('GET /catalogo/productos').length;
+      if (salida == '+ Nueva entrega') {
+        await _tocar(tester, _boton('+ Nueva entrega'));
+      } else {
+        await _tocar(tester, find.text('Volver a ventanilla'));
+        await _tocar(tester, _boton('+ Nueva entrega'));
+      }
+
+      // Paso 1: el campo está vacío y la tabla se pidió de nuevo sin el texto "miguel".
+      final buscador = tester.widget<EditableText>(find.descendant(
+          of: find.widgetWithText(TextField, 'Buscar por nombre del solicitante'),
+          matching: find.byType(EditableText)));
+      expect(buscador.controller.text, isEmpty);
+      final trabajadores = servidor.a('GET /trabajadores');
+      expect(trabajadores.length, trabajadoresAntes + 1);
+      expect(trabajadores.last.consulta, {'pagina': 1, 'limite': 8});
+
+      // Paso 2: el catálogo se pidió de nuevo y muestra la existencia descontada.
+      await _tocar(tester, find.text('Miguel Ángel Ruiz'));
+      await _tocar(tester, _boton('Siguiente'));
+      final productos = servidor.a('GET /catalogo/productos');
+      expect(productos.length, productosAntes + 1);
+      expect(productos.last.consulta, {'soloMasComunes': 'true', 'pagina': 1, 'limite': 8});
+      expect(find.text('8 Litro'), findsWidgets);
+      expect(find.text('10 Litro'), findsNothing);
+    });
+  }
 }

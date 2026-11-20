@@ -10,6 +10,7 @@ import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
 import '../../datos/ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
 import '../entrega_controlador.dart';
+import 'campo_autorizo.dart';
 import 'paso_materiales.dart' show mensajeEscribeParaBuscar;
 
 const mensajeSinSolicitantes = 'Sin resultados. Puedes usar un solicitante sin registro.';
@@ -70,7 +71,6 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
     final c = ref.read(entregaControllerProvider.notifier);
     final resultados = ref.watch(solicitantesProvider);
     final consulta = ref.watch(consultaSolicitantesProvider);
-    final autorizadores = ref.watch(autorizadoresProvider);
     final s = e.solicitante;
 
     return ListView(
@@ -209,20 +209,7 @@ class _PasoSolicitanteState extends ConsumerState<PasoSolicitante> {
           titulo: 'Datos adicionales',
           subtitulo: 'Información opcional de la solicitud',
           child: LayoutBuilder(builder: (context, caja) {
-            final autorizo = autorizadores.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (_, _) => const Text('No se pudo cargar la lista.'),
-              data: (lista) => CampoSelector<String?>(
-                etiqueta: 'Autorizó (Opcional)',
-                valor: e.autorizoId,
-                hint: 'Sin seleccionar',
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('Sin seleccionar')),
-                  for (final a in lista) DropdownMenuItem<String?>(value: a.id, child: Text(a.nombre)),
-                ],
-                onChanged: c.setAutorizo,
-              ),
-            );
+            const autorizo = CampoAutorizo();
             final numero = TextField(
               controller: _numero,
               maxLength: limiteReferencia,

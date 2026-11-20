@@ -104,169 +104,6 @@ const TABLAS_RESUMEN = {
 const FIRMAS = { firmaRecibe: '2/r.png', firmaEntrega: '2/e.png' };
 
 describe('ConfirmacionService', () => {
-  describe('confirmarEntrega', () => {
-    it('devuelve el folio y el resumen de la entrega (HU6-E1)', async () => {
-      const boletas = {
-        confirmarEntrega: jest
-          .fn()
-          .mockResolvedValue({ boletaId: 7, folio: 'BOL-2026-000007', estado: 'ENTREGADA' }),
-        obtener: jest.fn().mockResolvedValue(detalle()),
-      };
-      const servicio = crearServicio(boletas, TABLAS_RESUMEN);
-
-      const resultado = await servicio.confirmarEntrega('token', 7, FIRMAS);
-
-      expect(boletas.confirmarEntrega).toHaveBeenCalledWith('token', 7, FIRMAS);
-      expect(resultado).toMatchObject({
-        boletaId: 7,
-        folio: 'BOL-2026-000007',
-        estado: 'ENTREGADA',
-      });
-      expect(resultado.resumen).toEqual({
-        boletaId: 7,
-        folio: 'BOL-2026-000007',
-        estado: 'ENTREGADA',
-        entregadoEn: '2026-11-12T18:00:00.000Z',
-        recibidoPor: 'Miguel Ángel Ruiz',
-        area: 'SERVICIOS_GENERALES',
-        zona: 'Baños edificio 2',
-        numeroSolicitud: 'OT-9981',
-        autorizoNombre: null,
-        entregadoPor: 'Alicia García',
-        materiales: [
-          {
-            codigo: 'JAB-001',
-            nombre: 'Jabón líquido',
-            cantidad: 2,
-            unidad: 'Medio litro',
-            cantidadBase: 1,
-            comentario: 'Para los baños',
-            motivoExcepcion: null,
-          },
-          {
-            codigo: 'ESC-001',
-            nombre: 'Escoba',
-            cantidad: 3,
-            // Sin presentación se usa la unidad base del producto.
-            unidad: 'Pieza',
-            cantidadBase: 3,
-            comentario: null,
-            motivoExcepcion: null,
-          },
-        ],
-        herramientas: [
-          {
-            codigo: 'ACT-008',
-            nombre: 'Taladro',
-            modelo: 'XTR-500',
-            numeroSerie: 'SN-1',
-            diasPrestamo: 3,
-          },
-        ],
-      });
-    });
-
-    it('no falla si la entrega se guardó pero no se pudo armar el resumen', async () => {
-      const boletas = {
-        confirmarEntrega: jest
-          .fn()
-          .mockResolvedValue({ boletaId: 7, folio: 'BOL-2026-000007', estado: 'ENTREGADA' }),
-        obtener: jest.fn().mockRejectedValue(new Error('red caída')),
-      };
-      const servicio = crearServicio(boletas);
-
-      const resultado = await servicio.confirmarEntrega('token', 7, FIRMAS);
-
-      expect(resultado).toEqual({
-        boletaId: 7,
-        folio: 'BOL-2026-000007',
-        estado: 'ENTREGADA',
-        resumen: null,
-      });
-    });
-
-    it('deja pasar sin cambios los errores que no son de stock', async () => {
-      const original = new ErrorNegocio('BOLETA_NO_AUTORIZADA', 'La boleta está pendiente.');
-      const boletas = {
-        confirmarEntrega: jest.fn().mockRejectedValue(original),
-        obtener: jest.fn(),
-        validarMaterial: jest.fn(),
-      };
-      const servicio = crearServicio(boletas);
-
-      await expect(servicio.confirmarEntrega('token', 7, FIRMAS)).rejects.toBe(original);
-      expect(boletas.validarMaterial).not.toHaveBeenCalled();
-    });
-
-    it('detalla el stock insuficiente con lo disponible y la cantidad sugerida (HU6-E6)', async () => {
-      const original = new ErrorNegocio('STOCK_INSUFICIENTE', 'Jabón ya no tiene existencia.');
-      const boletas = {
-        confirmarEntrega: jest.fn().mockRejectedValue(original),
-        obtener: jest.fn().mockResolvedValue(
-          detalle({
-            estado: 'AUTORIZADA',
-            materiales: [
-              {
-                id: 22,
-                productoId: 13,
-                producto: { codigo: 'ESC-001', nombre_estandar: 'Escoba' },
-                presentacionId: null,
-                presentacion: null,
-                cantidad: 10,
-                cantidadBase: 10,
-                comentario: null,
-                motivoExcepcion: null,
-              },
-            ],
-          }),
-        ),
-        validarMaterial: jest.fn().mockResolvedValue({
-          disponible: 4,
-          stockSuficiente: false,
-          cantidadSugerida: 4,
-        }),
-      };
-      const servicio = crearServicio(boletas, {
-        productos: {
-          data: {
-            codigo: 'ESC-001',
-            nombre_estandar: 'Escoba',
-            unidades_medida: { nombre: 'Pieza' },
-          },
-          error: null,
-        },
-      });
-
-      const error = await servicio.confirmarEntrega('token', 7, FIRMAS).catch((e: unknown) => e);
-
-      expect(error).toBeInstanceOf(ErrorNegocio);
-      expect(error).toMatchObject({
-        codigo: 'STOCK_INSUFICIENTE',
-        estadoHttp: HttpStatus.CONFLICT,
-        datos: {
-          productoId: 13,
-          codigo: 'ESC-001',
-          nombre: 'Escoba',
-          solicitado: 10,
-          disponible: 4,
-          unidad: 'Pieza',
-          disponibleBase: 4,
-          cantidadSugerida: 4,
-        },
-      });
-      expect((error as ErrorNegocio).message).toContain('solo hay 4 Pieza');
-      // Se valida con los datos de la boleta: solicitante, zona y campus.
-      expect(boletas.validarMaterial).toHaveBeenCalledWith('token', {
-        productoId: 13,
-        cantidad: 10,
-        presentacionId: undefined,
-        trabajadorId: 15,
-        zonaId: 3,
-        campusId: 2,
-      });
-    });
-  });
-
   describe('crearBoleta', () => {
     const DTO = {
       materiales: [{ productoId: 12, cantidad: 2, presentacionId: 4 }],
@@ -296,23 +133,26 @@ describe('ConfirmacionService', () => {
       expect(resultado.resumen?.folio).toBe('BOL-2026-000007');
     });
 
-    it('no arma resumen si quedó pendiente de autorización (no hubo salida)', async () => {
+    it('incluye resumen y alertas cuando hubo excepción de periodicidad o límite', async () => {
       const boletas = {
         crear: jest.fn().mockResolvedValue({
           boletaId: 8,
           folio: 'BOL-2026-000008',
-          estado: 'PENDIENTE_AUTORIZACION',
+          estado: 'ENTREGADA',
           alertas: [{ producto: 'Cloro', excede_periodicidad: true }],
         }),
-        obtener: jest.fn(),
+        obtener: jest.fn().mockResolvedValue(detalle({ folio: 'BOL-2026-000008' })),
       };
-      const servicio = crearServicio(boletas);
+      const servicio = crearServicio(boletas, TABLAS_RESUMEN);
 
-      const resultado = await servicio.crearBoleta('token', DTO);
+      const resultado = await servicio.crearBoleta('token', {
+        ...DTO,
+        materiales: [{ productoId: 12, cantidad: 1, motivoExcepcion: 'Evento especial' }],
+      });
 
-      expect(resultado.estado).toBe('PENDIENTE_AUTORIZACION');
-      expect(resultado.resumen).toBeNull();
-      expect(boletas.obtener).not.toHaveBeenCalled();
+      expect(resultado.estado).toBe('ENTREGADA');
+      expect(resultado.alertas).toEqual([{ producto: 'Cloro', excede_periodicidad: true }]);
+      expect(resultado.resumen?.folio).toBe('BOL-2026-000008');
     });
 
     it('resume al solicitante sin registro con su nombre y unidad (HU6-E2)', async () => {
