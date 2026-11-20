@@ -6,6 +6,7 @@ import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
 import '../../../../core/errores/error_negocio.dart';
 import '../entrega_controlador.dart';
+import '../widgets/campo_dias_prestamo.dart';
 import 'dialogo_autorizacion.dart';
 
 Future<void> mostrarDialogoListaMateriales(BuildContext context) =>
@@ -192,12 +193,7 @@ class _FilaActivo extends StatelessWidget {
               Text('Serie ${a.serie}', style: const TextStyle(color: Colores.textoSuave, fontSize: 12)),
             ]),
           ),
-          _Cantidad(
-            texto: '${item.dias}',
-            onMenos: () => c.cambiarDias(a.codigo, item.dias - 1),
-            onMas: () => c.cambiarDias(a.codigo, item.dias + 1),
-          ),
-          const Text('días'),
+          CampoDiasPrestamo(item: item),
           _BotonBorrar(() => c.quitarActivo(a.codigo)),
         ],
       ),

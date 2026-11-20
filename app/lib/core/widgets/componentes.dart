@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../tema/tema.dart';
 
 /// Tarjeta blanca con borde redondeado y título opcional (patrón repetido en el Figma).
@@ -560,26 +561,59 @@ class FilaRegistro extends StatelessWidget {
 
 /// Contador "-  1  +" del prototipo (días de préstamo). Botones de 48 px para tableta.
 /// Con [onMenos] o [onMas] en null el botón correspondiente se deshabilita.
-class ContadorCompacto extends StatelessWidget {
+/// Con [onEscribir] el número se puede escribir a mano (solo dígitos): se llama con lo
+/// escrito cada vez que cambia. Un [valor] de 0 se muestra como campo vacío.
+class ContadorCompacto extends StatefulWidget {
   const ContadorCompacto({
     super.key,
     required this.valor,
     required this.onMenos,
     required this.onMas,
+    this.onEscribir,
     this.etiquetaMenos = 'Disminuir',
     this.etiquetaMas = 'Aumentar',
+    this.etiquetaCampo = 'Valor',
     this.sufijo,
   });
 
   final int valor;
   final VoidCallback? onMenos;
   final VoidCallback? onMas;
+  final ValueChanged<String>? onEscribir;
   final String etiquetaMenos;
   final String etiquetaMas;
+  final String etiquetaCampo; // lectura de pantalla del campo editable
   final String? sufijo; // ej. "días"
 
   @override
+  State<ContadorCompacto> createState() => _ContadorCompactoState();
+}
+
+class _ContadorCompactoState extends State<ContadorCompacto> {
+  late final TextEditingController _campo = TextEditingController(text: _texto(widget.valor));
+
+  static String _texto(int valor) => valor == 0 ? '' : '$valor';
+
+  @override
+  void didUpdateWidget(ContadorCompacto anterior) {
+    super.didUpdateWidget(anterior);
+    // Los botones (o el límite máximo) cambian el valor desde afuera: se refleja en el
+    // campo. Si lo escrito ya vale lo mismo (por ejemplo "0" o vacío) no se toca,
+    // para no borrarle lo que la persona tecleó.
+    if (widget.onEscribir != null && (int.tryParse(_campo.text) ?? 0) != widget.valor) {
+      _campo.text = _texto(widget.valor);
+    }
+  }
+
+  @override
+  void dispose() {
+    _campo.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    const estiloNumero = TextStyle(fontSize: 15, color: Colores.texto);
     // Wrap: si el campo es angosto, el sufijo baja a otra línea en vez de desbordarse.
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -593,17 +627,48 @@ class ContadorCompacto extends StatelessWidget {
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             IconButton(
-                tooltip: etiquetaMenos, onPressed: onMenos, icon: const Icon(Icons.remove, size: 18)),
-            SizedBox(
-                width: 28,
-                child: Text('$valor',
+                tooltip: widget.etiquetaMenos,
+                onPressed: widget.onMenos,
+                icon: const Icon(Icons.remove, size: 18)),
+            if (widget.onEscribir == null)
+              SizedBox(
+                  width: 28,
+                  child: Text('${widget.valor}', textAlign: TextAlign.center, style: estiloNumero))
+            else
+              SizedBox(
+                width: 56,
+                child: Semantics(
+                  label: widget.etiquetaCampo,
+                  child: TextField(
+                    controller: _campo,
+                    onChanged: widget.onEscribir,
+                    keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 15, color: Colores.texto))),
+                    style: estiloNumero,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(3),
+                    ],
+                    // Sin el recuadro del tema: el recuadro es el del contador.
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ),
             IconButton(
-                tooltip: etiquetaMas, onPressed: onMas, icon: const Icon(Icons.add, size: 18)),
+                tooltip: widget.etiquetaMas,
+                onPressed: widget.onMas,
+                icon: const Icon(Icons.add, size: 18)),
           ]),
         ),
-        if (sufijo != null) Text(sufijo!, style: const TextStyle(color: Colores.textoSuave)),
+        if (widget.sufijo != null)
+          Text(widget.sufijo!, style: const TextStyle(color: Colores.textoSuave)),
       ],
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
+import '../../datos/dias_prestamo.dart';
 import '../dialogos/dialogo_comentario.dart';
 import '../entrega_controlador.dart';
 
@@ -16,6 +17,7 @@ class PasoRevision extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final e = ref.watch(entregaControllerProvider);
     final c = ref.read(entregaControllerProvider.notifier);
+    final ahora = ref.watch(relojProvider)();
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -74,6 +76,7 @@ class PasoRevision extends ConsumerWidget {
                           CampoDato('Modelo', it.activo.modelo),
                           CampoDato('N° Serie', it.activo.serie),
                           CampoDato('Préstamo', '${it.dias} día(s)'),
+                          CampoDato('Devolución prevista', fechaPrevistaTexto(ahora, it.dias)),
                         ],
                         comentario: it.comentario,
                         onComentar: () async {

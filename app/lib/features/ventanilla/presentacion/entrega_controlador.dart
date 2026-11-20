@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errores/error_negocio.dart';
 import '../../../core/validacion/sin_emojis.dart';
 import '../../autenticacion/presentacion/sesion_controlador.dart';
+import '../datos/dias_prestamo.dart';
 import '../datos/modelos.dart';
 import '../datos/ventanilla_repositorio.dart';
 
@@ -88,6 +89,9 @@ class EntregaState {
 
   int get totalPartidas => materiales.length + activos.length;
 
+  /// Alguna herramienta quedó con los días vacíos o en 0.
+  bool get hayDiasInvalidos => activos.any((a) => !diasPrestamoValidos(a.dias));
+
   /// Nombres de quienes autorizaron excepciones (se muestran en "Autorizado por").
   List<String> get autorizadoPor => {
         for (final m in materiales)
@@ -98,7 +102,8 @@ class EntregaState {
         0 => sinRegistro
             ? nombreSinRegistro.trim().isNotEmpty && unidadSinRegistro.trim().isNotEmpty
             : solicitante != null,
-        1 => totalPartidas > 0,
+        // HU8: toda herramienta necesita al menos 1 día de préstamo.
+        1 => totalPartidas > 0 && !hayDiasInvalidos,
         2 => materiales.any((m) => m.entregado) || activos.any((a) => a.entregado),
         _ => false,
       };
@@ -327,13 +332,19 @@ class EntregaController extends Notifier<EntregaState> {
   void quitarActivo(String codigo) => state =
       state.copyWith(activos: state.activos.where((a) => a.activo.codigo != codigo).toList());
 
+  /// Cambia los días de préstamo de una herramienta (entre 0 y [diasPrestamoMaximo]).
+  /// 0 se acepta a propósito: es el campo vacío o en cero, y la boleta no avanza
+  /// (puedeAvanzar) hasta que se corrija.
   void cambiarDias(String codigo, int dias) {
-    if (dias < 1) return;
+    final validos = dias < 0 ? 0 : (dias > diasPrestamoMaximo ? diasPrestamoMaximo : dias);
     state = state.copyWith(activos: [
       for (final a in state.activos)
-        if (a.activo.codigo == codigo) a.copyWith(dias: dias) else a
+        if (a.activo.codigo == codigo) a.copyWith(dias: validos) else a
     ]);
   }
+
+  /// Lo que se escribe en el campo de días: vacío es 0 y se limita al máximo.
+  void escribirDias(String codigo, String texto) => cambiarDias(codigo, diasDeTexto(texto));
 
   // --- Paso 3: revisión ---
   void marcarMaterial(String codigo, bool v) => state = state.copyWith(materiales: [
@@ -462,6 +473,9 @@ final ventanillaRepositorioProvider =
 /// Nombre del usuario con sesión iniciada; se muestra como quien entrega.
 final almacenistaActualProvider = Provider<String>(
     (ref) => ref.watch(controladorSesionProvider).value?.usuario.nombre ?? '');
+
+/// La hora actual. Se cambia en las pruebas para fijar "hoy" en la fecha prevista de devolución.
+final relojProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
 final entregaControllerProvider =
     NotifierProvider<EntregaController, EntregaState>(EntregaController.new);

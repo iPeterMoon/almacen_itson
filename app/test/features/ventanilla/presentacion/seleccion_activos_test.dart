@@ -6,6 +6,7 @@ import 'package:almacen_itson/features/ventanilla/presentacion/widgets/paso_mate
 import 'package:almacen_itson/features/ventanilla/presentacion/widgets/seleccion_activos.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../datos/ventanilla_repositorio_api_test.dart'
@@ -23,7 +24,8 @@ import '../datos/ventanilla_repositorio_api_test.dart'
 // HU8 · Pantalla de selección de equipos: pestaña "Activos" del paso 2, con el
 // repositorio de la API y un servidor de activos falso, en la tableta del prototipo
 // (800 px lógicos de ancho).
-Future<ProviderContainer> abrirActivos(WidgetTester tester, ActivosFalso activos) async {
+Future<ProviderContainer> abrirActivos(WidgetTester tester, ActivosFalso activos,
+    {List<Override> overrides = const []}) async {
   tester.view.physicalSize = const Size(1200, 1920);
   tester.view.devicePixelRatio = 1.5;
   addTearDown(tester.view.reset);
@@ -42,6 +44,7 @@ Future<ProviderContainer> abrirActivos(WidgetTester tester, ActivosFalso activos
           activos: activos,
         ),
       ),
+      ...overrides,
     ],
   );
   addTearDown(contenedor.dispose);

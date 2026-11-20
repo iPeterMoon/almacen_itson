@@ -7,6 +7,7 @@ import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
 import '../../datos/ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
 import '../entrega_controlador.dart';
+import 'campo_dias_prestamo.dart';
 
 // Mensajes de la tabla de activos (HU8, Escenarios 2, 3 y 4).
 const mensajeActivoNoEncontrado = 'Activo no encontrado';
@@ -47,14 +48,13 @@ class SeleccionActivos extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final e = ref.watch(entregaControllerProvider);
-    final c = ref.read(entregaControllerProvider.notifier);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (e.activos.isNotEmpty) ...[
         const _Subtitulo('Seleccionados'),
         ContenedorLista(children: [
           for (var i = 0; i < e.activos.length; i++)
-            _FilaSeleccionado(indice: i, item: e.activos[i], controlador: c),
+            _FilaSeleccionado(indice: i, item: e.activos[i]),
         ]),
         const SizedBox(height: 16),
       ],
@@ -75,13 +75,13 @@ class _Subtitulo extends StatelessWidget {
       );
 }
 
-/// Fila de "Seleccionados": datos del equipo y tiempo de préstamo en días (mínimo 1).
+/// Fila de "Seleccionados": datos del equipo y tiempo de préstamo en días (1 a 365),
+/// con la fecha prevista de devolución.
 class _FilaSeleccionado extends StatelessWidget {
-  const _FilaSeleccionado({required this.indice, required this.item, required this.controlador});
+  const _FilaSeleccionado({required this.indice, required this.item});
 
   final int indice;
   final ItemActivo item;
-  final EntregaController controlador;
 
   @override
   Widget build(BuildContext context) {
@@ -93,19 +93,8 @@ class _FilaSeleccionado extends StatelessWidget {
         CampoDato('Equipo', a.equipo),
         CampoDato('Modelo', a.modelo),
         CampoDato('N° Serie', a.serie),
-        CampoDato(
-          'Tiempo de préstamo',
-          '${item.dias} días',
-          widget: ContadorCompacto(
-            valor: item.dias,
-            sufijo: 'días',
-            etiquetaMenos: 'Disminuir días de ${a.equipo}',
-            etiquetaMas: 'Aumentar días de ${a.equipo}',
-            // Con 1 día el botón "-" se deshabilita: el préstamo dura al menos un día.
-            onMenos: item.dias > 1 ? () => controlador.cambiarDias(a.codigo, item.dias - 1) : null,
-            onMas: () => controlador.cambiarDias(a.codigo, item.dias + 1),
-          ),
-        ),
+        CampoDato('Tiempo de préstamo', '${item.dias} días',
+            widget: CampoDiasPrestamo(item: item)),
       ],
     );
   }

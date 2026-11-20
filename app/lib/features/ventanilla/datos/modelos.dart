@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'dias_prestamo.dart';
+
 /// Modelos de la HU6. SUPUESTO: reflejan los DTO del servidor; ajustar nombres de
 /// campos cuando exista el contrato OpenAPI (/docs).
 
@@ -228,7 +230,7 @@ class ItemMaterial {
 class ItemActivo {
   const ItemActivo({
     required this.activo,
-    this.dias = 1,
+    this.dias = diasPrestamoPredeterminado,
     this.entregado = true,
     this.comentario,
   });
