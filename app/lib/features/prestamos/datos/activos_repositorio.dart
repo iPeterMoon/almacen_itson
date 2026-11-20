@@ -46,9 +46,11 @@ class ActivosRepositorio {
   final Dio _dio;
 
   // [soloPrestables] true trae solo los DISPONIBLE, para la boleta.
+  // [estado] se conserva por compatibilidad con quienes aún filtran por estado.
   Future<PaginaApi<Activo>> buscar({
     String? texto,
     bool? soloPrestables,
+    String? estado,
     int? limite,
   }) async {
     final t = texto?.trim();
@@ -58,6 +60,7 @@ class ActivosRepositorio {
         queryParameters: {
           if (t != null && t.isNotEmpty) 'texto': t,
           'soloPrestables': ?soloPrestables,
+          'estado': ?estado,
           'limite': ?limite,
         },
       );

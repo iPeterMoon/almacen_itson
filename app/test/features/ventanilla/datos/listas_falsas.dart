@@ -68,7 +68,12 @@ class ActivosFalso implements ActivosRepositorio {
   var llamadas = 0;
 
   @override
-  Future<PaginaApi<Activo>> buscar({String? texto, bool? soloPrestables, int? limite}) async {
+  Future<PaginaApi<Activo>> buscar({
+    String? texto,
+    bool? soloPrestables,
+    String? estado,
+    int? limite,
+  }) async {
     llamadas++;
     ultimaConsulta = (texto: texto, soloPrestables: soloPrestables, limite: limite);
     return PaginaApi(datos: activos, total: activos.length, pagina: 1, limite: limite ?? 8);
