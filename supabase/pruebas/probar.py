@@ -737,6 +737,44 @@ caso("HU8 Comb", "La boleta con excepción ya tiene préstamo y la escalera En p
      "join activos a on a.id=bh.activo_id join boletas_materiales bm on bm.boleta_id=b.id "
      f"where b.trabajador_id={MARIO} and a.id={ET}", contiene="ENTREGADA|EN_PRESTAMO|ACTIVO|Limpieza profunda")
 
+# ---------- HU11: detalle de una boleta (AI-70) ----------
+D = "select {} from vista_detalle_boleta where {}"
+B_MAT = admin("select id from boletas where folio='BOL-2026-0001'")
+B_COMB = admin("select id from boletas where folio='BOL-2026-0007'")
+B_AUT = admin("select id from boletas where autorizo_nombre='Supervisor externo'")
+B_NAI = admin("select id from boletas where solicitante_nombre='Luis Ochoa'")
+caso("HU11 E4", "Boleta solo con materiales: encabezado completo", CEN,
+     D.format("folio||'|'||solicitante_nombre||'|'||dependencia||'|'||entregado_por||'|'||campus", f"boleta_id={B_MAT}"),
+     contiene="BOL-2026-0001|Juan Pérez Soto|SERVICIOS_GENERALES|Alicia García|Centro")
+caso("HU11 E4", "Materiales entregados: código, concepto, almacén y cantidad", CEN,
+     D.format("(materiales->0->>'codigo')||'|'||(materiales->0->>'concepto')||'|'||(materiales->0->>'almacen')"
+              "||'|'||(materiales->0->>'cantidad')", f"boleta_id={B_MAT}"),
+     contiene="CD-123|Limpiador multiusos|Almacén 1|2.000")
+caso("HU11 E4", "Sin herramientas ni autorización: arreglo vacío y autorizó nulo", CEN,
+     D.format("jsonb_array_length(herramientas)||'|'||(autorizo_nombre is null)", f"boleta_id={B_MAT}"), contiene="0|true")
+caso("HU11 E4", "El renglón conserva la presentación y su cantidad", CEN,
+     D.format("(materiales->0->>'presentacion')||'|'||(materiales->0->>'cantidad')", "solicitante_nombre='Ana'"),
+     contiene="Medio litro|2.000")
+caso("HU11 E4", "Boleta con herramientas: código, modelo y serie del activo", CEN,
+     D.format("(herramientas->0->>'codigo')||'|'||(herramientas->0->>'modelo')||'|'||(herramientas->0->>'numero_serie')",
+              f"boleta_id={B_COMB}"), contiene="ACT-104|GBH 2-28|BSH-987654321")
+caso("HU11 E4", "El estado del activo es el actual (después robado), no el del préstamo", CEN,
+     D.format("herramientas->0->>'estado'", f"boleta_id={B_COMB}"), contiene="ROBO_EXTRAVIO")
+caso("HU11 E4", "La boleta combinada trae su material y su herramienta", CEN,
+     D.format("jsonb_array_length(materiales)||'|'||jsonb_array_length(herramientas)||'|'||(materiales->0->>'codigo')",
+              f"boleta_id={B_COMB}"), contiene="1|1|CD-700")
+caso("HU11 E4", "Boleta con autorización: quién autorizó", CEN,
+     D.format("autorizo_nombre||'|'||folio", f"boleta_id={B_AUT}"), contiene="Supervisor externo|BOL-")
+caso("HU11 E4", "El almacén sale de donde se descontó (Náinari: Principal)", NAI,
+     D.format("materiales->0->>'almacen'", f"boleta_id={B_NAI}"), contiene="Principal")
+caso("Seg", "Centro no ve el detalle de una boleta de Náinari", CEN, D.format("count(*)", f"boleta_id={B_NAI}"), contiene="0")
+caso("Seg", "Náinari ve el detalle de su boleta", NAI, D.format("solicitante_nombre", f"boleta_id={B_NAI}"), contiene="Luis Ochoa")
+caso("Seg", "Supervisor jefe ve el detalle de ambos campus", JEFE, D.format("count(distinct campus_id)", "true"), contiene="2")
+caso("Seg", "Sin sesión no se lee el detalle", "anon", D.format("count(*)", "true"), espera="permission denied")
+caso("Seg", "El detalle no se modifica desde la app", CEN,
+     "select bool_or(has_table_privilege('vista_detalle_boleta', p)) "
+     "from unnest(array['INSERT','UPDATE','DELETE','TRUNCATE']) p", contiene="f")
+
 cuadre = admin("""select count(*) from existencias e where e.cantidad <>
   (select coalesce(sum(m.cantidad),0) from movimientos_inventario m where m.producto_id=e.producto_id and m.ubicacion_id=e.ubicacion_id)""")
 resultados.append((cuadre == "0", "Kardex", "Saldo = suma del historial en cada ubicación", f"descuadres: {cuadre}"))

@@ -39,6 +39,7 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 | `GET`  | `/api/v1/boletas`                  | Lista las boletas de los campus del usuario                      |
 | `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`)    |
 | `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas, motivo y quien autorizó    |
+| `GET`  | `/api/v1/boletas/:id/detalle`      | Detalle para el historial: materiales con almacén, herramientas con estado actual y quién autorizó |
 | `GET`  | `/api/v1/boletas/:id/resumen`      | Resumen de la entrega para la pantalla de confirmación           |
 | `GET`  | `/api/v1/entregas`                 | Historial de material entregado por solicitante, insumo y zona   |
 

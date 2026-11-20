@@ -129,6 +129,21 @@ export class BoletasController {
     return this.boletas.obtener(usuario.token, id);
   }
 
+  // Detalle para la pantalla del historial: encabezado, materiales con su almacén,
+  // herramientas con su estado actual y quién autorizó (null si no hubo).
+  @Get(':id/detalle')
+  @ApiOperation({
+    summary: 'Detalle de una boleta para el historial (HU11)',
+    description: 'Responde 404 BOLETA_NO_EXISTE si la boleta no existe o es de otro campus.',
+  })
+  @ApiOkResponse({
+    description:
+      'Encabezado, materiales, herramientas y autorizoNombre (null si no hubo autorización).',
+  })
+  detalle(@UsuarioActual() usuario: UsuarioAutenticado, @Param('id', ParseIntPipe) id: number) {
+    return this.boletas.detalle(usuario.token, id);
+  }
+
   @Get(':id/resumen')
   @ApiOperation({
     summary: 'Resumen de una boleta entregada',
