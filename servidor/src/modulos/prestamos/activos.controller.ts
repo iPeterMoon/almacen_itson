@@ -93,7 +93,8 @@ export class ActivosController {
     summary: 'Busca activos de los campus del usuario',
     description:
       'Búsqueda parcial y sin distinguir mayúsculas por código, nombre o número de serie, ' +
-      'ordenada por nombre; si el código coincide exacto, ese activo va primero. ' +
+      'ordenada por nombre; si el código coincide exacto, ese activo va primero en toda ' +
+      'la búsqueda, aunque por nombre cayera fuera de la página solicitada. ' +
       'Con estado=DISPONIBLE o soloPrestables=true devuelve solo los que se pueden prestar ' +
       '(soloPrestables prevalece si ambos vienen). El "id" es el activoId de POST /boletas. ' +
       'Límite 8 por defecto, máximo 50.',

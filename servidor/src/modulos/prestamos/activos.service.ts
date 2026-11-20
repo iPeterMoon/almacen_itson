@@ -167,37 +167,86 @@ export class ActivosService {
     return (data ?? []) as FilaPrestamoAbierto[];
   }
 
-  async listar(token: string, dto: ListarActivosDto) {
-    const pagina = dto.pagina ?? 1;
-    const limite = dto.limite ?? LIMITE_LISTA_POR_DEFECTO;
-
-    let consulta = this.supabase
-      .clienteDeUsuario(token)
-      .from('activos')
-      .select(CAMPOS, { count: 'exact' });
+  // Base común de las dos consultas de la búsqueda: RLS sigue limitando los
+  // activos a los campus del usuario porque siempre se usa su token.
+  private consultaDeActivos(
+    cliente: ReturnType<SupabaseService['clienteDeUsuario']>,
+    dto: ListarActivosDto,
+  ) {
+    let consulta = cliente.from('activos').select(CAMPOS, { count: 'exact' });
     // soloPrestables es el atajo que usa la boleta; prevalece sobre estado para no
     // enviar dos filtros contradictorios.
     const estado = dto.soloPrestables ? 'DISPONIBLE' : dto.estado;
     if (estado) consulta = consulta.eq('estado', estado);
-    if (dto.texto) {
-      // El DTO solo permite letras, números, espacios y . - / # ', así que el texto
-      // no rompe la sintaxis del filtro "or" ni trae comodines. ilike con % a ambos
-      // lados: coincidencia parcial sin distinguir mayúsculas en las 3 columnas.
-      const t = `%${dto.texto}%`;
-      consulta = consulta.or(`codigo.ilike.${t},nombre.ilike.${t},numero_serie.ilike.${t}`);
+    return consulta;
+  }
+
+  async listar(token: string, dto: ListarActivosDto) {
+    const pagina = dto.pagina ?? 1;
+    const limite = dto.limite ?? LIMITE_LISTA_POR_DEFECTO;
+    const cliente = this.supabase.clienteDeUsuario(token);
+    const texto = dto.texto?.trim();
+
+    if (!texto) {
+      const { data, error, count } = await this.consultaDeActivos(cliente, dto)
+        .order('nombre', { ascending: true })
+        .order('codigo', { ascending: true })
+        .range(...rangoDePagina(pagina, limite));
+      if (error) throw parsearErrorBase(error.message) ?? new Error(error.message);
+      return {
+        datos: ((data ?? []) as unknown as FilaActivo[]).map(aActivo),
+        total: count ?? 0,
+        pagina,
+        limite,
+      };
     }
 
-    const { data, error, count } = await consulta
+    const inicio = (pagina - 1) * limite;
+
+    // El DTO solo permite letras, números, espacios y . - / # ', así que el texto
+    // no trae comodines: ilike sin % es una comparación exacta sin mayúsculas.
+    // Se consulta en su propia página y se antepone al resto para que el activo
+    // de código exacto sea primero aunque por nombre cayera fuera de la página.
+    const {
+      data: datosExactos,
+      error: errorExacto,
+      count: countExactos,
+    } = await this.consultaDeActivos(cliente, dto)
+      .ilike('codigo', texto)
       .order('nombre', { ascending: true })
       .order('codigo', { ascending: true })
-      .range(...rangoDePagina(pagina, limite));
+      .range(inicio, inicio + limite - 1);
+    if (errorExacto) throw parsearErrorBase(errorExacto.message) ?? new Error(errorExacto.message);
+
+    const exactos = ((datosExactos ?? []) as unknown as FilaActivo[])
+      .map(aActivo)
+      .filter((activo) => esCodigoExacto(activo.codigo, texto))
+      .slice(0, limite);
+    const totalExactos = countExactos ?? exactos.length;
+
+    // La búsqueda normal excluye los códigos exactos: son los primeros globales
+    // y, si no, ocuparían un lugar de la página al hacer coincidencia parcial.
+    const restantes = Math.max(0, limite - exactos.length);
+    const desde = Math.max(0, inicio - totalExactos);
+    const t = `%${texto}%`;
+    const { data, error, count } = await this.consultaDeActivos(cliente, dto)
+      .or(`codigo.ilike.${t},nombre.ilike.${t},numero_serie.ilike.${t}`)
+      .not('codigo', 'ilike', texto)
+      .order('nombre', { ascending: true })
+      .order('codigo', { ascending: true })
+      // Con restantes=0 se pide una fila solo para leer el count total.
+      .range(desde, desde + Math.max(0, restantes - 1));
 
     if (error) throw parsearErrorBase(error.message) ?? new Error(error.message);
+    const idsExactos = new Set(exactos.map((activo) => activo.id));
+    const otros = ((data ?? []) as unknown as FilaActivo[])
+      .map(aActivo)
+      .filter((activo) => !idsExactos.has(activo.id))
+      .slice(0, restantes);
+
     return {
-      // La base ordena por nombre y código; el código escrito exactamente sube
-      // al principio para que el autocompletado muestre primero ese activo.
-      datos: primeroCodigoExacto(((data ?? []) as unknown as FilaActivo[]).map(aActivo), dto.texto),
-      total: count ?? 0,
+      datos: [...exactos, ...otros].slice(0, limite),
+      total: (count ?? 0) + totalExactos,
       pagina,
       limite,
     };
@@ -208,16 +257,6 @@ export class ActivosService {
 // código de la base se compara igual que en las constraints (btrim + upper).
 function esCodigoExacto(codigo: string, texto: string) {
   return codigo.trim().toUpperCase() === texto.trim().toUpperCase();
-}
-
-// Orden estable: primero quienes coinciden con el código exacto; dentro de cada grupo
-// se conserva el orden que ya trae la consulta (nombre, luego código).
-function primeroCodigoExacto(activos: Activo[], texto?: string): Activo[] {
-  if (!texto) return activos;
-  return activos
-    .map((activo, indice) => ({ activo, indice, exacto: esCodigoExacto(activo.codigo, texto) }))
-    .sort((a, b) => Number(b.exacto) - Number(a.exacto) || a.indice - b.indice)
-    .map(({ activo }) => activo);
 }
 
 function aActivo(fila: FilaActivo): Activo {
