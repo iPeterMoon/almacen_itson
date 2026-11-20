@@ -285,11 +285,34 @@ class SolicitudEntrega {
 }
 
 class LineaResumen {
-  const LineaResumen(this.codigo, this.nombre, this.detalle, [this.extra = '']);
+  const LineaResumen(this.codigo, this.nombre, this.detalle);
   final String codigo;
   final String nombre;
-  final String detalle; // cantidad (materiales) o modelo (activos)
-  final String extra; // número de serie (activos)
+  final String detalle; // cantidad con su unidad
+}
+
+/// Una herramienta prestada en la boleta (HU8). El folio del préstamo (PRE-) y la
+/// fecha prevista los genera la base; la app solo los muestra.
+class LineaHerramientaResumen {
+  const LineaHerramientaResumen({
+    required this.codigo,
+    required this.nombre,
+    required this.modelo,
+    required this.serie,
+    required this.dias,
+    required this.fechaPrevista,
+    this.folioPrestamo,
+  });
+
+  final String codigo;
+  final String nombre;
+  final String modelo;
+  final String serie;
+  final int dias;
+  // Fecha prevista de devolución ya formateada (DD/MM/AAAA).
+  final String fechaPrevista;
+  // null mientras el servidor no lo devuelva en el resumen.
+  final String? folioPrestamo;
 }
 
 /// Resumen que devuelve el servidor. El folio lo genera el servidor, no la app.
@@ -301,18 +324,18 @@ class ResumenEntrega {
     required this.fechaHora,
     required this.entregadoPor,
     required this.materiales,
-    required this.activos,
+    this.herramientas = const [],
     this.autorizoNombre,
     this.motivos = const [],
   });
 
-  final String folio;
-  final String recibidoPor;
+  final String folio; // folio de la boleta (BOL-)
+  final String recibidoPor; // también es el resguardante de las herramientas
   final String area;
   final String fechaHora;
   final String entregadoPor;
-  final List<LineaResumen> materiales;
-  final List<LineaResumen> activos;
+  final List<LineaResumen> materiales; // se entregan
+  final List<LineaHerramientaResumen> herramientas; // se prestan
   final String? autorizoNombre;
   final List<String> motivos;
 }

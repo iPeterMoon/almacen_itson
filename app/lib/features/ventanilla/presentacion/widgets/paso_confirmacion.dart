@@ -74,10 +74,20 @@ class _PasoConfirmacionState extends ConsumerState<PasoConfirmacion> {
             ),
             const SizedBox(height: 12),
             _BloqueFirma(
-              etiqueta: 'Recibido por:',
+              etiqueta: e.activos.isEmpty ? 'Recibido por:' : 'Recibido por (resguardante):',
               nombre: e.recibidoPor,
               controlador: _recibe,
               alLimpiar: () => c.setFirmaRecibe(null),
+              // HU8: al firmar, quien recibe queda a cargo de las herramientas prestadas.
+              aviso: e.activos.isEmpty
+                  ? null
+                  : AvisoCaja(
+                      tipo: TipoAviso.info,
+                      titulo: 'Resguardo de herramientas',
+                      mensaje: 'Al firmar, ${e.recibidoPor} queda como resguardante de: '
+                          '${e.activos.map((a) => '${a.activo.codigo} ${a.activo.equipo}').join(', ')}. '
+                          'Es responsable de devolverlas en la fecha prevista.',
+                    ),
             ),
             if (e.error != null) ...[
               const SizedBox(height: 12),
@@ -96,12 +106,14 @@ class _BloqueFirma extends StatelessWidget {
     required this.nombre,
     required this.controlador,
     required this.alLimpiar,
+    this.aviso,
   });
 
   final String etiqueta;
   final String nombre;
   final SignatureController controlador;
   final VoidCallback alLimpiar;
+  final Widget? aviso; // se muestra antes del área de firma
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +126,7 @@ class _BloqueFirma extends StatelessWidget {
         Text(etiqueta, style: const TextStyle(color: Colores.textoSuave, fontSize: 13)),
         const SizedBox(height: 4),
         Text(nombre, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        if (aviso != null) ...[const SizedBox(height: 12), aviso!],
         const SizedBox(height: 12),
         ClipRRect(
           borderRadius: BorderRadius.circular(12),

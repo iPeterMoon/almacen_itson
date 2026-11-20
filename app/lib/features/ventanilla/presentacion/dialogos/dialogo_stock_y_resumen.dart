@@ -90,21 +90,26 @@ Future<AccionResumen?> mostrarDialogoResumen(BuildContext context, ResumenEntreg
                       for (final motivo in r.motivos) _Linea('Motivo', motivo),
                     ]),
                   ),
+                  // Boleta combinada (HU8-E6): el material se entrega y las herramientas
+                  // se prestan; cada cosa va en su propia sección.
                   if (r.materiales.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    const Text('Materiales', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    const _TituloSeccion('Materiales entregados'),
                     const SizedBox(height: 8),
                     _Tabla(
                         encabezados: const ['Código', 'Material', 'Cantidad'],
                         filas: [for (final l in r.materiales) [l.codigo, l.nombre, l.detalle]]),
                   ],
-                  if (r.activos.isNotEmpty) ...[
+                  if (r.herramientas.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    const Text('Activos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    const _TituloSeccion('Herramientas en préstamo'),
+                    const SizedBox(height: 4),
+                    Text('Resguardante: ${r.recibidoPor}',
+                        style: const TextStyle(color: Colores.textoSuave)),
                     const SizedBox(height: 8),
-                    _Tabla(
-                        encabezados: const ['Código', 'Equipo', 'Modelo', 'Número de serie'],
-                        filas: [for (final l in r.activos) [l.codigo, l.nombre, l.detalle, l.extra]]),
+                    ContenedorLista(children: [
+                      for (final h in r.herramientas) _FichaPrestamo(h),
+                    ]),
                   ],
                 ]),
               ),
@@ -123,6 +128,37 @@ Future<AccionResumen?> mostrarDialogoResumen(BuildContext context, ResumenEntreg
       ),
     ),
   );
+}
+
+class _TituloSeccion extends StatelessWidget {
+  const _TituloSeccion(this.texto);
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(texto, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700));
+}
+
+/// Una herramienta prestada: sus datos, el folio del préstamo y cuándo debe volver.
+/// Es una ficha (no una fila de tabla) porque son siete datos y no caben en una línea.
+class _FichaPrestamo extends StatelessWidget {
+  const _FichaPrestamo(this.h);
+  final LineaHerramientaResumen h;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(12),
+        child: RejillaCampos(anchoMinimoColumna: 140, campos: [
+          CampoDato('Herramienta', h.nombre),
+          CampoDato('Código', h.codigo),
+          CampoDato('Modelo', h.modelo),
+          CampoDato('N° Serie', h.serie),
+          // Sin folio todavía: el servidor aún no lo devolvió en el resumen.
+          CampoDato('Folio de préstamo', h.folioPrestamo ?? 'Pendiente'),
+          CampoDato('Préstamo', '${h.dias} día(s)'),
+          CampoDato('Devolución prevista', h.fechaPrevista),
+        ]),
+      );
 }
 
 class _Linea extends StatelessWidget {

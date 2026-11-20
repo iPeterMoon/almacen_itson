@@ -11,6 +11,7 @@ import '../../catalogo_inventario/datos/producto_resumen.dart';
 import '../../catalogo_inventario/datos/productos_repository.dart';
 import '../../prestamos/datos/activos_repositorio.dart';
 import 'boletas_repositorio.dart';
+import 'dias_prestamo.dart' show fechaPrevistaTexto;
 import 'modelos.dart';
 import 'trabajadores_repositorio.dart';
 import 'ventanilla_repositorio.dart';
@@ -288,10 +289,7 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
         for (final m in solicitud.materiales)
           LineaResumen(m.material.codigo, m.material.alias, m.cantidadTexto),
       ],
-      activos: [
-        for (final a in solicitud.activos)
-          LineaResumen(a.activo.codigo, a.activo.equipo, a.activo.modelo, a.activo.serie),
-      ],
+      herramientas: _herramientasDelResumen(solicitud.activos, boleta.prestamos, entregadoEn),
       autorizoNombre: solicitud.autorizoNombre?.trim(),
       motivos: [
         for (final m in solicitud.materiales)
@@ -299,6 +297,32 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
             '${m.material.alias}: ${_motivo(m.motivoExcepcion!)}',
       ],
     );
+  }
+
+  // Une lo capturado (nombre, modelo, serie, días) con lo que generó la base para
+  // cada préstamo (folio PRE- y fecha prevista). Si el servidor aún no manda la
+  // fecha, se muestra la misma que se calculó en la revisión.
+  List<LineaHerramientaResumen> _herramientasDelResumen(
+    List<ItemActivo> activos,
+    List<PrestamoCreado> prestamos,
+    String? entregadoEn,
+  ) {
+    final porCodigo = {for (final p in prestamos) p.codigo: p};
+    final base = DateTime.tryParse(entregadoEn ?? '') ?? DateTime.now();
+    return [
+      for (final a in activos)
+        LineaHerramientaResumen(
+          codigo: a.activo.codigo,
+          nombre: a.activo.equipo,
+          modelo: a.activo.modelo,
+          serie: a.activo.serie,
+          dias: a.dias,
+          folioPrestamo: porCodigo[a.activo.codigo]?.folio,
+          fechaPrevista: porCodigo[a.activo.codigo]?.fechaPrevista != null
+              ? formatearFecha(porCodigo[a.activo.codigo]!.fechaPrevista)
+              : fechaPrevistaTexto(base, a.dias),
+        ),
+    ];
   }
 
   Future<String?> _fechaEntrega(int boletaId) async {

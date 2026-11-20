@@ -8,6 +8,7 @@ import '../dialogos/dialogo_comentario.dart';
 import '../entrega_controlador.dart';
 
 /// Paso 3. Escenario 5: cada material con su cantidad y comentario opcional antes de confirmar.
+/// HU8: cada herramienta con código, nombre, modelo, serie, días y devolución prevista.
 /// Cada partida es una ficha con campos etiquetados (no una tabla apretada), para que se lea
 /// cómodamente en tableta.
 class PasoRevision extends ConsumerWidget {
@@ -25,8 +26,10 @@ class PasoRevision extends ConsumerWidget {
         TarjetaSeccion(
           titulo: 'Lista de materiales y equipo solicitados',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _SubTarjeta(
-              titulo: 'Materiales',
+            // En una boleta solo de herramientas no se muestra la sección vacía de materiales.
+            if (e.materiales.isNotEmpty || e.activos.isEmpty)
+              _SubTarjeta(
+                titulo: 'Materiales (entrega)',
               child: e.materiales.isEmpty
                   ? const Padding(
                       padding: EdgeInsets.all(8),
@@ -59,9 +62,9 @@ class PasoRevision extends ConsumerWidget {
                     ]),
             ),
             if (e.activos.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              if (e.materiales.isNotEmpty) const SizedBox(height: 12),
               _SubTarjeta(
-                titulo: 'Activos',
+                titulo: 'Herramientas (préstamo)',
                 child: ContenedorLista(children: [
                   for (var i = 0; i < e.activos.length; i++)
                     Builder(builder: (context) {
@@ -71,8 +74,8 @@ class PasoRevision extends ConsumerWidget {
                         entregado: it.entregado,
                         onCambio: (v) => c.marcarActivo(it.activo.codigo, v),
                         campos: [
-                          CampoDato('Equipo', it.activo.equipo),
-                          CampoDato('Activo', it.activo.codigo),
+                          CampoDato('Herramienta', it.activo.equipo),
+                          CampoDato('Código', it.activo.codigo),
                           CampoDato('Modelo', it.activo.modelo),
                           CampoDato('N° Serie', it.activo.serie),
                           CampoDato('Préstamo', '${it.dias} día(s)'),

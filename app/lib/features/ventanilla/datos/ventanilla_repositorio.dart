@@ -1,5 +1,6 @@
 import '../../../core/errores/error_negocio.dart';
 import '../../autenticacion/datos/supervisores_repositorio.dart';
+import 'dias_prestamo.dart';
 import 'modelos.dart';
 
 /// Contrato que usa la pantalla. La implementación real llamará a la API NestJS con dio.
@@ -43,6 +44,7 @@ abstract class VentanillaRepositorio {
 /// Reemplazar por VentanillaRepositorioApi cuando exista el contrato.
 class VentanillaRepositorioSimulado implements VentanillaRepositorio {
   int _folio = 184;
+  int _folioPrestamo = 3;
 
   static const _solicitantes = [
     Solicitante(id: '1', nombre: 'Pedro Luna Olivarría', dependencia: 'Servicios Generales', tipo: 'ITSON', zona: 'Taller Principal', areaTrabajo: 'Mantenimiento', areaTrabajo2: 'Taller Principal'),
@@ -208,13 +210,24 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
     _folio++;
     final solicitante = _solicitantes.where((x) => x.id == s.solicitanteId);
     return ResumenEntrega(
-      folio: 'ENT-2026-${_folio.toString().padLeft(4, '0')}',
+      folio: 'BOL-2026-${_folio.toString().padLeft(6, '0')}',
       recibidoPor: solicitante.isNotEmpty ? solicitante.first.nombre : (s.nombreSinRegistro ?? ''),
       area: solicitante.isNotEmpty ? solicitante.first.dependencia : (s.unidadSinRegistro ?? ''),
       fechaHora: '17/10/2026  08:57 a.m.',
       entregadoPor: 'Alicia Beltrán',
       materiales: s.materiales.map((m) => LineaResumen(m.material.codigo, m.material.alias, m.cantidadTexto)).toList(),
-      activos: s.activos.map((a) => LineaResumen(a.activo.codigo, a.activo.equipo, a.activo.modelo, a.activo.serie)).toList(),
+      herramientas: [
+        for (final a in s.activos)
+          LineaHerramientaResumen(
+            codigo: a.activo.codigo,
+            nombre: a.activo.equipo,
+            modelo: a.activo.modelo,
+            serie: a.activo.serie,
+            dias: a.dias,
+            folioPrestamo: 'PRE-2026-${(++_folioPrestamo).toString().padLeft(4, '0')}',
+            fechaPrevista: fechaPrevistaTexto(DateTime.now(), a.dias),
+          ),
+      ],
       autorizoNombre: s.autorizoNombre,
       motivos: [
         for (final m in s.materiales)
