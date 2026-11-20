@@ -64,13 +64,13 @@ class ActivosFalso implements ActivosRepositorio {
   ActivosFalso({this.activos = const [taladro]});
 
   final List<Activo> activos;
-  ({String? texto, String? estado, int? limite})? ultimaConsulta;
+  ({String? texto, bool? soloPrestables, int? limite})? ultimaConsulta;
   var llamadas = 0;
 
   @override
-  Future<PaginaApi<Activo>> buscar({String? texto, String? estado, int? limite}) async {
+  Future<PaginaApi<Activo>> buscar({String? texto, bool? soloPrestables, int? limite}) async {
     llamadas++;
-    ultimaConsulta = (texto: texto, estado: estado, limite: limite);
+    ultimaConsulta = (texto: texto, soloPrestables: soloPrestables, limite: limite);
     return PaginaApi(datos: activos, total: activos.length, pagina: 1, limite: limite ?? 8);
   }
 }

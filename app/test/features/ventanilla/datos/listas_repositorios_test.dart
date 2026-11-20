@@ -68,7 +68,7 @@ void main() {
     expect(lista.single.id, 'uuid-1');
   });
 
-  test('ActivosRepositorio filtra por estado y lee el almacén', () async {
+  test('ActivosRepositorio pide solo prestables y lee el almacén', () async {
     final (:dio, :servidor) = crear(cuerpo: {
       'datos': [
         {
@@ -85,13 +85,13 @@ void main() {
       ],
       'total': 1,
       'pagina': 1,
-      'limite': 20,
+      'limite': 8,
     });
 
-    final r = await ActivosRepositorio(dio).buscar(estado: 'DISPONIBLE', limite: 20);
+    final r = await ActivosRepositorio(dio).buscar(soloPrestables: true);
 
     expect(servidor.ultimaPeticion!.path, '/activos');
-    expect(servidor.ultimaPeticion!.queryParameters, {'estado': 'DISPONIBLE', 'limite': 20});
+    expect(servidor.ultimaPeticion!.queryParameters, {'soloPrestables': true});
     expect(r.datos.single.almacen, 'Principal');
     expect(r.datos.single.ubicacion, isNull);
   });
