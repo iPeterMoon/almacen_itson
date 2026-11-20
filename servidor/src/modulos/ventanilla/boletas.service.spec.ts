@@ -1187,4 +1187,139 @@ describe('BoletasService', () => {
       ).rejects.toMatchObject({ codigo: 'FIRMA_NO_SUBIDA' });
     });
   });
+  describe('historial (HU11, AI-72)', () => {
+    // Imita el constructor de consultas de PostgREST: cada método devuelve la misma
+    // consulta y range() resuelve con la respuesta indicada.
+    function consultaDeHistorial(respuesta: {
+      data: unknown;
+      error: unknown;
+      count: number | null;
+    }) {
+      const consulta = {
+        select: jest.fn(),
+        or: jest.fn(),
+        order: jest.fn(),
+        range: jest.fn().mockResolvedValue(respuesta),
+      };
+      for (const metodo of ['select', 'or', 'order'] as const) {
+        consulta[metodo].mockReturnValue(consulta);
+      }
+      return consulta;
+    }
+
+    const FILA = {
+      id: 7,
+      folio: 'BOL-2026-000007',
+      solicitante_nombre: 'Miguel Ángel Ruiz',
+      solicitante_unidad: null,
+      entregado_en: '2026-11-10T18:00:00.000Z',
+      autorizo_nombre: 'Leonel Lares',
+      trabajadores: { dependencia: 'SERVICIOS_GENERALES' },
+    };
+
+    it('busca por el nombre del solicitante y devuelve los datos con nombres de la API', async () => {
+      const consulta = consultaDeHistorial({ data: [FILA], error: null, count: 1 });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      const resultado = await servicio.historial('token', { q: 'miguel' });
+
+      expect(consulta.or).toHaveBeenCalledWith(
+        'folio.ilike.%miguel%,solicitante_nombre.ilike.%miguel%',
+      );
+      expect(resultado).toEqual({
+        datos: [
+          {
+            id: 7,
+            folio: 'BOL-2026-000007',
+            solicitanteNombre: 'Miguel Ángel Ruiz',
+            dependencia: 'SERVICIOS_GENERALES',
+            entregadoEn: '2026-11-10T18:00:00.000Z',
+            autorizoNombre: 'Leonel Lares',
+          },
+        ],
+        total: 1,
+      });
+    });
+
+    it('busca por folio con el mismo texto', async () => {
+      const consulta = consultaDeHistorial({ data: [FILA], error: null, count: 1 });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      const resultado = await servicio.historial('token', { q: 'BOL-2026-000007' });
+
+      expect(consulta.or).toHaveBeenCalledWith(
+        'folio.ilike.%BOL-2026-000007%,solicitante_nombre.ilike.%BOL-2026-000007%',
+      );
+      expect(resultado.datos[0].folio).toBe('BOL-2026-000007');
+    });
+
+    it('sin q no aplica ningún filtro de búsqueda', async () => {
+      const consulta = consultaDeHistorial({ data: [FILA], error: null, count: 1 });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      await servicio.historial('token', {});
+
+      expect(consulta.or).not.toHaveBeenCalled();
+    });
+
+    it('sin coincidencias devuelve datos vacío y total 0', async () => {
+      const consulta = consultaDeHistorial({ data: [], error: null, count: 0 });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      const resultado = await servicio.historial('token', { q: 'zzzz' });
+
+      expect(resultado).toEqual({ datos: [], total: 0 });
+    });
+
+    it('pagina con pagina y porPagina, y usa 8 por página por defecto', async () => {
+      const consulta = consultaDeHistorial({ data: [], error: null, count: 40 });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      await servicio.historial('token', { pagina: 3, porPagina: 5 });
+      await servicio.historial('token', {});
+
+      expect(consulta.range).toHaveBeenNthCalledWith(1, 10, 14);
+      expect(consulta.range).toHaveBeenNthCalledWith(2, 0, 7);
+    });
+
+    it('ordena por fecha de creación descendente y desempata por id', async () => {
+      const consulta = consultaDeHistorial({ data: [], error: null, count: 0 });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      await servicio.historial('token', {});
+
+      expect(consulta.order).toHaveBeenNthCalledWith(1, 'creado_en', { ascending: false });
+      expect(consulta.order).toHaveBeenNthCalledWith(2, 'id', { ascending: false });
+    });
+
+    it('sin solicitante registrado toma la dependencia de la unidad capturada', async () => {
+      const sinRegistro = {
+        ...FILA,
+        solicitante_nombre: 'Visitante externo',
+        solicitante_unidad: 'Biblioteca',
+        autorizo_nombre: null,
+        trabajadores: null,
+      };
+      const consulta = consultaDeHistorial({ data: [sinRegistro], error: null, count: 1 });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      const resultado = await servicio.historial('token', {});
+
+      expect(resultado.datos[0].dependencia).toBe('Biblioteca');
+      expect(resultado.datos[0].autorizoNombre).toBeNull();
+    });
+
+    it('traduce un error de la base a ErrorNegocio', async () => {
+      const consulta = consultaDeHistorial({
+        data: null,
+        error: { message: 'SIN_PERMISO: No puedes consultar boletas de otro campus.' },
+        count: null,
+      });
+      const servicio = crearServicio({ from: jest.fn().mockReturnValue(consulta) });
+
+      await expect(servicio.historial('token', {})).rejects.toMatchObject({
+        codigo: 'SIN_PERMISO',
+      });
+    });
+  });
 });
