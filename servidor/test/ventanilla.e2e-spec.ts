@@ -1184,6 +1184,76 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
   // Contrato publicado
   // -------------------------------------------------------------------------
 
+  it('el historial responde en /boletas/historial (no lo toma como id) y busca por solicitante o folio', async () => {
+    base.tabla('boletas', () =>
+      ok(
+        [
+          {
+            id: 7,
+            folio: 'BOL-2026-000007',
+            solicitante_nombre: 'Miguel Ángel Ruiz',
+            solicitante_unidad: null,
+            entregado_en: '2026-11-10T18:00:00.000Z',
+            autorizo_nombre: null,
+            trabajadores: { dependencia: 'SERVICIOS_GENERALES' },
+          },
+        ],
+        1,
+      ),
+    );
+
+    const res = await http()
+      .get('/api/v1/boletas/historial')
+      .query({ q: '  miguel ', pagina: '2', porPagina: '5' })
+      .set(como('almacenista'))
+      .expect(200);
+
+    expect(res.body).toEqual({
+      datos: [
+        {
+          id: 7,
+          folio: 'BOL-2026-000007',
+          solicitanteNombre: 'Miguel Ángel Ruiz',
+          dependencia: 'SERVICIOS_GENERALES',
+          entregadoEn: '2026-11-10T18:00:00.000Z',
+          autorizoNombre: null,
+        },
+      ],
+      total: 1,
+    });
+    const [consulta] = base.consultasA('boletas');
+    expect(consulta.llamadas).toContainEqual([
+      'or',
+      'folio.ilike.%miguel%,solicitante_nombre.ilike.%miguel%',
+    ]);
+    expect(consulta.llamadas).toContainEqual(['range', 5, 9]);
+  });
+
+  it('el historial sin coincidencias responde 200 con datos vacío y total 0', async () => {
+    base.tabla('boletas', () => ok([], 0));
+
+    const res = await http()
+      .get('/api/v1/boletas/historial')
+      .query({ q: 'zzzz' })
+      .set(como('almacenista'))
+      .expect(200);
+
+    expect(res.body).toEqual({ datos: [], total: 0 });
+  });
+
+  it('el historial rechaza comodines y parámetros que no existen', async () => {
+    await http()
+      .get('/api/v1/boletas/historial')
+      .query({ q: 'a%' })
+      .set(como('almacenista'))
+      .expect(400);
+    await http()
+      .get('/api/v1/boletas/historial')
+      .query({ limite: '5' })
+      .set(como('almacenista'))
+      .expect(400);
+  });
+
   it('documenta en Swagger todas las rutas de la HU 6', async () => {
     const res = await http().get('/docs-json').expect(200);
 
@@ -1191,6 +1261,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       '/api/v1/trabajadores',
       '/api/v1/entregas',
       '/api/v1/boletas',
+      '/api/v1/boletas/historial',
       '/api/v1/boletas/validar-material',
       '/api/v1/boletas/firmas',
       '/api/v1/boletas/{id}',
