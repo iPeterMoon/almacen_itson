@@ -18,6 +18,16 @@ function crearConRpc(rpc: jest.Mock, prestamos: RespuestaFalsa = { data: [], err
   return { rpc, from, consulta, clienteDeUsuario, servicio: new ActivosService(supabase) };
 }
 
+// Con texto hay dos consultas: primero el código exacto y luego el resto. Este
+// falso devuelve una respuesta distinta para cada una y registra sus filtros.
+function crearConBusquedaEnDosPartes(exacta: RespuestaFalsa, normal: RespuestaFalsa) {
+  const consultaExacta = crearSupabaseFalso(exacta).consulta;
+  const consultaNormal = crearSupabaseFalso(normal).consulta;
+  const from = jest.fn().mockReturnValueOnce(consultaExacta).mockReturnValueOnce(consultaNormal);
+  const supabase = { clienteDeUsuario: jest.fn(() => ({ from })) } as unknown as SupabaseService;
+  return { from, consultaExacta, consultaNormal, servicio: new ActivosService(supabase) };
+}
+
 const PRESTAMO_TALADRO = {
   folio: 'PRE-2026-0004',
   codigo: 'TAL-002',
@@ -101,6 +111,113 @@ describe('ActivosService', () => {
     expect(consulta.or).toHaveBeenCalledWith(
       'codigo.ilike.%tal%,nombre.ilike.%tal%,numero_serie.ilike.%tal%',
     );
+  });
+
+  it('busca por código con coincidencia parcial y sin distinguir mayúsculas', async () => {
+    const { servicio, consulta } = crear({ data: [taladro], error: null, count: 1 });
+
+    await servicio.listar('token', { texto: 'TAL-001' });
+
+    expect(consulta.or).toHaveBeenCalledWith(
+      'codigo.ilike.%TAL-001%,nombre.ilike.%TAL-001%,numero_serie.ilike.%TAL-001%',
+    );
+  });
+
+  it('busca por número de serie con coincidencia parcial', async () => {
+    const { servicio, consulta } = crear({ data: [taladro], error: null, count: 1 });
+
+    await servicio.listar('token', { texto: 'SN-TAL' });
+
+    expect(consulta.or).toHaveBeenCalledWith(
+      'codigo.ilike.%SN-TAL%,nombre.ilike.%SN-TAL%,numero_serie.ilike.%SN-TAL%',
+    );
+  });
+
+  it('pone primero el activo cuyo código coincide exacto', async () => {
+    const alicates = { ...taladro, id: 2, codigo: 'TAL-002', nombre: 'Alicates' };
+    const pinzas = { ...taladro, id: 3, codigo: 'TAL-003', nombre: 'Pinzas' };
+    const { servicio } = crear({
+      data: [alicates, taladro, pinzas],
+      error: null,
+      count: 3,
+    });
+
+    const { datos } = await servicio.listar('token', { texto: ' tal-001 ' });
+
+    expect(datos.map((a) => a.codigo)).toEqual(['TAL-001', 'TAL-002', 'TAL-003']);
+  });
+
+  it('trae el código exacto aunque por nombre caiga fuera de la página', async () => {
+    const otros = Array.from({ length: 10 }, (_, i) => ({
+      ...taladro,
+      id: i + 2,
+      codigo: `OTR-${String(i + 1).padStart(3, '0')}`,
+      nombre: `Alicate ${String(i + 1).padStart(2, '0')}`,
+    }));
+    const { servicio, consultaExacta, consultaNormal } = crearConBusquedaEnDosPartes(
+      { data: [taladro], error: null, count: 1 },
+      { data: otros, error: null, count: 20 },
+    );
+
+    const { datos, total } = await servicio.listar('token', { texto: 'TAL-001' });
+
+    expect(consultaExacta.ilike).toHaveBeenCalledWith('codigo', 'TAL-001');
+    expect(consultaExacta.range).toHaveBeenCalledWith(0, 7);
+    expect(consultaNormal.not).toHaveBeenCalledWith('codigo', 'ilike', 'TAL-001');
+    expect(consultaNormal.range).toHaveBeenCalledWith(0, 6);
+    expect(datos.map((a) => a.codigo)).toEqual([
+      'TAL-001',
+      ...otros.slice(0, 7).map((a) => a.codigo),
+    ]);
+    expect(total).toBe(21);
+  });
+
+  it('no repite el código exacto al pedir la página siguiente', async () => {
+    const otros = Array.from({ length: 15 }, (_, i) => ({
+      ...taladro,
+      id: i + 2,
+      codigo: `OTR-${String(i + 1).padStart(3, '0')}`,
+      nombre: `Alicate ${String(i + 1).padStart(2, '0')}`,
+    }));
+    const { servicio, consultaExacta, consultaNormal } = crearConBusquedaEnDosPartes(
+      // En la página 2 ya no hay filas exactas, pero su count se usa para el desplazamiento.
+      { data: [], error: null, count: 1 },
+      { data: otros.slice(7, 15), error: null, count: 20 },
+    );
+
+    const { datos } = await servicio.listar('token', { texto: 'TAL-001', pagina: 2 });
+
+    expect(consultaExacta.range).toHaveBeenCalledWith(8, 15);
+    expect(consultaNormal.range).toHaveBeenCalledWith(7, 14);
+    expect(datos.map((a) => a.codigo)).toEqual(otros.slice(7, 15).map((a) => a.codigo));
+    expect(datos.some((a) => a.codigo === 'TAL-001')).toBe(false);
+  });
+
+  it('conserva el orden de la base cuando no hay coincidencia exacta', async () => {
+    const alicates = { ...taladro, id: 2, codigo: 'TAL-002', nombre: 'Alicates' };
+    const { servicio } = crear({ data: [alicates, taladro], error: null, count: 2 });
+
+    const { datos } = await servicio.listar('token', { texto: 'tal' });
+
+    expect(datos.map((a) => a.codigo)).toEqual(['TAL-002', 'TAL-001']);
+  });
+
+  it('soloPrestables=true filtra por DISPONIBLE y prevalece sobre estado', async () => {
+    const { servicio, consulta } = crear({ data: [], error: null, count: 0 });
+
+    await servicio.listar('token', { estado: 'EN_PRESTAMO', soloPrestables: true });
+
+    expect(consulta.eq).toHaveBeenCalledTimes(1);
+    expect(consulta.eq).toHaveBeenCalledWith('estado', 'DISPONIBLE');
+    expect(consulta.range).toHaveBeenCalledWith(0, 7);
+  });
+
+  it('soloPrestables=false no filtra por estado', async () => {
+    const { servicio, consulta } = crear({ data: [], error: null, count: 0 });
+
+    await servicio.listar('token', { soloPrestables: false });
+
+    expect(consulta.eq).not.toHaveBeenCalled();
   });
 
   it('un activo sin ubicación no rompe la respuesta', async () => {

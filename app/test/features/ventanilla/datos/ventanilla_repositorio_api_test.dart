@@ -411,7 +411,7 @@ void main() {
 
     final lista = await crearApi(ProductosFalso(), activos: activos).buscarActivos('tal');
 
-    expect(activos.ultimaConsulta, (texto: 'tal', estado: 'DISPONIBLE', limite: 20));
+    expect(activos.ultimaConsulta, (texto: 'tal', soloPrestables: true, limite: null));
     expect(lista.single.activoId, 3);
     expect(lista.single.equipo, 'Taladro inalámbrico');
     expect(lista.single.serie, 'SN-TAL-001');
