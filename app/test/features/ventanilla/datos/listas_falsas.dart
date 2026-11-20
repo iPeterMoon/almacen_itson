@@ -60,22 +60,79 @@ const taladro = Activo(
   ubicacion: 'E1F1',
 );
 
+// Activos de ejemplo con los demás estados (HU8, Escenarios 2 y 3).
+const rotomartillo = Activo(
+  id: 4,
+  codigo: '912391',
+  nombre: 'Rotomartillo SDS Plus',
+  modelo: 'Bosch GBH 2-28',
+  numeroSerie: 'KRC-112233445',
+  estado: 'EN_PRESTAMO',
+  almacen: 'Principal',
+  ubicacion: 'E1F2',
+);
+
+const sierraEnReparacion = Activo(
+  id: 5,
+  codigo: '912401',
+  nombre: 'Sierra circular',
+  modelo: 'Makita 5007MG',
+  numeroSerie: 'MK-445566',
+  estado: 'EN_REPARACION',
+  almacen: 'Principal',
+  ubicacion: 'E1F3',
+);
+
 class ActivosFalso implements ActivosRepositorio {
-  ActivosFalso({this.activos = const [taladro]});
+  ActivosFalso({
+    this.activos = const [taladro],
+    this.total,
+    this.error,
+    this.conVencido = false,
+    this.errorAlValidar,
+  });
 
   final List<Activo> activos;
-  ({String? texto, bool? soloPrestables, int? limite})? ultimaConsulta;
+  // Total que responde el servidor falso; si no se indica, los activos recibidos.
+  final int? total;
+  final Object? error;
+  // POST /activos/validar: si el solicitante tiene un préstamo vencido, y un error
+  // a lanzar (ej. ACTIVO_NO_ENCONTRADO).
+  final bool conVencido;
+  final Object? errorAlValidar;
+  final validaciones = <({String codigo, int? trabajadorId})>[];
+
+  // Responde según el estado del activo: los prestados los tiene Mario Acosta hasta
+  // el 19/10/2026 (18:00 UTC = 11:00 a.m. en Hermosillo).
+  @override
+  Future<ValidacionActivoApi> validar({required String codigo, int? trabajadorId}) async {
+    validaciones.add((codigo: codigo, trabajadorId: trabajadorId));
+    if (errorAlValidar != null) throw errorAlValidar!;
+    final activo = activos.firstWhere((a) => a.codigo == codigo);
+    final prestado = activo.estado == 'EN_PRESTAMO';
+    return ValidacionActivoApi(
+      activo: activo,
+      prestable: activo.estado == 'DISPONIBLE',
+      motivo: activo.estado == 'DISPONIBLE' ? null : (prestado ? 'PRESTADO' : 'NO_DISPONIBLE'),
+      custodio: prestado ? 'Mario Acosta' : null,
+      fechaPrevista: prestado ? '2026-10-19T18:00:00.000Z' : null,
+      prestadoEn: prestado ? '2026-10-17T15:57:00.000Z' : null,
+      solicitanteConVencido: conVencido && trabajadorId != null,
+    );
+  }
+  ({String? texto, String? estado, int? pagina, int? limite})? ultimaConsulta;
   var llamadas = 0;
 
   @override
-  Future<PaginaApi<Activo>> buscar({
-    String? texto,
-    bool? soloPrestables,
-    String? estado,
-    int? limite,
-  }) async {
+  Future<PaginaApi<Activo>> buscar({String? texto, String? estado, int? pagina, int? limite, bool? soloPrestables}) async {
     llamadas++;
-    ultimaConsulta = (texto: texto, soloPrestables: soloPrestables, limite: limite);
-    return PaginaApi(datos: activos, total: activos.length, pagina: 1, limite: limite ?? 8);
+    ultimaConsulta = (texto: texto, estado: estado, pagina: pagina, limite: limite);
+    if (error != null) throw error!;
+    return PaginaApi(
+      datos: activos,
+      total: total ?? activos.length,
+      pagina: pagina ?? 1,
+      limite: limite ?? 8,
+    );
   }
 }

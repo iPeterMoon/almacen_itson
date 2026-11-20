@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errores/error_negocio.dart';
+import '../../../core/widgets/componentes.dart';
+import '../datos/dias_prestamo.dart';
 import '../datos/modelos.dart';
 import 'dialogos/dialogo_sugerencia_autorizacion.dart';
 import 'dialogos/dialogo_stock_y_resumen.dart';
@@ -133,6 +135,12 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
                 children: [
                   IndicadorPasos(actual: e.paso),
                   Expanded(child: cuerpo),
+                  // HU8: explica por qué "Siguiente" está deshabilitado.
+                  if (e.paso == 1 && e.hayDiasInvalidos)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: AvisoCaja(tipo: TipoAviso.error, mensaje: mensajeDiasInvalidos),
+                    ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
