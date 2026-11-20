@@ -175,10 +175,14 @@ export class ActivosService {
       .clienteDeUsuario(token)
       .from('activos')
       .select(CAMPOS, { count: 'exact' });
-    if (dto.estado) consulta = consulta.eq('estado', dto.estado);
+    // soloPrestables es el atajo que usa la boleta; prevalece sobre estado para no
+    // enviar dos filtros contradictorios.
+    const estado = dto.soloPrestables ? 'DISPONIBLE' : dto.estado;
+    if (estado) consulta = consulta.eq('estado', estado);
     if (dto.texto) {
       // El DTO solo permite letras, números, espacios y . - / # ', así que el texto
-      // no rompe la sintaxis del filtro "or" ni trae comodines.
+      // no rompe la sintaxis del filtro "or" ni trae comodines. ilike con % a ambos
+      // lados: coincidencia parcial sin distinguir mayúsculas en las 3 columnas.
       const t = `%${dto.texto}%`;
       consulta = consulta.or(`codigo.ilike.${t},nombre.ilike.${t},numero_serie.ilike.${t}`);
     }
@@ -190,12 +194,30 @@ export class ActivosService {
 
     if (error) throw parsearErrorBase(error.message) ?? new Error(error.message);
     return {
-      datos: ((data ?? []) as unknown as FilaActivo[]).map(aActivo),
+      // La base ordena por nombre y código; el código escrito exactamente sube
+      // al principio para que el autocompletado muestre primero ese activo.
+      datos: primeroCodigoExacto(((data ?? []) as unknown as FilaActivo[]).map(aActivo), dto.texto),
       total: count ?? 0,
       pagina,
       limite,
     };
   }
+}
+
+// El texto del autocompletado puede traer mayúsculas o espacios alrededor; el
+// código de la base se compara igual que en las constraints (btrim + upper).
+function esCodigoExacto(codigo: string, texto: string) {
+  return codigo.trim().toUpperCase() === texto.trim().toUpperCase();
+}
+
+// Orden estable: primero quienes coinciden con el código exacto; dentro de cada grupo
+// se conserva el orden que ya trae la consulta (nombre, luego código).
+function primeroCodigoExacto(activos: Activo[], texto?: string): Activo[] {
+  if (!texto) return activos;
+  return activos
+    .map((activo, indice) => ({ activo, indice, exacto: esCodigoExacto(activo.codigo, texto) }))
+    .sort((a, b) => Number(b.exacto) - Number(a.exacto) || a.indice - b.indice)
+    .map(({ activo }) => activo);
 }
 
 function aActivo(fila: FilaActivo): Activo {
