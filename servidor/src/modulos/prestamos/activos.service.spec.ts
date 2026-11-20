@@ -2,11 +2,22 @@ import { HttpStatus } from '@nestjs/common';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { crearSupabaseFalso, RespuestaFalsa } from '../../comun/pruebas/supabase-falso';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { Rol, type UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { ActivosService } from './activos.service';
+import { CacheActivosService, crearCacheEnMemoria } from './cache-activos.service';
+
+// Cada prueba con su propia caché, para que una respuesta guardada no pase a otra.
+function cacheNueva() {
+  return new CacheActivosService(crearCacheEnMemoria());
+}
+
+function almacenista(token: string, campusId = 1): UsuarioAutenticado {
+  return { id: 'u-alm', nombre: 'Alicia García', rol: Rol.Almacenista, campusId, token };
+}
 
 function crear(respuesta: RespuestaFalsa) {
   const falso = crearSupabaseFalso(respuesta);
-  return { ...falso, servicio: new ActivosService(falso.supabase) };
+  return { ...falso, servicio: new ActivosService(falso.supabase, cacheNueva()) };
 }
 
 // validar_activo es una RPC y los préstamos abiertos se leen con from, así que el
@@ -15,7 +26,13 @@ function crearConRpc(rpc: jest.Mock, prestamos: RespuestaFalsa = { data: [], err
   const { consulta, from } = crearSupabaseFalso(prestamos);
   const clienteDeUsuario = jest.fn(() => ({ rpc, from }));
   const supabase = { clienteDeUsuario } as unknown as SupabaseService;
-  return { rpc, from, consulta, clienteDeUsuario, servicio: new ActivosService(supabase) };
+  return {
+    rpc,
+    from,
+    consulta,
+    clienteDeUsuario,
+    servicio: new ActivosService(supabase, cacheNueva()),
+  };
 }
 
 // Con texto hay dos consultas: primero el código exacto y luego el resto. Este
@@ -25,7 +42,12 @@ function crearConBusquedaEnDosPartes(exacta: RespuestaFalsa, normal: RespuestaFa
   const consultaNormal = crearSupabaseFalso(normal).consulta;
   const from = jest.fn().mockReturnValueOnce(consultaExacta).mockReturnValueOnce(consultaNormal);
   const supabase = { clienteDeUsuario: jest.fn(() => ({ from })) } as unknown as SupabaseService;
-  return { from, consultaExacta, consultaNormal, servicio: new ActivosService(supabase) };
+  return {
+    from,
+    consultaExacta,
+    consultaNormal,
+    servicio: new ActivosService(supabase, cacheNueva()),
+  };
 }
 
 const PRESTAMO_TALADRO = {
@@ -75,7 +97,7 @@ describe('ActivosService', () => {
       count: 1,
     });
 
-    const resultado = await servicio.listar('token-usuario', {});
+    const resultado = await servicio.listar(almacenista('token-usuario'), {});
 
     expect(clienteDeUsuario).toHaveBeenCalledWith('token-usuario');
     expect(from).toHaveBeenCalledWith('activos');
@@ -105,7 +127,7 @@ describe('ActivosService', () => {
   it('filtra por estado y busca en código, nombre y número de serie', async () => {
     const { servicio, consulta } = crear({ data: [], error: null, count: 0 });
 
-    await servicio.listar('token', { estado: 'DISPONIBLE', texto: 'tal' });
+    await servicio.listar(almacenista('token'), { estado: 'DISPONIBLE', texto: 'tal' });
 
     expect(consulta.eq).toHaveBeenCalledWith('estado', 'DISPONIBLE');
     expect(consulta.or).toHaveBeenCalledWith(
@@ -116,7 +138,7 @@ describe('ActivosService', () => {
   it('busca por código con coincidencia parcial y sin distinguir mayúsculas', async () => {
     const { servicio, consulta } = crear({ data: [taladro], error: null, count: 1 });
 
-    await servicio.listar('token', { texto: 'TAL-001' });
+    await servicio.listar(almacenista('token'), { texto: 'TAL-001' });
 
     expect(consulta.or).toHaveBeenCalledWith(
       'codigo.ilike.%TAL-001%,nombre.ilike.%TAL-001%,numero_serie.ilike.%TAL-001%',
@@ -126,7 +148,7 @@ describe('ActivosService', () => {
   it('busca por número de serie con coincidencia parcial', async () => {
     const { servicio, consulta } = crear({ data: [taladro], error: null, count: 1 });
 
-    await servicio.listar('token', { texto: 'SN-TAL' });
+    await servicio.listar(almacenista('token'), { texto: 'SN-TAL' });
 
     expect(consulta.or).toHaveBeenCalledWith(
       'codigo.ilike.%SN-TAL%,nombre.ilike.%SN-TAL%,numero_serie.ilike.%SN-TAL%',
@@ -142,7 +164,7 @@ describe('ActivosService', () => {
       count: 3,
     });
 
-    const { datos } = await servicio.listar('token', { texto: ' tal-001 ' });
+    const { datos } = await servicio.listar(almacenista('token'), { texto: ' tal-001 ' });
 
     expect(datos.map((a) => a.codigo)).toEqual(['TAL-001', 'TAL-002', 'TAL-003']);
   });
@@ -159,7 +181,7 @@ describe('ActivosService', () => {
       { data: otros, error: null, count: 20 },
     );
 
-    const { datos, total } = await servicio.listar('token', { texto: 'TAL-001' });
+    const { datos, total } = await servicio.listar(almacenista('token'), { texto: 'TAL-001' });
 
     expect(consultaExacta.ilike).toHaveBeenCalledWith('codigo', 'TAL-001');
     expect(consultaExacta.range).toHaveBeenCalledWith(0, 7);
@@ -185,7 +207,7 @@ describe('ActivosService', () => {
       { data: otros.slice(7, 15), error: null, count: 20 },
     );
 
-    const { datos } = await servicio.listar('token', { texto: 'TAL-001', pagina: 2 });
+    const { datos } = await servicio.listar(almacenista('token'), { texto: 'TAL-001', pagina: 2 });
 
     expect(consultaExacta.range).toHaveBeenCalledWith(8, 15);
     expect(consultaNormal.range).toHaveBeenCalledWith(7, 14);
@@ -197,7 +219,7 @@ describe('ActivosService', () => {
     const alicates = { ...taladro, id: 2, codigo: 'TAL-002', nombre: 'Alicates' };
     const { servicio } = crear({ data: [alicates, taladro], error: null, count: 2 });
 
-    const { datos } = await servicio.listar('token', { texto: 'tal' });
+    const { datos } = await servicio.listar(almacenista('token'), { texto: 'tal' });
 
     expect(datos.map((a) => a.codigo)).toEqual(['TAL-002', 'TAL-001']);
   });
@@ -205,7 +227,7 @@ describe('ActivosService', () => {
   it('soloPrestables=true filtra por DISPONIBLE y prevalece sobre estado', async () => {
     const { servicio, consulta } = crear({ data: [], error: null, count: 0 });
 
-    await servicio.listar('token', { estado: 'EN_PRESTAMO', soloPrestables: true });
+    await servicio.listar(almacenista('token'), { estado: 'EN_PRESTAMO', soloPrestables: true });
 
     expect(consulta.eq).toHaveBeenCalledTimes(1);
     expect(consulta.eq).toHaveBeenCalledWith('estado', 'DISPONIBLE');
@@ -215,7 +237,7 @@ describe('ActivosService', () => {
   it('soloPrestables=false no filtra por estado', async () => {
     const { servicio, consulta } = crear({ data: [], error: null, count: 0 });
 
-    await servicio.listar('token', { soloPrestables: false });
+    await servicio.listar(almacenista('token'), { soloPrestables: false });
 
     expect(consulta.eq).not.toHaveBeenCalled();
   });
@@ -223,7 +245,7 @@ describe('ActivosService', () => {
   it('un activo sin ubicación no rompe la respuesta', async () => {
     const { servicio } = crear({ data: [{ ...taladro, ubicaciones: null }], error: null });
 
-    const { datos } = await servicio.listar('token', {});
+    const { datos } = await servicio.listar(almacenista('token'), {});
 
     expect(datos[0].almacen).toBeNull();
     expect(datos[0].ubicacion).toBeNull();
@@ -232,7 +254,30 @@ describe('ActivosService', () => {
   it('un error de negocio de la base sale como ErrorNegocio', async () => {
     const { servicio } = crear({ data: null, error: { message: 'SIN_PERMISO: No.' } });
 
-    await expect(servicio.listar('token', {})).rejects.toBeInstanceOf(ErrorNegocio);
+    await expect(servicio.listar(almacenista('token'), {})).rejects.toBeInstanceOf(ErrorNegocio);
+  });
+
+  // AI-49: la búsqueda pasa por la caché; el detalle se prueba en cache-activos.service.spec.
+  it('la segunda búsqueda igual del mismo campus no vuelve a consultar la base', async () => {
+    const { servicio, from } = crear({ data: [taladro], error: null, count: 1 });
+
+    const primera = await servicio.listar(almacenista('token-a'), { texto: 'tal' });
+    // Con texto se hacen dos consultas (código exacto y el resto).
+    const consultasDeLaPrimera = from.mock.calls.length;
+    const segunda = await servicio.listar(almacenista('token-b'), { texto: 'tal' });
+
+    expect(consultasDeLaPrimera).toBeGreaterThan(0);
+    expect(from).toHaveBeenCalledTimes(consultasDeLaPrimera);
+    expect(segunda).toEqual(primera);
+  });
+
+  it('un error de la base no se guarda en la caché', async () => {
+    const { servicio, from } = crear({ data: null, error: { message: 'SIN_PERMISO: No.' } });
+
+    await expect(servicio.listar(almacenista('token'), {})).rejects.toBeInstanceOf(ErrorNegocio);
+    await expect(servicio.listar(almacenista('token'), {})).rejects.toBeInstanceOf(ErrorNegocio);
+
+    expect(from).toHaveBeenCalledTimes(2);
   });
 
   describe('validarActivo', () => {

@@ -97,7 +97,8 @@ export class ActivosController {
       'la búsqueda, aunque por nombre cayera fuera de la página solicitada. ' +
       'Con estado=DISPONIBLE o soloPrestables=true devuelve solo los que se pueden prestar ' +
       '(soloPrestables prevalece si ambos vienen). El "id" es el activoId de POST /boletas. ' +
-      'Límite 8 por defecto, máximo 50.',
+      'Límite 8 por defecto, máximo 50. La respuesta se guarda 10 min por campus y se ' +
+      'descarta al entregar una boleta con herramientas (la del supervisor jefe no se guarda).',
   })
   @ApiOkResponse({
     description: 'Página de activos.',
@@ -123,6 +124,6 @@ export class ActivosController {
     },
   })
   listar(@UsuarioActual() usuario: UsuarioAutenticado, @Query() dto: ListarActivosDto) {
-    return this.activos.listar(usuario.token, dto);
+    return this.activos.listar(usuario, dto);
   }
 }
