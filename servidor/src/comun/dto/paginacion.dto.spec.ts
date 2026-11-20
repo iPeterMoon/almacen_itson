@@ -53,4 +53,16 @@ describe('ListarActivosDto', () => {
     expect((await validar(ListarActivosDto, { estado: 'DISPONIBLE' })).campos).toEqual([]);
     expect((await validar(ListarActivosDto, { estado: 'PERDIDO' })).campos).toEqual(['estado']);
   });
+
+  it('convierte soloPrestables y rechaza otro valor que no sea true/false', async () => {
+    expect((await validar(ListarActivosDto, { soloPrestables: 'true' })).dto.soloPrestables).toBe(
+      true,
+    );
+    expect((await validar(ListarActivosDto, { soloPrestables: 'false' })).dto.soloPrestables).toBe(
+      false,
+    );
+    expect((await validar(ListarActivosDto, { soloPrestables: 'sí' })).campos).toEqual([
+      'soloPrestables',
+    ]);
+  });
 });
