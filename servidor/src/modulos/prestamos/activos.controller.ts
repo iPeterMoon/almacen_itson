@@ -94,7 +94,8 @@ export class ActivosController {
     description:
       'Búsqueda parcial por código, nombre o número de serie, ordenada por nombre. ' +
       'Con estado=DISPONIBLE devuelve solo los que se pueden prestar. El "id" es el ' +
-      'activoId de POST /boletas.',
+      'activoId de POST /boletas. La respuesta se guarda 10 min por campus y se descarta ' +
+      'al entregar una boleta con herramientas (la del supervisor jefe no se guarda).',
   })
   @ApiOkResponse({
     description: 'Página de activos.',
@@ -120,6 +121,6 @@ export class ActivosController {
     },
   })
   listar(@UsuarioActual() usuario: UsuarioAutenticado, @Query() dto: ListarActivosDto) {
-    return this.activos.listar(usuario.token, dto);
+    return this.activos.listar(usuario, dto);
   }
 }

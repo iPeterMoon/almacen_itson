@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { LIMITE_LISTA_POR_DEFECTO, rangoDePagina } from '../../comun/dto/paginacion.dto';
 import { parsearErrorBase } from '../../comun/errores/error-negocio';
+import type { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { CacheActivosService } from './cache-activos.service';
 import { ListarActivosDto } from './dto/listar-activos.dto';
 import { ValidarActivoDto } from './dto/validar-activo.dto';
 
@@ -98,7 +100,10 @@ function normalizarNombre(nombre: string) {
 // del usuario.
 @Injectable()
 export class ActivosService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly cache: CacheActivosService,
+  ) {}
 
   // HU8: la base decide si el activo existe en los campus del usuario, quién lo
   // tiene prestado y si el solicitante tiene vencidos. Aquí solo se traduce la
@@ -167,7 +172,13 @@ export class ActivosService {
     return (data ?? []) as FilaPrestamoAbierto[];
   }
 
-  async listar(token: string, dto: ListarActivosDto) {
+  // Búsqueda del autocompletado. Se guarda 10 min por campus (ver CacheActivosService)
+  // y se descarta al prestar, así no se ofrece como disponible un activo prestado.
+  listar(usuario: UsuarioAutenticado, dto: ListarActivosDto) {
+    return this.cache.buscar(usuario, dto, () => this.consultar(usuario.token, dto));
+  }
+
+  private async consultar(token: string, dto: ListarActivosDto) {
     const pagina = dto.pagina ?? 1;
     const limite = dto.limite ?? LIMITE_LISTA_POR_DEFECTO;
 

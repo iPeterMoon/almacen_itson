@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PrestamosModule } from '../prestamos/prestamos.module';
 import { BoletasController } from './boletas.controller';
 import { BoletasService } from './boletas.service';
 import { ConfirmacionService } from './confirmacion.service';
@@ -11,6 +12,8 @@ import { TrabajadoresService } from './trabajadores.service';
 // solicitantes registrados. Aquí se irán agregando otros controladores del mismo
 // dominio (por ejemplo, devoluciones).
 @Module({
+  // Préstamos exporta la caché de activos, que se invalida al entregar herramientas.
+  imports: [PrestamosModule],
   controllers: [BoletasController, EntregasController, TrabajadoresController],
   providers: [BoletasService, ConfirmacionService, EntregasService, TrabajadoresService],
 })

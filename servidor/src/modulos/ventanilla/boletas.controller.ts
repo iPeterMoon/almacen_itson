@@ -91,7 +91,7 @@ export class BoletasController {
     description: 'Boleta entregada, con su folio, estado, alertas y resumen.',
   })
   crear(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: CrearBoletaDto) {
-    return this.confirmacion.crearBoleta(usuario.token, dto);
+    return this.confirmacion.crearBoleta(usuario, dto);
   }
 
   // Sin @Roles: cualquier usuario autenticado puede consultar; las políticas RLS filtran por campus.

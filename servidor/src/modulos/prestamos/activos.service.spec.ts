@@ -2,11 +2,22 @@ import { HttpStatus } from '@nestjs/common';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { crearSupabaseFalso, RespuestaFalsa } from '../../comun/pruebas/supabase-falso';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { Rol, type UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { ActivosService } from './activos.service';
+import { CacheActivosService, crearCacheEnMemoria } from './cache-activos.service';
+
+// Cada prueba con su propia caché, para que una respuesta guardada no pase a otra.
+function cacheNueva() {
+  return new CacheActivosService(crearCacheEnMemoria());
+}
+
+function almacenista(token: string, campusId = 1): UsuarioAutenticado {
+  return { id: 'u-alm', nombre: 'Alicia García', rol: Rol.Almacenista, campusId, token };
+}
 
 function crear(respuesta: RespuestaFalsa) {
   const falso = crearSupabaseFalso(respuesta);
-  return { ...falso, servicio: new ActivosService(falso.supabase) };
+  return { ...falso, servicio: new ActivosService(falso.supabase, cacheNueva()) };
 }
 
 // validar_activo es una RPC y los préstamos abiertos se leen con from, así que el
@@ -15,7 +26,13 @@ function crearConRpc(rpc: jest.Mock, prestamos: RespuestaFalsa = { data: [], err
   const { consulta, from } = crearSupabaseFalso(prestamos);
   const clienteDeUsuario = jest.fn(() => ({ rpc, from }));
   const supabase = { clienteDeUsuario } as unknown as SupabaseService;
-  return { rpc, from, consulta, clienteDeUsuario, servicio: new ActivosService(supabase) };
+  return {
+    rpc,
+    from,
+    consulta,
+    clienteDeUsuario,
+    servicio: new ActivosService(supabase, cacheNueva()),
+  };
 }
 
 const PRESTAMO_TALADRO = {
@@ -65,7 +82,7 @@ describe('ActivosService', () => {
       count: 1,
     });
 
-    const resultado = await servicio.listar('token-usuario', {});
+    const resultado = await servicio.listar(almacenista('token-usuario'), {});
 
     expect(clienteDeUsuario).toHaveBeenCalledWith('token-usuario');
     expect(from).toHaveBeenCalledWith('activos');
@@ -95,7 +112,7 @@ describe('ActivosService', () => {
   it('filtra por estado y busca en código, nombre y número de serie', async () => {
     const { servicio, consulta } = crear({ data: [], error: null, count: 0 });
 
-    await servicio.listar('token', { estado: 'DISPONIBLE', texto: 'tal' });
+    await servicio.listar(almacenista('token'), { estado: 'DISPONIBLE', texto: 'tal' });
 
     expect(consulta.eq).toHaveBeenCalledWith('estado', 'DISPONIBLE');
     expect(consulta.or).toHaveBeenCalledWith(
@@ -106,7 +123,7 @@ describe('ActivosService', () => {
   it('un activo sin ubicación no rompe la respuesta', async () => {
     const { servicio } = crear({ data: [{ ...taladro, ubicaciones: null }], error: null });
 
-    const { datos } = await servicio.listar('token', {});
+    const { datos } = await servicio.listar(almacenista('token'), {});
 
     expect(datos[0].almacen).toBeNull();
     expect(datos[0].ubicacion).toBeNull();
@@ -115,7 +132,27 @@ describe('ActivosService', () => {
   it('un error de negocio de la base sale como ErrorNegocio', async () => {
     const { servicio } = crear({ data: null, error: { message: 'SIN_PERMISO: No.' } });
 
-    await expect(servicio.listar('token', {})).rejects.toBeInstanceOf(ErrorNegocio);
+    await expect(servicio.listar(almacenista('token'), {})).rejects.toBeInstanceOf(ErrorNegocio);
+  });
+
+  // AI-49: la búsqueda pasa por la caché; el detalle se prueba en cache-activos.service.spec.
+  it('la segunda búsqueda igual del mismo campus no vuelve a consultar la base', async () => {
+    const { servicio, from } = crear({ data: [taladro], error: null, count: 1 });
+
+    const primera = await servicio.listar(almacenista('token-a'), { texto: 'tal' });
+    const segunda = await servicio.listar(almacenista('token-b'), { texto: 'tal' });
+
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(segunda).toEqual(primera);
+  });
+
+  it('un error de la base no se guarda en la caché', async () => {
+    const { servicio, from } = crear({ data: null, error: { message: 'SIN_PERMISO: No.' } });
+
+    await expect(servicio.listar(almacenista('token'), {})).rejects.toBeInstanceOf(ErrorNegocio);
+    await expect(servicio.listar(almacenista('token'), {})).rejects.toBeInstanceOf(ErrorNegocio);
+
+    expect(from).toHaveBeenCalledTimes(2);
   });
 
   describe('validarActivo', () => {

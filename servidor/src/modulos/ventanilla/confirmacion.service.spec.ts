@@ -4,6 +4,7 @@
 import { HttpStatus } from '@nestjs/common';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { CacheActivosService } from '../prestamos/cache-activos.service';
 import { BoletasService } from './boletas.service';
 import { ConfirmacionService } from './confirmacion.service';
 
@@ -27,12 +28,23 @@ function clienteFalso(tablas: Record<string, Respuesta>) {
   };
 }
 
-function crearServicio(boletas: Partial<Record<keyof BoletasService, jest.Mock>>, tablas = {}) {
+function crearServicio(
+  boletas: Partial<Record<keyof BoletasService, jest.Mock>>,
+  tablas = {},
+  cacheActivos = { invalidarCampus: jest.fn() },
+) {
   const supabase = {
     clienteDeUsuario: jest.fn(() => clienteFalso(tablas)),
   } as unknown as SupabaseService;
-  return new ConfirmacionService(supabase, boletas as unknown as BoletasService);
+  return new ConfirmacionService(
+    supabase,
+    boletas as unknown as BoletasService,
+    cacheActivos as unknown as CacheActivosService,
+  );
 }
+
+// Almacenista del campus 1; la boleta del DTO de pruebas es del campus 2.
+const USUARIO = { token: 'token', campusId: 1 };
 
 // Detalle de una boleta ENTREGADA con la forma que devuelve BoletasService.obtener().
 function detalle(cambios: Record<string, unknown> = {}) {
@@ -125,7 +137,7 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas, TABLAS_RESUMEN);
 
-      const resultado = await servicio.crearBoleta('token', DTO);
+      const resultado = await servicio.crearBoleta(USUARIO, DTO);
 
       expect(boletas.crear).toHaveBeenCalledWith('token', DTO);
       expect(resultado.folio).toBe('BOL-2026-000007');
@@ -145,7 +157,7 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas, TABLAS_RESUMEN);
 
-      const resultado = await servicio.crearBoleta('token', {
+      const resultado = await servicio.crearBoleta(USUARIO, {
         ...DTO,
         materiales: [{ productoId: 12, cantidad: 1, motivoExcepcion: 'Evento especial' }],
       });
@@ -178,7 +190,7 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas, TABLAS_RESUMEN);
 
-      const { resumen } = await servicio.crearBoleta('token', {
+      const { resumen } = await servicio.crearBoleta(USUARIO, {
         materiales: [{ productoId: 12, cantidad: 1 }],
         solicitanteNombre: 'Juan Pérez',
         solicitanteUnidad: 'Campus Náinari',
@@ -205,8 +217,8 @@ describe('ConfirmacionService', () => {
         TABLAS_RESUMEN,
       );
 
-      expect((await conNumero.crearBoleta('t', DTO)).resumen?.numeroSolicitud).toBe('OT-9981');
-      expect((await sinNumero.crearBoleta('t', DTO)).resumen?.numeroSolicitud).toBeNull();
+      expect((await conNumero.crearBoleta(USUARIO, DTO)).resumen?.numeroSolicitud).toBe('OT-9981');
+      expect((await sinNumero.crearBoleta(USUARIO, DTO)).resumen?.numeroSolicitud).toBeNull();
     });
 
     it('detalla el stock insuficiente con las 4 piezas disponibles de 10 solicitadas (HU6-E6)', async () => {
@@ -231,7 +243,7 @@ describe('ConfirmacionService', () => {
       });
 
       const error = await servicio
-        .crearBoleta('token', {
+        .crearBoleta(USUARIO, {
           materiales: [
             { productoId: 12, cantidad: 1 },
             { productoId: 13, cantidad: 10 },
@@ -269,7 +281,7 @@ describe('ConfirmacionService', () => {
       });
 
       const error = await servicio
-        .crearBoleta('token', {
+        .crearBoleta(USUARIO, {
           materiales: [{ productoId: 12, cantidad: 10, presentacionId: 4 }],
           ...FIRMAS,
         })
@@ -305,7 +317,7 @@ describe('ConfirmacionService', () => {
       });
 
       const error = await servicio
-        .crearBoleta('token', { materiales: [{ productoId: 13, cantidad: 2 }], ...FIRMAS })
+        .crearBoleta(USUARIO, { materiales: [{ productoId: 13, cantidad: 2 }], ...FIRMAS })
         .catch((e: unknown) => e);
 
       expect(error).toMatchObject({ datos: { disponible: 0, cantidadSugerida: 0 } });
@@ -319,7 +331,7 @@ describe('ConfirmacionService', () => {
       };
       const servicio = crearServicio(boletas);
 
-      await expect(servicio.crearBoleta('token', DTO)).rejects.toBe(original);
+      await expect(servicio.crearBoleta(USUARIO, DTO)).rejects.toBe(original);
     });
 
     it('deja pasar sin cambios los demás errores de negocio', async () => {
@@ -327,8 +339,63 @@ describe('ConfirmacionService', () => {
       const boletas = { crear: jest.fn().mockRejectedValue(original), validarMaterial: jest.fn() };
       const servicio = crearServicio(boletas);
 
-      await expect(servicio.crearBoleta('token', DTO)).rejects.toBe(original);
+      await expect(servicio.crearBoleta(USUARIO, DTO)).rejects.toBe(original);
       expect(boletas.validarMaterial).not.toHaveBeenCalled();
+    });
+
+    describe('caché de activos (AI-49)', () => {
+      const CREADA = { boletaId: 7, folio: 'F', estado: 'ENTREGADA', alertas: [] };
+      const HERRAMIENTAS = [{ activoId: 8, diasPrestamo: 3 }];
+
+      function conCache(crear: jest.Mock) {
+        const cacheActivos = { invalidarCampus: jest.fn() };
+        const servicio = crearServicio(
+          { crear, obtener: jest.fn().mockResolvedValue(detalle()) },
+          TABLAS_RESUMEN,
+          cacheActivos,
+        );
+        return { servicio, cacheActivos };
+      }
+
+      it('al entregar herramientas descarta la búsqueda de activos del campus', async () => {
+        const { servicio, cacheActivos } = conCache(jest.fn().mockResolvedValue(CREADA));
+
+        await servicio.crearBoleta(USUARIO, { ...DTO, herramientas: HERRAMIENTAS });
+
+        // Campus de la boleta (2) y del usuario (1), por si la base usó el del usuario.
+        expect(cacheActivos.invalidarCampus).toHaveBeenCalledWith(2, 1);
+      });
+
+      it('sin campusId en la boleta descarta el campus del usuario', async () => {
+        const { servicio, cacheActivos } = conCache(jest.fn().mockResolvedValue(CREADA));
+
+        await servicio.crearBoleta(USUARIO, {
+          herramientas: HERRAMIENTAS,
+          trabajadorId: 15,
+          ...FIRMAS,
+        });
+
+        expect(cacheActivos.invalidarCampus).toHaveBeenCalledWith(undefined, 1);
+      });
+
+      it('una boleta solo de materiales no toca la caché de activos', async () => {
+        const { servicio, cacheActivos } = conCache(jest.fn().mockResolvedValue(CREADA));
+
+        await servicio.crearBoleta(USUARIO, DTO);
+
+        expect(cacheActivos.invalidarCampus).not.toHaveBeenCalled();
+      });
+
+      it('si la base rechaza la boleta no se descarta nada: no se prestó', async () => {
+        const { servicio, cacheActivos } = conCache(
+          jest.fn().mockRejectedValue(new ErrorNegocio('ACTIVO_NO_DISPONIBLE', 'Prestado.')),
+        );
+
+        await expect(
+          servicio.crearBoleta(USUARIO, { ...DTO, herramientas: HERRAMIENTAS }),
+        ).rejects.toBeInstanceOf(ErrorNegocio);
+        expect(cacheActivos.invalidarCampus).not.toHaveBeenCalled();
+      });
     });
   });
 
