@@ -31,7 +31,11 @@ function crearServicio(boletas: Partial<Record<keyof BoletasService, jest.Mock>>
   const supabase = {
     clienteDeUsuario: jest.fn(() => clienteFalso(tablas)),
   } as unknown as SupabaseService;
-  return new ConfirmacionService(supabase, boletas as unknown as BoletasService);
+  // Por defecto la boleta no tiene préstamos: las pruebas que necesiten HU8 lo simulan.
+  return new ConfirmacionService(supabase, {
+    prestamosDeBoleta: jest.fn().mockResolvedValue([]),
+    ...boletas,
+  } as unknown as BoletasService);
 }
 
 // Detalle de una boleta ENTREGADA con la forma que devuelve BoletasService.obtener().
@@ -81,7 +85,13 @@ function detalle(cambios: Record<string, unknown> = {}) {
       {
         id: 31,
         activoId: 8,
-        activo: { codigo: 'ACT-008', nombre: 'Taladro', modelo: 'XTR-500', numero_serie: 'SN-1' },
+        activo: {
+          codigo: 'ACT-008',
+          nombre: 'Taladro',
+          modelo: 'XTR-500',
+          numero_serie: 'SN-1',
+          estado: 'EN_PRESTAMO',
+        },
         diasPrestamo: 3,
         solicitanteConVencido: false,
       },
@@ -102,6 +112,19 @@ const TABLAS_RESUMEN = {
 };
 
 const FIRMAS = { firmaRecibe: '2/r.png', firmaEntrega: '2/e.png' };
+
+// HU8: préstamo abierto por ejecutar_entrega para el Taladro de la boleta de prueba.
+// prestado_en es el momento de la entrega y fecha_prevista = entrega + 3 días.
+const PRESTAMO = {
+  activoId: 8,
+  codigo: 'ACT-008',
+  folio: 'PRE-2026-0001',
+  diasPrestamo: 3,
+  prestadoEn: '2026-11-12T18:00:00.000Z',
+  fechaPrevista: '2026-11-15T18:00:00.000Z',
+  custodio: 'Miguel Ángel Ruiz',
+  estado: 'ACTIVO',
+};
 
 describe('ConfirmacionService', () => {
   describe('crearBoleta', () => {
@@ -131,6 +154,55 @@ describe('ConfirmacionService', () => {
       expect(resultado.folio).toBe('BOL-2026-000007');
       expect(resultado.alertas).toEqual([]);
       expect(resultado.resumen?.folio).toBe('BOL-2026-000007');
+    });
+
+    it('devuelve por herramienta el folio PRE-, la fecha prevista = entrega + días y el activo EN_PRESTAMO (HU8)', async () => {
+      const boleta = detalle();
+      const boletas = {
+        crear: jest.fn().mockResolvedValue({
+          boletaId: 7,
+          folio: boleta.folio,
+          estado: 'ENTREGADA',
+          alertas: [],
+        }),
+        obtener: jest.fn().mockResolvedValue(boleta),
+        prestamosDeBoleta: jest.fn().mockResolvedValue([PRESTAMO]),
+      };
+
+      const resultado = await crearServicio(boletas, TABLAS_RESUMEN).crearBoleta('token', DTO);
+      const herramienta = resultado.resumen?.herramientas[0];
+
+      expect(boletas.prestamosDeBoleta).toHaveBeenCalledWith('token', 'BOL-2026-000007');
+      expect(herramienta?.folioPrestamo).toMatch(/^PRE-\d{4}-\d{4}$/);
+      expect(herramienta).toMatchObject({
+        folioPrestamo: 'PRE-2026-0001',
+        diasPrestamo: 3,
+        prestadoEn: boleta.entregadoEn,
+        fechaPrevista: '2026-11-15T18:00:00.000Z',
+        estadoActivo: 'EN_PRESTAMO',
+      });
+      // La fecha prevista la calcula la base como entrega + días del préstamo.
+      expect(herramienta?.fechaPrevista).toBe(
+        new Date(new Date(boleta.entregadoEn).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      );
+    });
+
+    it('registra al solicitante de la boleta como custodio de la herramienta (HU8)', async () => {
+      const boleta = detalle();
+      const boletas = {
+        crear: jest.fn().mockResolvedValue({
+          boletaId: 7,
+          folio: boleta.folio,
+          estado: 'ENTREGADA',
+          alertas: [],
+        }),
+        obtener: jest.fn().mockResolvedValue(boleta),
+        prestamosDeBoleta: jest.fn().mockResolvedValue([PRESTAMO]),
+      };
+
+      const { resumen } = await crearServicio(boletas, TABLAS_RESUMEN).crearBoleta('token', DTO);
+
+      expect(resumen?.herramientas[0].custodio).toBe(resumen?.recibidoPor);
     });
 
     it('incluye resumen y alertas cuando hubo excepción de periodicidad o límite', async () => {
@@ -342,6 +414,41 @@ describe('ConfirmacionService', () => {
       expect(boletas.obtener).toHaveBeenCalledWith('token', 7);
       expect(resumen.folio).toBe('BOL-2026-000007');
       expect(resumen.entregadoPor).toBe('Alicia García');
+    });
+
+    it('incluye el préstamo de cada herramienta al reimprimir el resumen (HU8)', async () => {
+      const boletas = {
+        obtener: jest.fn().mockResolvedValue(detalle()),
+        prestamosDeBoleta: jest.fn().mockResolvedValue([PRESTAMO]),
+      };
+
+      const resumen = await crearServicio(boletas, TABLAS_RESUMEN).obtenerResumen('token', 7);
+
+      expect(boletas.prestamosDeBoleta).toHaveBeenCalledWith('token', 'BOL-2026-000007');
+      expect(resumen.herramientas[0]).toMatchObject({
+        folioPrestamo: 'PRE-2026-0001',
+        diasPrestamo: 3,
+        fechaPrevista: '2026-11-15T18:00:00.000Z',
+        estadoActivo: 'EN_PRESTAMO',
+        custodio: 'Miguel Ángel Ruiz',
+      });
+      expect(resumen.herramientas[0].fechaPrevista).toBe(
+        new Date(new Date(resumen.entregadoEn!).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      );
+    });
+
+    it('deja en null los datos del préstamo si la boleta no lo trae (HU8)', async () => {
+      const boletas = { obtener: jest.fn().mockResolvedValue(detalle()) };
+
+      const resumen = await crearServicio(boletas, TABLAS_RESUMEN).obtenerResumen('token', 7);
+
+      expect(resumen.herramientas[0]).toMatchObject({
+        diasPrestamo: 3,
+        folioPrestamo: null,
+        fechaPrevista: null,
+        estadoActivo: 'EN_PRESTAMO',
+        custodio: null,
+      });
     });
 
     it('rechaza con BOLETA_NO_ENTREGADA si la boleta aún no se entrega', async () => {
