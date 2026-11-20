@@ -185,7 +185,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text(mensajeActivoEnPrestamo), findsOneWidget);
+      expect(find.text('912391 está prestado a Mario Acosta hasta el 19/10/2026'), findsOneWidget);
       expect(c.read(entregaControllerProvider).activos, isEmpty);
     });
 
@@ -196,7 +196,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text(mensajeActivoNoDisponible), findsOneWidget);
+      expect(find.text('912401 no está disponible (En reparación)'), findsOneWidget);
       expect(c.read(entregaControllerProvider).activos, isEmpty);
     });
 

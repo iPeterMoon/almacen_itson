@@ -84,12 +84,42 @@ const sierraEnReparacion = Activo(
 );
 
 class ActivosFalso implements ActivosRepositorio {
-  ActivosFalso({this.activos = const [taladro], this.total, this.error});
+  ActivosFalso({
+    this.activos = const [taladro],
+    this.total,
+    this.error,
+    this.conVencido = false,
+    this.errorAlValidar,
+  });
 
   final List<Activo> activos;
   // Total que responde el servidor falso; si no se indica, los activos recibidos.
   final int? total;
   final Object? error;
+  // POST /activos/validar: si el solicitante tiene un préstamo vencido, y un error
+  // a lanzar (ej. ACTIVO_NO_ENCONTRADO).
+  final bool conVencido;
+  final Object? errorAlValidar;
+  final validaciones = <({String codigo, int? trabajadorId})>[];
+
+  // Responde según el estado del activo: los prestados los tiene Mario Acosta hasta
+  // el 19/10/2026 (18:00 UTC = 11:00 a.m. en Hermosillo).
+  @override
+  Future<ValidacionActivoApi> validar({required String codigo, int? trabajadorId}) async {
+    validaciones.add((codigo: codigo, trabajadorId: trabajadorId));
+    if (errorAlValidar != null) throw errorAlValidar!;
+    final activo = activos.firstWhere((a) => a.codigo == codigo);
+    final prestado = activo.estado == 'EN_PRESTAMO';
+    return ValidacionActivoApi(
+      activo: activo,
+      prestable: activo.estado == 'DISPONIBLE',
+      motivo: activo.estado == 'DISPONIBLE' ? null : (prestado ? 'PRESTADO' : 'NO_DISPONIBLE'),
+      custodio: prestado ? 'Mario Acosta' : null,
+      fechaPrevista: prestado ? '2026-10-19T18:00:00.000Z' : null,
+      prestadoEn: prestado ? '2026-10-17T15:57:00.000Z' : null,
+      solicitanteConVencido: conVencido && trabajadorId != null,
+    );
+  }
   ({String? texto, String? estado, int? pagina, int? limite})? ultimaConsulta;
   var llamadas = 0;
 

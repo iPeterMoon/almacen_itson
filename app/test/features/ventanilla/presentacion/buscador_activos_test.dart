@@ -22,7 +22,7 @@ class ActivosQueFiltran extends ActivosFalso {
 
   @override
   Future<PaginaApi<Activo>> buscar(
-      {String? texto, String? estado, int? pagina, int? limite}) async {
+      {String? texto, String? estado, int? pagina, int? limite, bool? soloPrestables}) async {
     llamadas++;
     ultimaConsulta = (texto: texto, estado: estado, pagina: pagina, limite: limite);
     final q = (texto ?? '').toLowerCase();
@@ -183,7 +183,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text(mensajeActivoNoDisponible), findsOneWidget);
+      expect(find.text('912401 no está disponible (En reparación)'), findsOneWidget);
       expect(c.read(entregaControllerProvider).activos, isEmpty);
     });
   });

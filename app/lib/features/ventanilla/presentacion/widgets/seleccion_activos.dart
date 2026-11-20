@@ -6,16 +6,16 @@ import '../../../../core/tema/tema.dart';
 import '../../../../core/widgets/componentes.dart';
 import '../../datos/modelos.dart';
 import '../../datos/ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
+import '../avisos_activos.dart';
 import '../entrega_controlador.dart';
 import 'campo_dias_prestamo.dart';
 
+export '../avisos_activos.dart' show mensajeActivoNoEncontrado;
+
 // Mensajes de la tabla de activos (HU8, Escenarios 2, 3 y 4).
-const mensajeActivoNoEncontrado = 'Activo no encontrado';
 const mensajeSinActivos = 'No hay activos registrados.';
 const mensajeActivosEscribeParaBuscar = 'Escribe al menos 2 caracteres para buscar';
 const mensajeErrorActivos = 'No se pudieron cargar los activos.';
-const mensajeActivoNoDisponible = 'El activo no está disponible.';
-const mensajeActivoEnPrestamo = 'Este equipo ya está en préstamo.';
 const mensajeSinHerramientas = 'No se encontró ninguna herramienta con ese código, nombre o serie';
 
 /// Qué decir cuando la lista de activos llega vacía, según lo que se escribió.
@@ -27,15 +27,30 @@ String mensajeActivosVacios(String consulta) {
   return mensajeActivoNoEncontrado; // Escenario 4
 }
 
-/// Texto que se avisa al tocar un activo que no se puede seleccionar.
-String mensajeActivoNoSeleccionable(ActivoCatalogo activo) =>
-    activo.estado == estadoActivoEnPrestamo ? mensajeActivoEnPrestamo : mensajeActivoNoDisponible;
-
-// Aviso al tocar un activo que no se puede prestar.
-void _avisarNoSeleccionable(BuildContext context, ActivoCatalogo activo) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(mensajeActivoNoSeleccionable(activo))));
+/// Toque en una fila de Resultados (HU8 E2-E5). Si ya está en la boleta, la quita.
+/// Si no, la valida con el servidor: no disponible o ya prestada muestra el diálogo
+/// y no la agrega; disponible la agrega (aunque el solicitante tenga un vencido).
+Future<void> _alTocarActivo(BuildContext context, EntregaController c, ActivoCatalogo activo,
+    {required bool agregado}) async {
+  if (agregado) {
+    c.quitarActivo(activo.codigo);
+    return;
+  }
+  final mensajero = ScaffoldMessenger.of(context);
+  try {
+    final v = await c.validarYAgregarActivo(activo);
+    if (v != null && !v.prestable && context.mounted) {
+      await mostrarDialogoActivoNoPrestable(context, v);
+    }
+  } on ErrorNegocio catch (e) {
+    mensajero
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(e.mensaje)));
+  } catch (_) {
+    mensajero
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text(ErrorNegocio.mensajeSinConexion)));
+  }
 }
 
 /// Pestaña "Activos" del paso 2 (HU8): tabla "Seleccionados" con los días de
@@ -50,6 +65,16 @@ class SeleccionActivos extends ConsumerWidget {
     final e = ref.watch(entregaControllerProvider);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // HU8 E5: solo advierte; la boleta puede continuar.
+      if (e.solicitanteConVencido) ...[
+        AvisoCaja(
+          tipo: TipoAviso.advertencia,
+          titulo: mensajeVencido(e.recibidoPor),
+          mensaje: 'Puedes continuar con el préstamo. Se sugiere solicitar la autorización '
+              'de un supervisor.',
+        ),
+        const SizedBox(height: 16),
+      ],
       if (e.activos.isNotEmpty) ...[
         const _Subtitulo('Seleccionados'),
         ContenedorLista(children: [
@@ -127,6 +152,7 @@ class _ResultadosActivos extends ConsumerWidget {
                         indice: i,
                         activo: pagina.items[i],
                         agregado: e.activos.any((x) => x.activo.codigo == pagina.items[i].codigo),
+                        validando: e.validandoActivo == pagina.items[i].codigo,
                         controlador: c,
                       ),
                   ]),
@@ -159,22 +185,25 @@ class _SinResultados extends StatelessWidget {
 }
 
 /// Fila de "Resultados". Disponible: casilla "Agregar". Cualquier otro estado: sin
-/// casilla, y al tocarla se avisa por qué no se puede prestar.
+/// casilla; al tocarla se valida y se muestra por qué no se puede prestar.
 class _FilaResultado extends StatelessWidget {
   const _FilaResultado({
     required this.indice,
     required this.activo,
     required this.agregado,
     required this.controlador,
+    this.validando = false,
   });
 
   final int indice;
   final ActivoCatalogo activo;
   final bool agregado;
   final EntregaController controlador;
+  final bool validando; // se está consultando al servidor
 
   @override
   Widget build(BuildContext context) {
+    void tocar() => _alTocarActivo(context, controlador, activo, agregado: agregado);
     return FilaRegistro(
       indice: indice,
       resaltada: agregado,
@@ -189,20 +218,22 @@ class _FilaResultado extends StatelessWidget {
       ],
       trailing: SizedBox(
         width: 56,
-        child: activo.disponible
+        child: validando
+            ? const Center(
+                child: SizedBox(
+                    width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)))
+            : activo.disponible
             ? Column(mainAxisSize: MainAxisSize.min, children: [
                 Checkbox(
                   value: agregado,
                   semanticLabel: 'Agregar ${activo.equipo}',
-                  onChanged: (_) => controlador.alternarActivo(activo),
+                  onChanged: (_) => tocar(),
                 ),
                 const Text('Agregar', style: TextStyle(fontSize: 12, color: Colores.textoSuave)),
               ])
             : null,
       ),
-      onTap: activo.disponible
-          ? () => controlador.alternarActivo(activo)
-          : () => _avisarNoSeleccionable(context, activo),
+      onTap: validando ? null : tocar,
     );
   }
 }
@@ -214,14 +245,7 @@ class EtiquetaEstadoActivo extends StatelessWidget {
 
   final String estado;
 
-  static String texto(String estado) => switch (estado) {
-        estadoActivoDisponible => 'Disponible',
-        estadoActivoEnPrestamo => 'En préstamo',
-        estadoActivoEnReparacion => 'En reparación',
-        estadoActivoRoboExtravio => 'Robo/Extravío',
-        estadoActivoDeBaja => 'De baja',
-        _ => estado,
-      };
+  static String texto(String estado) => textoEstadoActivo(estado);
 
   @override
   Widget build(BuildContext context) {

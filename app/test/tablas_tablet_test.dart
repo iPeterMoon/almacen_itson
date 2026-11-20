@@ -82,7 +82,8 @@ void main() {
         await tester.pumpAndSettle(const Duration(seconds: 1));
         // Con un equipo marcado se ven las dos tablas: Seleccionados y Resultados.
         await tester.tap(find.byType(Checkbox).first);
-        await tester.pump();
+        // Antes de agregarla se valida con el servidor (HU8).
+        await tester.pumpAndSettle(const Duration(seconds: 1));
 
         expect(tester.takeException(), isNull);
         expect(find.text('Seleccionados'), findsOneWidget);

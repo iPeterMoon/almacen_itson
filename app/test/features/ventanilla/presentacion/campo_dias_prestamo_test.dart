@@ -193,7 +193,8 @@ void main() {
       await tester.tap(find.text('Activos'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.byType(Checkbox).first);
-      await tester.pump();
+      // Antes de agregarla se valida con el servidor (HU8).
+      await tester.pumpAndSettle(const Duration(seconds: 1));
 
       expect(siguiente(tester).onPressed, isNotNull);
       expect(find.text(mensajeDiasInvalidos), findsNothing);

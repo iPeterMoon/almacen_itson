@@ -28,6 +28,11 @@ abstract class VentanillaRepositorio {
   /// Activos de cualquier estado; solo los de estado DISPONIBLE se pueden prestar.
   Future<Pagina<ActivoCatalogo>> buscarActivos(String consulta, {int pagina = 1, int porPagina = 5});
 
+  /// Valida un activo antes de agregarlo (HU8): si se puede prestar, quién lo tiene
+  /// si ya está prestado y si [solicitante] tiene préstamos vencidos. Lanza
+  /// [ErrorNegocio] ACTIVO_NO_ENCONTRADO si el código no existe.
+  Future<ValidacionActivo> validarActivo({required ActivoCatalogo activo, Solicitante? solicitante});
+
   /// Devuelve null si no hay restricción; si la hay, la alerta a mostrar.
   Future<AlertaRestriccion?> validarMaterial({
     Solicitante? solicitante,
@@ -191,6 +196,25 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
       default: // Escenario 9: sin restricción
         return null;
     }
+  }
+
+  // Simulación: los prestados los tiene Mario Acosta y Miguel Angel (id 2) tiene
+  // un préstamo vencido.
+  @override
+  Future<ValidacionActivo> validarActivo({
+    required ActivoCatalogo activo,
+    Solicitante? solicitante,
+  }) async {
+    await _espera();
+    final prestado = activo.estado == estadoActivoEnPrestamo;
+    return ValidacionActivo(
+      activo: activo,
+      prestable: activo.disponible,
+      solicitanteConVencido: solicitante?.id == '2',
+      custodio: prestado ? 'Mario Acosta' : null,
+      fechaPrevista: prestado ? '19/10/2026' : null,
+      prestadoEn: prestado ? '08:57 a.m. 17/10/2026' : null,
+    );
   }
 
   @override

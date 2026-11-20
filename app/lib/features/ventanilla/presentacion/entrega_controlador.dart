@@ -10,6 +10,7 @@ import '../../autenticacion/presentacion/sesion_controlador.dart';
 import '../datos/dias_prestamo.dart';
 import '../datos/modelos.dart';
 import '../datos/ventanilla_repositorio.dart';
+import 'avisos_activos.dart';
 
 const _sin = Object();
 const int tamanoMaxFirma = 500 * 1024; // 500 KB, según el contrato de firmas
@@ -31,6 +32,8 @@ class EntregaState {
     this.error,
     this.stockInsuficiente,
     this.resumen,
+    this.validandoActivo,
+    this.solicitanteConVencido = false,
   });
 
   final int paso; // 0 Solicitante, 1 Materiales, 2 Revisión, 3 Confirmación
@@ -49,6 +52,10 @@ class EntregaState {
   final String? error;
   final StockInsuficiente? stockInsuficiente;
   final ResumenEntrega? resumen;
+  // Código del activo que se está validando con el servidor (para no tocarlo dos veces).
+  final String? validandoActivo;
+  // HU8 E5: el solicitante actual tiene un préstamo vencido. Solo se avisa.
+  final bool solicitanteConVencido;
 
   EntregaState copyWith({
     int? paso,
@@ -66,6 +73,8 @@ class EntregaState {
     Object? error = _sin,
     Object? stockInsuficiente = _sin,
     Object? resumen = _sin,
+    Object? validandoActivo = _sin,
+    bool? solicitanteConVencido,
   }) {
     return EntregaState(
       paso: paso ?? this.paso,
@@ -85,6 +94,9 @@ class EntregaState {
           ? this.stockInsuficiente
           : stockInsuficiente as StockInsuficiente?,
       resumen: identical(resumen, _sin) ? this.resumen : resumen as ResumenEntrega?,
+      validandoActivo:
+          identical(validandoActivo, _sin) ? this.validandoActivo : validandoActivo as String?,
+      solicitanteConVencido: solicitanteConVencido ?? this.solicitanteConVencido,
     );
   }
 
@@ -160,15 +172,18 @@ class EntregaController extends Notifier<EntregaState> {
   }
 
   // --- Paso 1: solicitante y datos adicionales ---
-  void seleccionarSolicitante(Solicitante s) =>
-      state = state.copyWith(solicitante: s, sinRegistro: false);
+  // Cambiar de solicitante quita el aviso de vencido: era del anterior.
+  void seleccionarSolicitante(Solicitante s) => state =
+      state.copyWith(solicitante: s, sinRegistro: false, solicitanteConVencido: false);
 
   /// Permite quitar la selección para elegir a otro trabajador (o a ninguno).
-  void deseleccionarSolicitante() => state = state.copyWith(solicitante: null);
+  void deseleccionarSolicitante() =>
+      state = state.copyWith(solicitante: null, solicitanteConVencido: false);
 
   void usarSinRegistro(bool valor) => state = state.copyWith(
         sinRegistro: valor,
         solicitante: valor ? null : _sin,
+        solicitanteConVencido: false,
       );
 
   void setNombreSinRegistro(String v) =>
@@ -328,6 +343,33 @@ class EntregaController extends Notifier<EntregaState> {
     state = state.copyWith(activos: [...state.activos, ItemActivo(activo: activo)]);
   }
 
+  /// HU8 E2-E5: valida el activo con el servidor antes de agregarlo. Si no se puede
+  /// prestar (no disponible o ya prestado) no lo agrega y devuelve la validación para
+  /// que la pantalla muestre el aviso. Si el solicitante tiene un préstamo vencido, lo
+  /// agrega igual y deja el aviso en [EntregaState.solicitanteConVencido]. Lanza
+  /// [ErrorNegocio] con el mensaje ya traducido (ej. "Activo no encontrado").
+  Future<ValidacionActivo?> validarYAgregarActivo(ActivoCatalogo activo) async {
+    if (state.validandoActivo != null) return null;
+    if (state.activos.any((a) => a.activo.codigo == activo.codigo)) return null;
+    state = state.copyWith(validandoActivo: activo.codigo);
+    try {
+      final v = await _repo.validarActivo(
+        activo: activo,
+        solicitante: state.sinRegistro ? null : state.solicitante,
+      );
+      if (!v.prestable) return v;
+      state = state.copyWith(
+        activos: [...state.activos, ItemActivo(activo: v.activo)],
+        solicitanteConVencido: state.solicitanteConVencido || v.solicitanteConVencido,
+      );
+      return v;
+    } on ErrorNegocio catch (e) {
+      throw ErrorNegocio(e.codigo, mensajeDeError(e), estadoHttp: e.estadoHttp, datos: e.datos);
+    } finally {
+      state = state.copyWith(validandoActivo: null);
+    }
+  }
+
   /// Casilla "Agregar" de la tabla de activos: marca o desmarca el equipo.
   void alternarActivo(ActivoCatalogo activo) {
     if (state.activos.any((a) => a.activo.codigo == activo.codigo)) {
@@ -439,7 +481,9 @@ class EntregaController extends Notifier<EntregaState> {
           ),
         );
       } else {
-        state = state.copyWith(enviando: false, error: e.mensaje);
+        // Los errores de activo (prestado, no disponible, no encontrado) se traducen
+        // a los mensajes de la HU8.
+        state = state.copyWith(enviando: false, error: mensajeDeError(e));
       }
     } catch (_) {
       state = state.copyWith(enviando: false, error: 'No se pudo conectar con el servidor.');

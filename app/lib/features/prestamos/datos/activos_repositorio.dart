@@ -40,6 +40,42 @@ class Activo {
       );
 }
 
+// Respuesta de POST /activos/validar (HU8 E2, E3 y E5). No registra nada.
+// [prestable] es true solo si el activo está DISPONIBLE. Si está prestado trae el
+// custodio y la fecha prevista (ISO 8601). [solicitanteConVencido] solo avisa.
+class ValidacionActivoApi {
+  const ValidacionActivoApi({
+    required this.activo,
+    required this.prestable,
+    required this.solicitanteConVencido,
+    this.motivo,
+    this.custodio,
+    this.fechaPrevista,
+    this.prestadoEn,
+  });
+
+  // id, codigo, nombre, modelo, numeroSerie y estado del activo validado.
+  final Activo activo;
+  final bool prestable;
+  final bool solicitanteConVencido;
+  // 'PRESTADO' o 'NO_DISPONIBLE' cuando no es prestable.
+  final String? motivo;
+  final String? custodio;
+  final String? fechaPrevista;
+  // SUPUESTO: el servidor aún no lo manda; si llega se muestra la fecha y hora del préstamo.
+  final String? prestadoEn;
+
+  factory ValidacionActivoApi.fromJson(Map<String, dynamic> json) => ValidacionActivoApi(
+        activo: Activo.fromJson(json['activo'] as Map<String, dynamic>),
+        prestable: json['prestable'] as bool,
+        solicitanteConVencido: json['solicitanteConVencido'] as bool? ?? false,
+        motivo: json['motivo'] as String?,
+        custodio: json['custodio'] as String?,
+        fechaPrevista: json['fechaPrevista'] as String?,
+        prestadoEn: json['prestadoEn'] as String?,
+      );
+}
+
 class ActivosRepositorio {
   const ActivosRepositorio(this._dio);
 
@@ -67,6 +103,21 @@ class ActivosRepositorio {
         },
       );
       return PaginaApi.fromJson(respuesta.data!, Activo.fromJson);
+    } on DioException catch (e) {
+      throw ErrorNegocio.desdeDio(e);
+    }
+  }
+
+  // Valida un activo antes de prestarlo. Con [trabajadorId] también revisa si el
+  // solicitante tiene préstamos vencidos. Si el código no existe en los campus del
+  // usuario lanza ErrorNegocio ACTIVO_NO_ENCONTRADO (404).
+  Future<ValidacionActivoApi> validar({required String codigo, int? trabajadorId}) async {
+    try {
+      final respuesta = await _dio.post<Map<String, dynamic>>(
+        '/activos/validar',
+        data: {'codigo': codigo, 'trabajadorId': ?trabajadorId},
+      );
+      return ValidacionActivoApi.fromJson(respuesta.data!);
     } on DioException catch (e) {
       throw ErrorNegocio.desdeDio(e);
     }

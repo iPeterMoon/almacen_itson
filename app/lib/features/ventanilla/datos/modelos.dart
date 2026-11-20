@@ -129,6 +129,33 @@ class ActivoCatalogo {
   bool get disponible => estado == estadoActivoDisponible;
 }
 
+/// Resultado de validar un activo antes de prestarlo (HU8 E2, E3 y E5). Las fechas
+/// llegan ya formateadas en hora de Hermosillo.
+class ValidacionActivo {
+  const ValidacionActivo({
+    required this.activo,
+    required this.prestable,
+    this.solicitanteConVencido = false,
+    this.custodio,
+    this.fechaPrevista,
+    this.prestadoEn,
+  });
+
+  // El activo con el estado que tiene ahora en el servidor.
+  final ActivoCatalogo activo;
+  // Solo un activo DISPONIBLE se puede prestar.
+  final bool prestable;
+  // El solicitante tiene un préstamo vencido: se avisa, pero no bloquea.
+  final bool solicitanteConVencido;
+  // Si está prestado: a quién y hasta cuándo (DD/MM/AAAA).
+  final String? custodio;
+  final String? fechaPrevista;
+  // Fecha y hora del préstamo actual, si el servidor la manda.
+  final String? prestadoEn;
+
+  bool get prestado => activo.estado == estadoActivoEnPrestamo;
+}
+
 /// Motivo obligatorio cuando un material excede periodicidad o límite de zona.
 /// La entrega se registra de inmediato; no hay autorización dentro del sistema.
 class MotivoExcepcion {

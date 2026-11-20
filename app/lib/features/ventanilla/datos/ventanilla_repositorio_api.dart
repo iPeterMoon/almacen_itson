@@ -333,6 +333,37 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
     }
   }
 
+  // POST /activos/validar. La base decide el estado, el custodio y los vencidos;
+  // aquí solo se dan formato a las fechas. Se conservan almacén y ubicación de la
+  // fila de la tabla (la validación no los trae) y se toma el estado actual.
+  @override
+  Future<ValidacionActivo> validarActivo({
+    required ActivoCatalogo activo,
+    Solicitante? solicitante,
+  }) async {
+    final v = await _activos.validar(
+      codigo: activo.codigo,
+      trabajadorId: _idDeTrabajador(solicitante),
+    );
+    return ValidacionActivo(
+      activo: ActivoCatalogo(
+        activoId: v.activo.id,
+        codigo: v.activo.codigo,
+        equipo: v.activo.nombre,
+        modelo: v.activo.modelo,
+        serie: v.activo.numeroSerie,
+        almacen: activo.almacen,
+        ubicacion: activo.ubicacion,
+        estado: v.activo.estado,
+      ),
+      prestable: v.prestable,
+      solicitanteConVencido: v.solicitanteConVencido,
+      custodio: v.custodio,
+      fechaPrevista: v.fechaPrevista == null ? null : formatearFecha(v.fechaPrevista),
+      prestadoEn: v.prestadoEn == null ? null : formatearHoraFecha(v.prestadoEn),
+    );
+  }
+
   // Id del trabajador para el servidor; null si no hay solicitante registrado.
   int? _idDeTrabajador(Solicitante? s) => s == null ? null : int.tryParse(s.id);
 
