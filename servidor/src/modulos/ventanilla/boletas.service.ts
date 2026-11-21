@@ -44,6 +44,8 @@ interface ActivoResumen {
   nombre: string;
   modelo: string;
   numero_serie: string;
+  // HU8: tras la entrega el activo queda EN_PRESTAMO.
+  estado: string;
 }
 
 interface HerramientaDeBoleta {
@@ -52,6 +54,31 @@ interface HerramientaDeBoleta {
   dias_prestamo: number;
   solicitante_con_vencido: boolean;
   activos: ActivoResumen | null;
+}
+
+// HU8: préstamo abierto por ejecutar_entrega. La vista ya trae el custodio
+// (solicitante de la boleta) y la fecha prevista calculada por la base.
+export interface PrestamoDeBoleta {
+  activoId: number | null;
+  codigo: string | null;
+  folio: string | null;
+  diasPrestamo: number | null;
+  prestadoEn: string | null;
+  fechaPrevista: string | null;
+  custodio: string | null;
+  // Estado del préstamo (ACTIVO), no del activo (EN_PRESTAMO).
+  estado: string | null;
+}
+
+interface FilaPrestamoDeBoleta {
+  activo_id: number | null;
+  codigo: string | null;
+  folio: string | null;
+  dias_prestamo: number | null;
+  prestado_en: string | null;
+  fecha_prevista: string | null;
+  custodio: string | null;
+  estado: string | null;
 }
 
 interface TrabajadorResumen {
@@ -124,9 +151,13 @@ const CAMPOS_DETALLE = `
   ),
   boletas_herramientas (
     id, activo_id, dias_prestamo, solicitante_con_vencido,
-    activos ( codigo, nombre, modelo, numero_serie )
+    activos ( codigo, nombre, modelo, numero_serie, estado )
   )
 `;
+
+// Columnas del seguimiento de préstamos que se cruzan con cada herramienta de la boleta.
+const CAMPOS_PRESTAMO_BOLETA =
+  'activo_id, codigo, folio, dias_prestamo, prestado_en, fecha_prevista, custodio, estado';
 
 // Reglas del bucket privado "firmas": tamaño máximo y firmas de archivo permitidas.
 // La extensión se decide por el contenido real, no por el nombre que manda el cliente.
@@ -352,6 +383,29 @@ export class BoletasService {
       throw new ErrorNegocio('BOLETA_NO_EXISTE', `La boleta ${boletaId} no existe.`);
     }
     return this.aDetalle(data);
+  }
+
+  // HU8: la entrega abrió un préstamo por cada herramienta. La vista trae el folio PRE-,
+  // los días, la fecha prevista y el custodio, que es el solicitante de la boleta.
+  // Se consulta con el token del usuario para que RLS limite a sus campus.
+  async prestamosDeBoleta(token: string, folio: string): Promise<PrestamoDeBoleta[]> {
+    const { data, error } = await this.supabase
+      .clienteDeUsuario(token)
+      .from('vista_seguimiento_prestamos')
+      .select(CAMPOS_PRESTAMO_BOLETA)
+      .eq('boleta_folio', folio);
+
+    if (error) throw this.errorDeBase(error);
+    return ((data ?? []) as unknown as FilaPrestamoDeBoleta[]).map((fila) => ({
+      activoId: fila.activo_id === null ? null : Number(fila.activo_id),
+      codigo: fila.codigo,
+      folio: fila.folio,
+      diasPrestamo: fila.dias_prestamo,
+      prestadoEn: fila.prestado_en,
+      fechaPrevista: fila.fecha_prevista,
+      custodio: fila.custodio,
+      estado: fila.estado,
+    }));
   }
 
   // Sube la firma al bucket privado. La ruta incluye el campus porque la política de

@@ -49,12 +49,39 @@ const TRABAJADOR = {
 
 const ZONA = { id: 3, nombre: 'Baños edificio 2', edificio: 'Edificio 2', piso: '1' };
 
+// HU8: activo prestado y préstamo abierto por ejecutar_entrega.
+const ACTIVO = {
+  codigo: 'ACT-008',
+  nombre: 'Taladro',
+  modelo: 'XTR-500',
+  numero_serie: 'SN-12345',
+  estado: 'EN_PRESTAMO',
+};
+
 interface MaterialGuardado {
   producto_id: number;
   presentacion_id: number | null;
   cantidad: number;
   comentario: string | null;
   motivo_excepcion: string | null;
+}
+
+interface HerramientaGuardada {
+  activo_id: number;
+  dias_prestamo: number;
+}
+
+// Fila de vista_seguimiento_prestamos tal como la lee BoletasService.
+interface PrestamoGuardado {
+  boleta_folio: string;
+  activo_id: number;
+  codigo: string;
+  folio: string;
+  dias_prestamo: number;
+  prestado_en: string;
+  fecha_prevista: string;
+  custodio: string;
+  estado: string;
 }
 
 interface BoletaGuardada {
@@ -72,6 +99,7 @@ interface BoletaGuardada {
   entregado_en: string | null;
   entregado_por: string | null;
   materiales: MaterialGuardado[];
+  herramientas: HerramientaGuardada[];
   excede_periodicidad: boolean;
 }
 
@@ -106,6 +134,7 @@ function boletaDePrueba(cambios: Partial<BoletaGuardada> = {}): BoletaGuardada {
         motivo_excepcion: null,
       },
     ],
+    herramientas: [],
     excede_periodicidad: false,
     ...cambios,
   };
@@ -153,7 +182,13 @@ function filaDetalle(boleta: BoletaGuardada) {
           : null,
       };
     }),
-    boletas_herramientas: [],
+    boletas_herramientas: boleta.herramientas.map((herramienta, indice) => ({
+      id: 200 + indice,
+      activo_id: herramienta.activo_id,
+      dias_prestamo: herramienta.dias_prestamo,
+      solicitante_con_vencido: false,
+      activos: { ...ACTIVO },
+    })),
   };
 }
 
@@ -166,6 +201,8 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
   const base = crearBaseFalsa();
   // Boletas "guardadas" en la base simulada, por id.
   const boletas = new Map<number, BoletaGuardada>();
+  // Préstamos "guardados" en la vista de seguimiento (HU8).
+  const prestamos: PrestamoGuardado[] = [];
 
   const sesionFalsa = {
     idDeToken: jest.fn((token: string) =>
@@ -198,6 +235,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
   beforeEach(() => {
     base.reiniciar();
     boletas.clear();
+    prestamos.length = 0;
     simularCatalogo();
   });
 
@@ -234,6 +272,10 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       const id = filtro(consulta, 'eq', 'id');
       const usuario = Object.values(USUARIOS).find((u) => u.id === id);
       return ok(usuario ? { nombre: usuario.nombre } : null);
+    });
+    base.tabla('vista_seguimiento_prestamos', (consulta) => {
+      const folio = filtro(consulta, 'eq', 'boleta_folio');
+      return ok(prestamos.filter((prestamo) => prestamo.boleta_folio === folio));
     });
   }
 
@@ -633,6 +675,71 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
           herramientas: [],
         },
       });
+    });
+
+    it('devuelve el préstamo de cada herramienta al crear y al consultar el resumen (HU8)', async () => {
+      base.funcion('crear_boleta', () => {
+        boletas.set(
+          7,
+          boletaDePrueba({
+            materiales: [],
+            herramientas: [{ activo_id: 8, dias_prestamo: 3 }],
+          }),
+        );
+        prestamos.push({
+          boleta_folio: 'BOL-2026-000007',
+          activo_id: 8,
+          codigo: ACTIVO.codigo,
+          folio: 'PRE-2026-0001',
+          dias_prestamo: 3,
+          prestado_en: '2026-11-12T18:00:00.000Z',
+          fecha_prevista: '2026-11-15T18:00:00.000Z',
+          custodio: TRABAJADOR.nombre,
+          estado: 'ACTIVO',
+        });
+        return ok([
+          { boleta_id: '7', folio: 'BOL-2026-000007', estado: 'ENTREGADA', alertas: null },
+        ]);
+      });
+
+      const res = await http()
+        .post('/api/v1/boletas')
+        .set(como('almacenista'))
+        .send({
+          trabajadorId: 15,
+          zonaId: 3,
+          herramientas: [{ activoId: 8, diasPrestamo: 3 }],
+          firmaRecibe: '2/recibe.png',
+          firmaEntrega: '2/entrega.png',
+        })
+        .expect(201);
+
+      expect(res.body.resumen.herramientas).toEqual([
+        {
+          codigo: 'ACT-008',
+          nombre: 'Taladro',
+          modelo: 'XTR-500',
+          numeroSerie: 'SN-12345',
+          diasPrestamo: 3,
+          folioPrestamo: 'PRE-2026-0001',
+          prestadoEn: '2026-11-12T18:00:00.000Z',
+          fechaPrevista: '2026-11-15T18:00:00.000Z',
+          estadoActivo: 'EN_PRESTAMO',
+          custodio: 'Miguel Ángel Ruiz',
+        },
+      ]);
+      // La fecha prevista de la base es la entrega más los días del préstamo.
+      expect(res.body.resumen.herramientas[0].fechaPrevista).toBe(
+        new Date(
+          new Date(String(res.body.resumen.entregadoEn)).getTime() + 3 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      );
+
+      const resumen = await http()
+        .get('/api/v1/boletas/7/resumen')
+        .set(como('almacenista'))
+        .expect(200);
+      expect(resumen.body).toEqual(res.body.resumen);
     });
 
     it('con solicitante sin registro y sin número de solicitud usa la unidad capturada como área (E3, E4)', async () => {

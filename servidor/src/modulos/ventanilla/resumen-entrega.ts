@@ -22,6 +22,16 @@ export interface LineaHerramientaResumen {
   modelo: string;
   numeroSerie: string;
   diasPrestamo: number;
+  // HU8: datos del préstamo que abrió ejecutar_entrega. Los genera la base, nunca el servidor.
+  // Pueden ser null en boletas antiguas o si no se pudo consultar el seguimiento.
+  folioPrestamo: string | null; // PRE-AAAA-NNNN
+  prestadoEn: string | null;
+  // Fecha prevista calculada por la base: entrega + días de préstamo.
+  fechaPrevista: string | null;
+  // Estado del activo tras la entrega: EN_PRESTAMO.
+  estadoActivo: string | null;
+  // Custodio del resguardo: el solicitante de la boleta, según vista_seguimiento_prestamos.
+  custodio: string | null;
 }
 
 export interface ResumenEntrega {

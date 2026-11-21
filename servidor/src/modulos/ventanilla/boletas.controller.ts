@@ -85,7 +85,9 @@ export class BoletasController {
       'descontando existencias y abriendo los préstamos. Si algún material excede la ' +
       'periodicidad o el límite de la zona, exige `motivoExcepcion`, devuelve las `alertas` ' +
       'con la sugerencia y deja constancia del motivo, sin dejar la boleta pendiente. ' +
-      'La respuesta siempre incluye el `resumen`. Si algún material no alcanza, responde 409 ' +
+      'La respuesta siempre incluye el `resumen`: por cada herramienta trae el folio del ' +
+      'préstamo (`PRE-AAAA-NNNN`), los días, la fecha prevista, el activo `EN_PRESTAMO` y el ' +
+      'custodio (el solicitante de la boleta). Si algún material no alcanza, responde 409 ' +
       'STOCK_INSUFICIENTE con `datos` (disponible y cantidadSugerida) para ofrecer el ajuste.',
   })
   @ApiCreatedResponse({
@@ -134,7 +136,11 @@ export class BoletasController {
     summary: 'Resumen de una boleta entregada',
     description: 'Responde 409 BOLETA_NO_ENTREGADA si la boleta aún no se ha entregado.',
   })
-  @ApiOkResponse({ description: 'Resumen con folio, solicitante, materiales y herramientas.' })
+  @ApiOkResponse({
+    description:
+      'Resumen con folio, solicitante, materiales y herramientas; cada herramienta incluye ' +
+      'folioPrestamo (PRE-), diasPrestamo, fechaPrevista, estadoActivo (EN_PRESTAMO) y custodio.',
+  })
   obtenerResumen(
     @UsuarioActual() usuario: UsuarioAutenticado,
     @Param('id', ParseIntPipe) id: number,
