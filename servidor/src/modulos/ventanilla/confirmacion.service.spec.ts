@@ -1,7 +1,7 @@
 // Pruebas del servicio de confirmación. BoletasService y el cliente de Supabase son falsos:
 // se comprueba la orquestación (resumen, stock insuficiente), no las reglas de la base,
 // que ya prueba supabase/pruebas/probar.py.
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { BoletasService } from './boletas.service';
@@ -127,6 +127,8 @@ const PRESTAMO = {
 };
 
 describe('ConfirmacionService', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   describe('crearBoleta', () => {
     const DTO = {
       materiales: [{ productoId: 12, cantidad: 2, presentacionId: 4 }],
@@ -203,6 +205,39 @@ describe('ConfirmacionService', () => {
       const { resumen } = await crearServicio(boletas, TABLAS_RESUMEN).crearBoleta('token', DTO);
 
       expect(resumen?.herramientas[0].custodio).toBe(resumen?.recibidoPor);
+    });
+
+    it('no falla la entrega si el seguimiento de préstamos responde SIN_PERMISO (HU8)', async () => {
+      const aviso = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const boleta = detalle();
+      const boletas = {
+        crear: jest.fn().mockResolvedValue({
+          boletaId: 7,
+          folio: boleta.folio,
+          estado: 'ENTREGADA',
+          alertas: [],
+        }),
+        obtener: jest.fn().mockResolvedValue(boleta),
+        // Lo que errorDeBase lanza si RLS rechaza la consulta a vista_seguimiento_prestamos.
+        prestamosDeBoleta: jest
+          .fn()
+          .mockRejectedValue(new ErrorNegocio('SIN_PERMISO', 'sin acceso.')),
+      };
+
+      const resultado = await crearServicio(boletas, TABLAS_RESUMEN).crearBoleta('token', DTO);
+
+      // La entrega ya quedó guardada: responder error provocaría un reintento y duplicarla.
+      expect(boletas.crear).toHaveBeenCalledTimes(1);
+      expect(resultado).toMatchObject({ folio: 'BOL-2026-000007', estado: 'ENTREGADA' });
+      expect(resultado.resumen?.herramientas[0]).toMatchObject({
+        diasPrestamo: 3,
+        folioPrestamo: null,
+        prestadoEn: null,
+        fechaPrevista: null,
+        estadoActivo: 'EN_PRESTAMO',
+        custodio: null,
+      });
+      expect(aviso).toHaveBeenCalledWith(expect.stringContaining('BOL-2026-000007'));
     });
 
     it('incluye resumen y alertas cuando hubo excepción de periodicidad o límite', async () => {

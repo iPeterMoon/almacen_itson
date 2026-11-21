@@ -103,7 +103,19 @@ export class ConfirmacionService {
       ? await this.nombreDeUsuario(cliente, boleta.entregadoPor)
       : null;
     // HU8: cada herramienta entregada tiene un préstamo PRE- con fecha prevista y custodio.
-    const prestamos = await this.boletas.prestamosDeBoleta(token, boleta.folio);
+    // La boleta ya está entregada: si falla el seguimiento (por ejemplo, RLS en la vista),
+    // se dejan los datos del préstamo en null en vez de responder error y provocar un reintento.
+    let prestamos: Awaited<ReturnType<BoletasService['prestamosDeBoleta']>>;
+    try {
+      prestamos = await this.boletas.prestamosDeBoleta(token, boleta.folio);
+    } catch (error) {
+      this.logger.warn(
+        `La boleta ${boleta.folio} se entregó, pero no se pudo consultar el seguimiento de préstamos: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      prestamos = [];
+    }
     const porActivo = new Map(
       prestamos.flatMap((prestamo) =>
         prestamo.activoId === null ? [] : [[prestamo.activoId, prestamo] as const],
