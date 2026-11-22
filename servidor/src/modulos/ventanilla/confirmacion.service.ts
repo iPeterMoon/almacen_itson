@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
+import type { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { CacheActivosService } from '../prestamos/cache-activos.service';
 import { BoletasService } from './boletas.service';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
 import { ResumenEntrega } from './resumen-entrega';
@@ -25,6 +27,9 @@ interface ContextoDeLineas {
   campusId?: number | null;
 }
 
+// Del usuario solo hacen falta su token y su campus.
+type UsuarioDeBoleta = Pick<UsuarioAutenticado, 'token' | 'campusId'>;
+
 type DetalleBoleta = Awaited<ReturnType<BoletasService['obtener']>>;
 
 // Servicio de confirmación de la entrega (HU6-E1 y E6).
@@ -43,11 +48,13 @@ export class ConfirmacionService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly boletas: BoletasService,
+    private readonly cacheActivos: CacheActivosService,
   ) {}
 
   // Crea la boleta y devuelve también el resumen: la entrega siempre se registra en el acto,
   // incluso cuando hubo que capturar un motivo por excepción de periodicidad o límite.
-  async crearBoleta(token: string, dto: CrearBoletaDto) {
+  async crearBoleta(usuario: UsuarioDeBoleta, dto: CrearBoletaDto) {
+    const { token } = usuario;
     let creada: Awaited<ReturnType<BoletasService['crear']>>;
     try {
       creada = await this.boletas.crear(token, dto);
@@ -58,6 +65,13 @@ export class ConfirmacionService {
         zonaId: dto.zonaId,
         campusId: dto.campusId,
       });
+    }
+
+    // Los activos prestados ya no están DISPONIBLE: se descarta la búsqueda guardada
+    // del campus de la boleta (y del usuario, por si la base usó el suyo) para que el
+    // autocompletado no los vuelva a ofrecer (AI-49).
+    if ((dto.herramientas?.length ?? 0) > 0) {
+      this.cacheActivos.invalidarCampus(dto.campusId, usuario.campusId);
     }
 
     const resumen = await this.resumenSinFallar(token, creada.boletaId);
