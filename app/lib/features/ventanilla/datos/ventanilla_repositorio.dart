@@ -1,5 +1,6 @@
 import '../../../core/errores/error_negocio.dart';
 import '../../autenticacion/datos/supervisores_repositorio.dart';
+import 'dias_prestamo.dart';
 import 'modelos.dart';
 
 /// Contrato que usa la pantalla. La implementación real llamará a la API NestJS con dio.
@@ -8,7 +9,7 @@ import 'modelos.dart';
 ///   GET  /api/v1/ventanilla/solicitantes?q=&pagina=&porPagina=   -> { items, total }
 ///   GET  /api/v1/usuarios/supervisores (solo sugerencias para "Autorizó")
 ///   GET  /api/v1/inventario/materiales?q=&categoria=&tipo=&almacen=&comunes=&pagina=&porPagina=   -> { items, total }
-///   GET  /api/v1/inventario/activos?q=
+///   GET  /api/v1/inventario/activos?q=&pagina=&porPagina=   -> { items, total }
 ///   POST /api/v1/ventanilla/materiales/validar   -> alerta de periodicidad / límite de zona
 ///   POST /api/v1/ventanilla/entregas             -> folio y resumen (descuenta stock)
 abstract class VentanillaRepositorio {
@@ -24,7 +25,13 @@ abstract class VentanillaRepositorio {
     int pagina = 1,
     int porPagina = 5,
   });
-  Future<List<ActivoCatalogo>> buscarActivos(String consulta);
+  /// Activos de cualquier estado; solo los de estado DISPONIBLE se pueden prestar.
+  Future<Pagina<ActivoCatalogo>> buscarActivos(String consulta, {int pagina = 1, int porPagina = 5});
+
+  /// Valida un activo antes de agregarlo (HU8): si se puede prestar, quién lo tiene
+  /// si ya está prestado y si [solicitante] tiene préstamos vencidos. Lanza
+  /// [ErrorNegocio] ACTIVO_NO_ENCONTRADO si el código no existe.
+  Future<ValidacionActivo> validarActivo({required ActivoCatalogo activo, Solicitante? solicitante});
 
   /// Devuelve null si no hay restricción; si la hay, la alerta a mostrar.
   Future<AlertaRestriccion?> validarMaterial({
@@ -42,6 +49,7 @@ abstract class VentanillaRepositorio {
 /// Reemplazar por VentanillaRepositorioApi cuando exista el contrato.
 class VentanillaRepositorioSimulado implements VentanillaRepositorio {
   int _folio = 184;
+  int _folioPrestamo = 3;
 
   static const _solicitantes = [
     Solicitante(id: '1', nombre: 'Pedro Luna Olivarría', dependencia: 'Servicios Generales', tipo: 'ITSON', zona: 'Taller Principal', areaTrabajo: 'Mantenimiento', areaTrabajo2: 'Taller Principal'),
@@ -78,9 +86,16 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
     MaterialCatalogo(codigo: 'CD-132', concepto: 'Trapeador', alias: 'Mechudo', tipo: 'Servicios Generales', esComun: false, categoria: 'Pieza', almacen: 'Servicios Generales', ubicacion: 'Estante 5', existencia: 10, unidadBase: 'piezas', unidades: ['Piezas', 'Cajas']),
   ];
 
+  // Los mismos equipos del prototipo (pantalla "Selecciona material o equipo").
   static const _activos = [
     ActivoCatalogo(codigo: '912391', equipo: 'Rotomartillo SDS Plus', modelo: 'Bosch GBH 2-28', serie: 'KRC-112233445', almacen: 'Mantenimiento', ubicacion: 'Estante 2, Fila 3'),
-    ActivoCatalogo(codigo: '912400', equipo: 'Taladro percutor', modelo: 'DeWalt DWD024', serie: 'DW-998877', almacen: 'Mantenimiento', ubicacion: 'Estante 2, Fila 4'),
+    ActivoCatalogo(codigo: '912392', equipo: 'Aspiradora industrial', modelo: 'Kärcher NT 48/1', serie: 'BSH-987654321', almacen: 'Mantenimiento', ubicacion: 'Estante 2, Fila 4'),
+    ActivoCatalogo(codigo: '912396', equipo: 'Esmeriladora angular', modelo: 'DeWalt DWE4020', serie: 'DW-554433220', almacen: 'Mantenimiento', ubicacion: 'Estante 3, Fila 1'),
+    ActivoCatalogo(codigo: '912395', equipo: 'Hidrolavadora', modelo: 'Truper HIDR-1/2', serie: 'TRP-998877661', almacen: 'Mantenimiento', ubicacion: 'Estante 3, Fila 2'),
+    ActivoCatalogo(codigo: '912394', equipo: 'Escalera de extensión', modelo: 'Cuprum C-2224-24', serie: 'KRC-LOTE-CUP-2019-88', almacen: 'Mantenimiento', ubicacion: 'Patio', estado: estadoActivoEnPrestamo),
+    ActivoCatalogo(codigo: '912398', equipo: 'Rotomartillo', modelo: 'Bosch GBH 2-28', serie: 'BSH-987654398', almacen: 'Mantenimiento', ubicacion: 'Estante 2, Fila 3', estado: estadoActivoEnPrestamo),
+    ActivoCatalogo(codigo: '912400', equipo: 'Taladro percutor', modelo: 'DeWalt DWD024', serie: 'DW-998877', almacen: 'Mantenimiento', ubicacion: 'Estante 2, Fila 4', estado: estadoActivoEnReparacion),
+    ActivoCatalogo(codigo: '912401', equipo: 'Sierra circular', modelo: 'Makita 5007MG', serie: 'MK-445566', almacen: 'Mantenimiento', ubicacion: 'Estante 4, Fila 1', estado: estadoActivoRoboExtravio),
   ];
 
   Future<void> _espera() => Future<void>.delayed(const Duration(milliseconds: 250));
@@ -142,12 +157,13 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
   }
 
   @override
-  Future<List<ActivoCatalogo>> buscarActivos(String consulta) async {
+  Future<Pagina<ActivoCatalogo>> buscarActivos(String consulta, {int pagina = 1, int porPagina = 5}) async {
     await _espera();
     final q = consulta.trim().toLowerCase();
-    return _activos
+    final todos = _activos
         .where((a) => a.equipo.toLowerCase().contains(q) || a.codigo.contains(q) || a.serie.toLowerCase().contains(q))
         .toList();
+    return _paginar(todos, pagina, porPagina);
   }
 
   @override
@@ -182,6 +198,25 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
     }
   }
 
+  // Simulación: los prestados los tiene Mario Acosta y Miguel Angel (id 2) tiene
+  // un préstamo vencido.
+  @override
+  Future<ValidacionActivo> validarActivo({
+    required ActivoCatalogo activo,
+    Solicitante? solicitante,
+  }) async {
+    await _espera();
+    final prestado = activo.estado == estadoActivoEnPrestamo;
+    return ValidacionActivo(
+      activo: activo,
+      prestable: activo.disponible,
+      solicitanteConVencido: solicitante?.id == '2',
+      custodio: prestado ? 'Mario Acosta' : null,
+      fechaPrevista: prestado ? '19/10/2026' : null,
+      prestadoEn: prestado ? '08:57 a.m. 17/10/2026' : null,
+    );
+  }
+
   @override
   Future<ResumenEntrega> registrarEntrega(SolicitudEntrega s) async {
     await _espera();
@@ -199,13 +234,24 @@ class VentanillaRepositorioSimulado implements VentanillaRepositorio {
     _folio++;
     final solicitante = _solicitantes.where((x) => x.id == s.solicitanteId);
     return ResumenEntrega(
-      folio: 'ENT-2026-${_folio.toString().padLeft(4, '0')}',
+      folio: 'BOL-2026-${_folio.toString().padLeft(6, '0')}',
       recibidoPor: solicitante.isNotEmpty ? solicitante.first.nombre : (s.nombreSinRegistro ?? ''),
       area: solicitante.isNotEmpty ? solicitante.first.dependencia : (s.unidadSinRegistro ?? ''),
       fechaHora: '17/10/2026  08:57 a.m.',
       entregadoPor: 'Alicia Beltrán',
       materiales: s.materiales.map((m) => LineaResumen(m.material.codigo, m.material.alias, m.cantidadTexto)).toList(),
-      activos: s.activos.map((a) => LineaResumen(a.activo.codigo, a.activo.equipo, a.activo.modelo, a.activo.serie)).toList(),
+      herramientas: [
+        for (final a in s.activos)
+          LineaHerramientaResumen(
+            codigo: a.activo.codigo,
+            nombre: a.activo.equipo,
+            modelo: a.activo.modelo,
+            serie: a.activo.serie,
+            dias: a.dias,
+            folioPrestamo: 'PRE-2026-${(++_folioPrestamo).toString().padLeft(4, '0')}',
+            fechaPrevista: fechaPrevistaTexto(DateTime.now(), a.dias),
+          ),
+      ],
       autorizoNombre: s.autorizoNombre,
       motivos: [
         for (final m in s.materiales)

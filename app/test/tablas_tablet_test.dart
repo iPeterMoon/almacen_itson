@@ -72,6 +72,47 @@ void main() {
         _sinScrollHorizontal(tester);
       });
 
+      testWidgets('tablas de activos (seleccionados y resultados) completas', (tester) async {
+        configurar(tester);
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        await tester.pumpWidget(_app(c, const PasoMateriales()));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+        await tester.tap(find.text('Activos'));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+        // Con un equipo marcado se ven las dos tablas: Seleccionados y Resultados.
+        await tester.tap(find.byType(Checkbox).first);
+        // Antes de agregarla se valida con el servidor (HU8).
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Seleccionados'), findsOneWidget);
+        expect(find.text('Tiempo de préstamo'), findsOneWidget);
+        _dentroDePantalla(tester, find.text('Tiempo de préstamo'));
+        _dentroDePantalla(tester, find.text('Préstamo'));
+        _dentroDePantalla(tester, find.text('Siguiente'));
+        _sinScrollHorizontal(tester);
+      });
+
+      testWidgets('tabla de activos filtrada por la búsqueda completa', (tester) async {
+        configurar(tester);
+        final c = ProviderContainer();
+        addTearDown(c.dispose);
+        await tester.pumpWidget(_app(c, const PasoMateriales()));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.tap(find.text('Activos'));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField).first, 'ro');
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Resultados'), findsOneWidget);
+        _dentroDePantalla(tester, find.text('Ubicación'));
+        _dentroDePantalla(tester, find.text('Préstamo'));
+        _sinScrollHorizontal(tester);
+      });
+
       testWidgets('tablas de revisión (materiales y activos) completas', (tester) async {
         configurar(tester);
         final c = ProviderContainer();
@@ -80,7 +121,7 @@ void main() {
         final repo = VentanillaRepositorioSimulado();
         final m = (await tester.runAsync(() => repo.buscarMateriales(consulta: 'Guantes')))!.items.first;
         await tester.runAsync(() => n.agregarMaterial(material: m, cantidad: 1, unidad: 'Piezas'));
-        final a = (await tester.runAsync(() => repo.buscarActivos('')))!.first;
+        final a = (await tester.runAsync(() => repo.buscarActivos('')))!.items.first;
         n.agregarActivo(a);
         // Con comentario el botón muestra un indicador: no debe desbordarse ("overflowed by 15 pixels").
         n.comentarMaterial(m.codigo, 'Prueba');

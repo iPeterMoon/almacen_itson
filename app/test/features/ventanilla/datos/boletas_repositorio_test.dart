@@ -57,6 +57,28 @@ void main() {
     expect(ruta, '2/abc-firma-recibe.png');
   });
 
+  test('BoletaCreada lee los préstamos del resumen y tolera resumen nulo', () {
+    final conResumen = BoletaCreada.fromJson({
+      'boletaId': 9,
+      'folio': 'BOL-2026-000009',
+      'estado': 'ENTREGADA',
+      'resumen': {
+        'materiales': [],
+        'herramientas': [
+          {'codigo': 'ACT-104', 'folioPrestamo': 'PRE-2026-0008', 'fechaPrevista': '2026-11-23T18:00:00.000Z'},
+          {'codigo': 'ACT-105'},
+        ],
+      },
+    });
+    expect(conResumen.prestamos.first.folio, 'PRE-2026-0008');
+    expect(conResumen.prestamos.first.fechaPrevista, '2026-11-23T18:00:00.000Z');
+    expect(conResumen.prestamos.last.folio, isNull);
+
+    final sinResumen = BoletaCreada.fromJson(
+        {'boletaId': 9, 'folio': 'BOL-2026-000009', 'estado': 'ENTREGADA', 'resumen': null});
+    expect(sinResumen.prestamos, isEmpty);
+  });
+
   test('crear devuelve folio y estado', () async {
     final (:repo, :servidor) = crear(
       estado: 201,

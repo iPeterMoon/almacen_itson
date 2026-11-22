@@ -55,18 +55,50 @@ class ValidacionMaterial {
 // Respuesta de POST /boletas. Toda boleta se entrega en el acto: no hay estados
 // de autorización. [estado] siempre es 'ENTREGADA'.
 class BoletaCreada {
-  const BoletaCreada({required this.boletaId, required this.folio, required this.estado});
+  const BoletaCreada({
+    required this.boletaId,
+    required this.folio,
+    required this.estado,
+    this.prestamos = const [],
+  });
 
   static const entregada = 'ENTREGADA';
 
   final int boletaId;
   final String folio;
   final String estado;
+  // Préstamos que abrió la boleta, tomados de resumen.herramientas (HU8).
+  final List<PrestamoCreado> prestamos;
 
-  factory BoletaCreada.fromJson(Map<String, dynamic> json) => BoletaCreada(
-        boletaId: (json['boletaId'] as num).toInt(),
-        folio: json['folio'] as String,
-        estado: json['estado'] as String,
+  factory BoletaCreada.fromJson(Map<String, dynamic> json) {
+    // El resumen puede venir en null si el servidor no pudo armarlo; la boleta ya existe.
+    final resumen = json['resumen'] as Map<String, dynamic>?;
+    final herramientas = (resumen?['herramientas'] as List?) ?? const [];
+    return BoletaCreada(
+      boletaId: (json['boletaId'] as num).toInt(),
+      folio: json['folio'] as String,
+      estado: json['estado'] as String,
+      prestamos: [
+        for (final h in herramientas) PrestamoCreado.fromJson(h as Map<String, dynamic>),
+      ],
+    );
+  }
+}
+
+// Una herramienta de resumen.herramientas de POST /boletas: el folio del préstamo
+// (`folioPrestamo`, PRE-AAAA-NNNN) y la fecha prevista (ISO 8601) que generó la base.
+// Pueden llegar en null si el servidor no pudo consultar el seguimiento de préstamos.
+class PrestamoCreado {
+  const PrestamoCreado({required this.codigo, this.folio, this.fechaPrevista});
+
+  final String codigo; // código de activo, para ubicar la herramienta
+  final String? folio;
+  final String? fechaPrevista;
+
+  factory PrestamoCreado.fromJson(Map<String, dynamic> json) => PrestamoCreado(
+        codigo: json['codigo'] as String? ?? '',
+        folio: json['folioPrestamo'] as String?,
+        fechaPrevista: json['fechaPrevista'] as String?,
       );
 }
 

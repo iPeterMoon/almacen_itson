@@ -7,8 +7,10 @@ import '../../../core/validacion/sin_emojis.dart';
 import '../../../core/validacion/limites_texto.dart';
 import '../../autenticacion/datos/supervisores_repositorio.dart';
 import '../../autenticacion/presentacion/sesion_controlador.dart';
+import '../datos/dias_prestamo.dart';
 import '../datos/modelos.dart';
 import '../datos/ventanilla_repositorio.dart';
+import 'avisos_activos.dart';
 
 const _sin = Object();
 const int tamanoMaxFirma = 500 * 1024; // 500 KB, según el contrato de firmas
@@ -30,6 +32,8 @@ class EntregaState {
     this.error,
     this.stockInsuficiente,
     this.resumen,
+    this.validandoActivo,
+    this.solicitanteConVencido = false,
   });
 
   final int paso; // 0 Solicitante, 1 Materiales, 2 Revisión, 3 Confirmación
@@ -48,6 +52,10 @@ class EntregaState {
   final String? error;
   final StockInsuficiente? stockInsuficiente;
   final ResumenEntrega? resumen;
+  // Código del activo que se está validando con el servidor (para no tocarlo dos veces).
+  final String? validandoActivo;
+  // HU8 E5: el solicitante actual tiene un préstamo vencido. Solo se avisa.
+  final bool solicitanteConVencido;
 
   EntregaState copyWith({
     int? paso,
@@ -65,6 +73,8 @@ class EntregaState {
     Object? error = _sin,
     Object? stockInsuficiente = _sin,
     Object? resumen = _sin,
+    Object? validandoActivo = _sin,
+    bool? solicitanteConVencido,
   }) {
     return EntregaState(
       paso: paso ?? this.paso,
@@ -84,6 +94,9 @@ class EntregaState {
           ? this.stockInsuficiente
           : stockInsuficiente as StockInsuficiente?,
       resumen: identical(resumen, _sin) ? this.resumen : resumen as ResumenEntrega?,
+      validandoActivo:
+          identical(validandoActivo, _sin) ? this.validandoActivo : validandoActivo as String?,
+      solicitanteConVencido: solicitanteConVencido ?? this.solicitanteConVencido,
     );
   }
 
@@ -91,11 +104,19 @@ class EntregaState {
 
   int get totalPartidas => materiales.length + activos.length;
 
+  /// Alguna herramienta quedó con los días vacíos o en 0.
+  bool get hayDiasInvalidos => activos.any((a) => !diasPrestamoValidos(a.dias));
+
+  /// Nombres de quienes autorizaron excepciones (se muestran en "Autorizado por").
+  List<String> get autorizadoPor =>
+      autorizoNombre.trim().isEmpty ? const [] : [autorizoNombre.trim()];
+
   bool puedeAvanzar() => switch (paso) {
         0 => sinRegistro
             ? nombreSinRegistro.trim().isNotEmpty && unidadSinRegistro.trim().isNotEmpty
             : solicitante != null,
-        1 => totalPartidas > 0,
+        // HU8: toda herramienta necesita al menos 1 día de préstamo.
+        1 => totalPartidas > 0 && !hayDiasInvalidos,
         2 => materiales.any((m) => m.entregado) || activos.any((a) => a.entregado),
         _ => false,
       };
@@ -111,24 +132,36 @@ class EntregaController extends Notifier<EntregaState> {
 
   void reiniciar() {
     state = const EntregaState();
-    for (final busqueda in [
-      consultaSolicitantesProvider,
-      paginaSolicitantesProvider,
-      filtroMaterialesProvider,
-      paginaMaterialesProvider,
-      consultaActivosProvider,
-    ]) {
-      ref.invalidate(busqueda);
+    _limpiarBusquedas();
+  }
+
+  // Los textos de búsqueda viven en providers que sobreviven al cambio de paso, pero
+  // los campos de texto se crean vacíos al volver. Si no se limpian, la tabla queda
+  // filtrada con la barra en blanco. Se limpian al salir de un paso y al empezar
+  // una boleta. (Los filtros de categoría, tipo y almacén sí se ven en pantalla y se conservan.)
+  void _limpiarBusquedas() {
+    if (ref.read(consultaSolicitantesProvider).isNotEmpty) {
+      ref.read(consultaSolicitantesProvider.notifier).set('');
+    }
+    if (ref.read(consultaActivosProvider).isNotEmpty) {
+      ref.read(consultaActivosProvider.notifier).set('');
+    }
+    if (ref.read(filtroMaterialesProvider).consulta.isNotEmpty) {
+      ref.read(filtroMaterialesProvider.notifier).setConsulta('');
     }
   }
 
   // --- Navegación entre pasos ---
   void avanzar() {
-    if (state.paso < 3 && state.puedeAvanzar()) state = state.copyWith(paso: state.paso + 1);
+    if (state.paso < 3 && state.puedeAvanzar()) {
+      state = state.copyWith(paso: state.paso + 1);
+      _limpiarBusquedas();
+    }
   }
 
   void retroceder() {
     if (state.paso == 0) return;
+    _limpiarBusquedas();
     // Al salir de la confirmación se descartan las firmas (el lienzo se vacía).
     state = state.copyWith(
       paso: state.paso - 1,
@@ -139,15 +172,18 @@ class EntregaController extends Notifier<EntregaState> {
   }
 
   // --- Paso 1: solicitante y datos adicionales ---
-  void seleccionarSolicitante(Solicitante s) =>
-      state = state.copyWith(solicitante: s, sinRegistro: false);
+  // Cambiar de solicitante quita el aviso de vencido: era del anterior.
+  void seleccionarSolicitante(Solicitante s) => state =
+      state.copyWith(solicitante: s, sinRegistro: false, solicitanteConVencido: false);
 
   /// Permite quitar la selección para elegir a otro trabajador (o a ninguno).
-  void deseleccionarSolicitante() => state = state.copyWith(solicitante: null);
+  void deseleccionarSolicitante() =>
+      state = state.copyWith(solicitante: null, solicitanteConVencido: false);
 
   void usarSinRegistro(bool valor) => state = state.copyWith(
         sinRegistro: valor,
         solicitante: valor ? null : _sin,
+        solicitanteConVencido: false,
       );
 
   void setNombreSinRegistro(String v) =>
@@ -299,21 +335,66 @@ class EntregaController extends Notifier<EntregaState> {
           if (m.material.codigo == codigo) m.copyWith(unidad: unidad) else m
       ]);
 
+  /// Agrega un equipo a la boleta con 1 día de préstamo. Solo se agregan los
+  /// disponibles; el servidor vuelve a validarlo al confirmar (HU8, Escenarios 2 y 3).
   void agregarActivo(ActivoCatalogo activo) {
+    if (!activo.disponible) return;
     if (state.activos.any((a) => a.activo.codigo == activo.codigo)) return;
     state = state.copyWith(activos: [...state.activos, ItemActivo(activo: activo)]);
+  }
+
+  /// HU8 E2-E5: valida el activo con el servidor antes de agregarlo. Si no se puede
+  /// prestar (no disponible o ya prestado) no lo agrega y devuelve la validación para
+  /// que la pantalla muestre el aviso. Si el solicitante tiene un préstamo vencido, lo
+  /// agrega igual y deja el aviso en [EntregaState.solicitanteConVencido]. Lanza
+  /// [ErrorNegocio] con el mensaje ya traducido (ej. "Activo no encontrado").
+  Future<ValidacionActivo?> validarYAgregarActivo(ActivoCatalogo activo) async {
+    if (state.validandoActivo != null) return null;
+    if (state.activos.any((a) => a.activo.codigo == activo.codigo)) return null;
+    state = state.copyWith(validandoActivo: activo.codigo);
+    try {
+      final v = await _repo.validarActivo(
+        activo: activo,
+        solicitante: state.sinRegistro ? null : state.solicitante,
+      );
+      if (!v.prestable) return v;
+      state = state.copyWith(
+        activos: [...state.activos, ItemActivo(activo: v.activo)],
+        solicitanteConVencido: state.solicitanteConVencido || v.solicitanteConVencido,
+      );
+      return v;
+    } on ErrorNegocio catch (e) {
+      throw ErrorNegocio(e.codigo, mensajeDeError(e), estadoHttp: e.estadoHttp, datos: e.datos);
+    } finally {
+      state = state.copyWith(validandoActivo: null);
+    }
+  }
+
+  /// Casilla "Agregar" de la tabla de activos: marca o desmarca el equipo.
+  void alternarActivo(ActivoCatalogo activo) {
+    if (state.activos.any((a) => a.activo.codigo == activo.codigo)) {
+      quitarActivo(activo.codigo);
+    } else {
+      agregarActivo(activo);
+    }
   }
 
   void quitarActivo(String codigo) => state =
       state.copyWith(activos: state.activos.where((a) => a.activo.codigo != codigo).toList());
 
+  /// Cambia los días de préstamo de una herramienta (entre 0 y [diasPrestamoMaximo]).
+  /// 0 se acepta a propósito: es el campo vacío o en cero, y la boleta no avanza
+  /// (puedeAvanzar) hasta que se corrija.
   void cambiarDias(String codigo, int dias) {
-    if (dias < 1) return;
+    final validos = dias < 0 ? 0 : (dias > diasPrestamoMaximo ? diasPrestamoMaximo : dias);
     state = state.copyWith(activos: [
       for (final a in state.activos)
-        if (a.activo.codigo == codigo) a.copyWith(dias: dias) else a
+        if (a.activo.codigo == codigo) a.copyWith(dias: validos) else a
     ]);
   }
+
+  /// Lo que se escribe en el campo de días: vacío es 0 y se limita al máximo.
+  void escribirDias(String codigo, String texto) => cambiarDias(codigo, diasDeTexto(texto));
 
   // --- Paso 3: revisión ---
   void marcarMaterial(String codigo, bool v) => state = state.copyWith(materiales: [
@@ -400,7 +481,9 @@ class EntregaController extends Notifier<EntregaState> {
           ),
         );
       } else {
-        state = state.copyWith(enviando: false, error: e.mensaje);
+        // Los errores de activo (prestado, no disponible, no encontrado) se traducen
+        // a los mensajes de la HU8.
+        state = state.copyWith(enviando: false, error: mensajeDeError(e));
       }
     } catch (_) {
       state = state.copyWith(enviando: false, error: 'No se pudo conectar con el servidor.');
@@ -433,6 +516,9 @@ final ventanillaRepositorioProvider =
 final almacenistaActualProvider = Provider<String>(
     (ref) => ref.watch(controladorSesionProvider).value?.usuario.nombre ?? '');
 
+/// La hora actual. Se cambia en las pruebas para fijar "hoy" en la fecha prevista de devolución.
+final relojProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
 final entregaControllerProvider =
     NotifierProvider<EntregaController, EntregaState>(EntregaController.new);
 
@@ -462,6 +548,16 @@ class PaginaMaterialesNotifier extends Notifier<int> {
   @override
   int build() {
     ref.watch(filtroMaterialesProvider);
+    return 1;
+  }
+
+  void set(int pagina) => state = pagina;
+}
+
+class PaginaActivosNotifier extends Notifier<int> {
+  @override
+  int build() {
+    ref.watch(consultaActivosProvider);
     return 1;
   }
 
@@ -560,7 +656,14 @@ final materialesProvider = FutureProvider.autoDispose<Pagina<MaterialCatalogo>>(
 
 final consultaActivosProvider =
     NotifierProvider<ConsultaNotifier, String>(ConsultaNotifier.new);
-final activosProvider = FutureProvider.autoDispose<List<ActivoCatalogo>>((ref) {
+final paginaActivosProvider =
+    NotifierProvider<PaginaActivosNotifier, int>(PaginaActivosNotifier.new);
+
+/// Activos del campus (HU8) con su estado, paginados como la tabla de materiales.
+final activosProvider = FutureProvider.autoDispose<Pagina<ActivoCatalogo>>((ref) {
   final q = ref.watch(consultaActivosProvider);
-  return ref.watch(ventanillaRepositorioProvider).buscarActivos(q);
+  final p = ref.watch(paginaActivosProvider);
+  return ref
+      .watch(ventanillaRepositorioProvider)
+      .buscarActivos(q, pagina: p, porPagina: registrosPorPagina);
 });

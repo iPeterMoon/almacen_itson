@@ -11,6 +11,7 @@ import '../../catalogo_inventario/datos/producto_resumen.dart';
 import '../../catalogo_inventario/datos/productos_repository.dart';
 import '../../prestamos/datos/activos_repositorio.dart';
 import 'boletas_repositorio.dart';
+import 'dias_prestamo.dart' show fechaPrevistaTexto;
 import 'modelos.dart';
 import 'trabajadores_repositorio.dart';
 import 'ventanilla_repositorio.dart';
@@ -46,8 +47,6 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   // Nombre del usuario con sesión; aparece como "Entregado por" en el resumen.
   final String Function() _entregadoPor;
 
-  // La pantalla de Denise maneja los filtros por nombre; la API, por id. Se guardan
-  // las equivalencias la primera vez que se cargan las opciones.
   Future<_IdsFiltros>? _ids;
 
   // Busca materiales con existencia. Reglas de AI-30 y AI-62:
@@ -152,14 +151,23 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   @override
   Future<List<Supervisor>> listarSupervisores() => _supervisores.listar();
 
-  // Solo activos DISPONIBLE: los demás no se pueden prestar. Sin paginador, se
-  // usa el límite por defecto del servidor (8), que es lo que cabe en la tablet.
+  // Activos del campus en cualquier estado: la tabla muestra cuáles están disponibles,
+  // en préstamo o fuera de servicio, y solo deja seleccionar los disponibles. Igual
+  // que en materiales, con 1 carácter no se llama al servidor (pide 2 o más).
   @override
-  Future<List<ActivoCatalogo>> buscarActivos(String consulta) async {
+  Future<Pagina<ActivoCatalogo>> buscarActivos(String consulta,
+      {int pagina = 1, int porPagina = 5}) async {
     final texto = consulta.trim();
-    if (texto.isNotEmpty && texto.length < minimoCaracteresBusqueda) return const [];
-    final r = await _activos.buscar(texto: texto, soloPrestables: true);
-    return r.datos.map(aActivoCatalogo).toList(growable: false);
+    if (texto.isNotEmpty && texto.length < minimoCaracteresBusqueda) {
+      return Pagina(items: const [], total: 0, pagina: pagina, porPagina: porPagina);
+    }
+    final r = await _activos.buscar(texto: texto, pagina: pagina, limite: porPagina);
+    return Pagina(
+      items: r.datos.map(aActivoCatalogo).toList(growable: false),
+      total: r.total,
+      pagina: pagina,
+      porPagina: porPagina,
+    );
   }
 
   // POST /boletas/validar-material. Si no alcanza la existencia lanza
@@ -281,10 +289,7 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
         for (final m in solicitud.materiales)
           LineaResumen(m.material.codigo, m.material.alias, m.cantidadTexto),
       ],
-      activos: [
-        for (final a in solicitud.activos)
-          LineaResumen(a.activo.codigo, a.activo.equipo, a.activo.modelo, a.activo.serie),
-      ],
+      herramientas: _herramientasDelResumen(solicitud.activos, boleta.prestamos, entregadoEn),
       autorizoNombre: solicitud.autorizoNombre?.trim(),
       motivos: [
         for (final m in solicitud.materiales)
@@ -294,12 +299,69 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
     );
   }
 
+  // Une lo capturado (nombre, modelo, serie, días) con lo que generó la base para
+  // cada préstamo (folio PRE- y fecha prevista). Si el servidor no pudo mandar la
+  // fecha, se muestra la misma que se calculó en la revisión.
+  List<LineaHerramientaResumen> _herramientasDelResumen(
+    List<ItemActivo> activos,
+    List<PrestamoCreado> prestamos,
+    String? entregadoEn,
+  ) {
+    final porCodigo = {for (final p in prestamos) p.codigo: p};
+    final base = DateTime.tryParse(entregadoEn ?? '') ?? DateTime.now();
+    return [
+      for (final a in activos)
+        LineaHerramientaResumen(
+          codigo: a.activo.codigo,
+          nombre: a.activo.equipo,
+          modelo: a.activo.modelo,
+          serie: a.activo.serie,
+          dias: a.dias,
+          folioPrestamo: porCodigo[a.activo.codigo]?.folio,
+          fechaPrevista: porCodigo[a.activo.codigo]?.fechaPrevista != null
+              ? formatearFecha(porCodigo[a.activo.codigo]!.fechaPrevista)
+              : fechaPrevistaTexto(base, a.dias),
+        ),
+    ];
+  }
+
   Future<String?> _fechaEntrega(int boletaId) async {
     try {
       return await _boletas.fechaEntrega(boletaId);
     } catch (_) {
       return DateTime.now().toUtc().toIso8601String();
     }
+  }
+
+  // POST /activos/validar. La base decide el estado, el custodio y los vencidos;
+  // aquí solo se dan formato a las fechas. Se conservan almacén y ubicación de la
+  // fila de la tabla (la validación no los trae) y se toma el estado actual.
+  @override
+  Future<ValidacionActivo> validarActivo({
+    required ActivoCatalogo activo,
+    Solicitante? solicitante,
+  }) async {
+    final v = await _activos.validar(
+      codigo: activo.codigo,
+      trabajadorId: _idDeTrabajador(solicitante),
+    );
+    return ValidacionActivo(
+      activo: ActivoCatalogo(
+        activoId: v.activo.id,
+        codigo: v.activo.codigo,
+        equipo: v.activo.nombre,
+        modelo: v.activo.modelo,
+        serie: v.activo.numeroSerie,
+        almacen: activo.almacen,
+        ubicacion: activo.ubicacion,
+        estado: v.activo.estado,
+      ),
+      prestable: v.prestable,
+      solicitanteConVencido: v.solicitanteConVencido,
+      custodio: v.custodio,
+      fechaPrevista: v.fechaPrevista == null ? null : formatearFecha(v.fechaPrevista),
+      prestadoEn: v.prestadoEn == null ? null : formatearHoraFecha(v.prestadoEn),
+    );
   }
 
   // Id del trabajador para el servidor; null si no hay solicitante registrado.
@@ -367,6 +429,7 @@ ActivoCatalogo aActivoCatalogo(Activo a) => ActivoCatalogo(
       serie: a.numeroSerie,
       almacen: a.almacen ?? '-',
       ubicacion: a.ubicacion ?? '-',
+      estado: a.estado,
     );
 
 // Etiquetas que usa la pantalla para el tipo de producto.

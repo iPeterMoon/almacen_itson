@@ -74,14 +74,21 @@ void main() {
       expect(estado().activos.firstWhere((a) => a.activo.codigo == 'SIE-002').dias, 1);
     });
 
-    test('los días de préstamo no bajan de 1', () {
+    // 0 es el campo vacío: se guarda para poder bloquear el paso, y un negativo
+    // queda en 0. La boleta no avanza hasta que haya al menos 1 día.
+    test('los días en 0 o negativos quedan en 0 y bloquean el paso', () {
       controlador()
+        ..seleccionarSolicitante(const Solicitante(
+            id: '1', nombre: 'Pedro', dependencia: 'SG', tipo: 'ITSON', zona: 'Taller'))
         ..agregarActivo(_taladro)
         ..cambiarDias('TAL-001', 3)
-        ..cambiarDias('TAL-001', 0)
-        ..cambiarDias('TAL-001', -2);
+        ..avanzar();
+      expect(estado().puedeAvanzar(), isTrue);
 
-      expect(estado().activos.single.dias, 3);
+      controlador().cambiarDias('TAL-001', -2);
+
+      expect(estado().activos.single.dias, 0);
+      expect(estado().puedeAvanzar(), isFalse);
     });
 
     test('quita solo la herramienta indicada', () {
