@@ -94,6 +94,7 @@ const BOLETA_DETALLE = {
         nombre: 'Taladro',
         modelo: 'XTR-500',
         numero_serie: 'SN-12345',
+        estado: 'EN_PRESTAMO',
       },
     },
   ],
@@ -885,7 +886,12 @@ describe('BoletasService', () => {
         expect.objectContaining({
           activoId: 8,
           diasPrestamo: 3,
-          activo: expect.objectContaining({ codigo: 'ACT-008', nombre: 'Taladro' }),
+          // HU8: ejecutar_entrega dejó el activo EN_PRESTAMO al entregar la boleta.
+          activo: expect.objectContaining({
+            codigo: 'ACT-008',
+            nombre: 'Taladro',
+            estado: 'EN_PRESTAMO',
+          }),
         }),
       ]);
     });
@@ -935,6 +941,72 @@ describe('BoletasService', () => {
 
       expect(resultado.materiales).toEqual([]);
       expect(resultado.herramientas).toEqual([]);
+    });
+  });
+
+  describe('prestamosDeBoleta (HU8)', () => {
+    const PRESTAMO_DE_BOLETA = {
+      activo_id: 8,
+      codigo: 'ACT-008',
+      folio: 'PRE-2026-0001',
+      dias_prestamo: 3,
+      prestado_en: '2026-11-12T18:00:00.000Z',
+      fecha_prevista: '2026-11-15T18:00:00.000Z',
+      custodio: 'Miguel Ángel Ruiz',
+      estado: 'ACTIVO',
+    };
+
+    // Imita from(...).select(...).eq(...) de PostgREST.
+    function clienteConPrestamos(respuesta: { data: unknown; error: { message: string } | null }) {
+      const eq = jest.fn().mockResolvedValue(respuesta);
+      const select = jest.fn().mockReturnValue({ eq });
+      const from = jest.fn().mockReturnValue({ select });
+      return { eq, from };
+    }
+
+    it('lee el seguimiento por folio de boleta y devuelve el préstamo en camelCase', async () => {
+      const cliente = clienteConPrestamos({ data: [PRESTAMO_DE_BOLETA], error: null });
+      const servicio = crearServicio(cliente);
+
+      const prestamos = await servicio.prestamosDeBoleta('token', 'BOL-2026-000007');
+
+      expect(cliente.from).toHaveBeenCalledWith('vista_seguimiento_prestamos');
+      expect(cliente.eq).toHaveBeenCalledWith('boleta_folio', 'BOL-2026-000007');
+      expect(prestamos).toEqual([
+        {
+          activoId: 8,
+          codigo: 'ACT-008',
+          folio: 'PRE-2026-0001',
+          diasPrestamo: 3,
+          prestadoEn: '2026-11-12T18:00:00.000Z',
+          fechaPrevista: '2026-11-15T18:00:00.000Z',
+          custodio: 'Miguel Ángel Ruiz',
+          estado: 'ACTIVO',
+        },
+      ]);
+      // La fecha prevista es la entrega más los días del préstamo.
+      expect(prestamos[0].fechaPrevista).toBe(
+        new Date(
+          new Date(prestamos[0].prestadoEn!).getTime() + 3 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      );
+    });
+
+    it('devuelve una lista vacía cuando la boleta no tiene herramientas', async () => {
+      const servicio = crearServicio(clienteConPrestamos({ data: [], error: null }));
+
+      await expect(servicio.prestamosDeBoleta('token', 'BOL-2026-000007')).resolves.toEqual([]);
+    });
+
+    it('traduce los errores de la base', async () => {
+      const servicio = crearServicio(
+        clienteConPrestamos({ data: null, error: { message: 'SIN_PERMISO: sin acceso.' } }),
+      );
+
+      await expect(servicio.prestamosDeBoleta('token', 'BOL-2026-000007')).rejects.toMatchObject({
+        codigo: 'SIN_PERMISO',
+        estadoHttp: HttpStatus.FORBIDDEN,
+      });
     });
   });
 

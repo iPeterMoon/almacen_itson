@@ -116,6 +116,30 @@ export class ConfirmacionService {
     const entregadoPor = boleta.entregadoPor
       ? await this.nombreDeUsuario(cliente, boleta.entregadoPor)
       : null;
+    // HU8: cada herramienta entregada tiene un préstamo PRE- con fecha prevista y custodio.
+    // La boleta ya está entregada: si falla el seguimiento (por ejemplo, RLS en la vista),
+    // se dejan los datos del préstamo en null en vez de responder error y provocar un reintento.
+    let prestamos: Awaited<ReturnType<BoletasService['prestamosDeBoleta']>>;
+    try {
+      prestamos = await this.boletas.prestamosDeBoleta(token, boleta.folio);
+    } catch (error) {
+      this.logger.warn(
+        `La boleta ${boleta.folio} se entregó, pero no se pudo consultar el seguimiento de préstamos: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      prestamos = [];
+    }
+    const porActivo = new Map(
+      prestamos.flatMap((prestamo) =>
+        prestamo.activoId === null ? [] : [[prestamo.activoId, prestamo] as const],
+      ),
+    );
+    const porCodigo = new Map(
+      prestamos.flatMap((prestamo) =>
+        prestamo.codigo ? [[prestamo.codigo, prestamo] as const] : [],
+      ),
+    );
 
     return {
       boletaId: boleta.id,
@@ -138,13 +162,27 @@ export class ConfirmacionService {
         comentario: material.comentario,
         motivoExcepcion: material.motivoExcepcion,
       })),
-      herramientas: boleta.herramientas.map((herramienta) => ({
-        codigo: herramienta.activo?.codigo ?? '',
-        nombre: herramienta.activo?.nombre ?? '',
-        modelo: herramienta.activo?.modelo ?? '',
-        numeroSerie: herramienta.activo?.numero_serie ?? '',
-        diasPrestamo: herramienta.diasPrestamo,
-      })),
+      herramientas: boleta.herramientas.map((herramienta) => {
+        // El activo identifica al préstamo; el código es respaldo para datos sin activoId.
+        const prestamo =
+          porActivo.get(herramienta.activoId) ??
+          (herramienta.activo?.codigo ? porCodigo.get(herramienta.activo.codigo) : undefined) ??
+          null;
+        return {
+          codigo: herramienta.activo?.codigo ?? '',
+          nombre: herramienta.activo?.nombre ?? '',
+          modelo: herramienta.activo?.modelo ?? '',
+          numeroSerie: herramienta.activo?.numero_serie ?? '',
+          diasPrestamo: prestamo?.diasPrestamo ?? herramienta.diasPrestamo,
+          folioPrestamo: prestamo?.folio ?? null,
+          prestadoEn: prestamo?.prestadoEn ?? null,
+          fechaPrevista: prestamo?.fechaPrevista ?? null,
+          // Estado del activo, que ejecutar_entrega dejó en EN_PRESTAMO.
+          estadoActivo: herramienta.activo?.estado ?? null,
+          // Custodio del resguardo: el solicitante de la boleta según la vista.
+          custodio: prestamo?.custodio ?? null,
+        };
+      }),
     };
   }
 
