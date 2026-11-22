@@ -34,16 +34,16 @@ void main() {
   });
 
   group('cambiarDias', () {
-    test('acepta valores entre 1 y 365', () {
+    test('acepta valores entre 1 y 30', () {
+      c.cambiarDias('TAL-001', 15);
+      expect(dias(), 15);
       c.cambiarDias('TAL-001', 30);
       expect(dias(), 30);
-      c.cambiarDias('TAL-001', 365);
-      expect(dias(), 365);
     });
 
-    test('no pasa de 365', () {
-      c.cambiarDias('TAL-001', 366);
-      expect(dias(), 365);
+    test('no pasa de 30, el máximo del servidor', () {
+      c.cambiarDias('TAL-001', 31);
+      expect(dias(), 30);
     });
 
     test('0 se acepta (campo vacío) para poder bloquear el paso; un negativo queda en 0', () {
@@ -81,9 +81,9 @@ void main() {
       expect(dias(), 0);
     });
 
-    test('más de 365 se queda en 365', () {
+    test('más de 30 se queda en 30', () {
       c.escribirDias('TAL-001', '900');
-      expect(dias(), 365);
+      expect(dias(), 30);
     });
   });
 

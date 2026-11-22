@@ -100,7 +100,7 @@ class _Subtitulo extends StatelessWidget {
       );
 }
 
-/// Fila de "Seleccionados": datos del equipo y tiempo de préstamo en días (1 a 365),
+/// Fila de "Seleccionados": datos del equipo y tiempo de préstamo en días (1 a 30),
 /// con la fecha prevista de devolución.
 class _FilaSeleccionado extends StatelessWidget {
   const _FilaSeleccionado({required this.indice, required this.item});

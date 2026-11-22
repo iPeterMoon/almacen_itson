@@ -1,10 +1,12 @@
 // Reglas de interfaz de los días de préstamo de una herramienta (HU8).
-// El servidor valida que sean enteros mayores a cero; el máximo es de la app.
+// El servidor valida que sean enteros de 1 a DIAS_PRESTAMO_MAX (30, en
+// servidor/src/comun/dto/limites.ts). El máximo de la app debe ser el mismo: con más
+// días la boleta avanzaría aquí y POST /boletas la rechazaría con 400.
 
 /// Días con los que se agrega una herramienta a la boleta.
 const diasPrestamoPredeterminado = 1;
 const diasPrestamoMinimo = 1;
-const diasPrestamoMaximo = 365;
+const diasPrestamoMaximo = 30;
 
 const mensajeDiasInvalidos = 'El tiempo de préstamo debe ser mayor a cero días';
 

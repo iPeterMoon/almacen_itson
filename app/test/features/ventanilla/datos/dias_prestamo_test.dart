@@ -24,8 +24,8 @@ void main() {
       expect(fechaPrevistaTexto(DateTime.utc(2027, 2, 28, 18), 1), '01/03/2027');
     });
 
-    test('con el máximo de 365 días llega a la misma fecha del año siguiente', () {
-      expect(fechaPrevistaTexto(hoy, diasPrestamoMaximo), '19/11/2027');
+    test('con el máximo de 30 días llega al mismo día del mes siguiente', () {
+      expect(fechaPrevistaTexto(hoy, diasPrestamoMaximo), '19/12/2026');
     });
 
     test('rellena con ceros el día y el mes', () {
@@ -63,7 +63,7 @@ void main() {
     test('un número normal', () {
       expect(diasDeTexto('7'), 7);
       expect(diasDeTexto(' 12 '), 12);
-      expect(diasDeTexto('365'), 365);
+      expect(diasDeTexto('30'), 30);
     });
 
     test('vacío, en 0 o sin número queda en 0 (inválido)', () {
@@ -75,18 +75,18 @@ void main() {
     });
 
     test('más del máximo se queda en el máximo', () {
-      expect(diasDeTexto('366'), 365);
-      expect(diasDeTexto('999'), 365);
+      expect(diasDeTexto('31'), 30);
+      expect(diasDeTexto('999'), 30);
     });
   });
 
   test('límites y valor por defecto', () {
     expect(diasPrestamoPredeterminado, 1);
     expect(diasPrestamoMinimo, 1);
-    expect(diasPrestamoMaximo, 365);
+    expect(diasPrestamoMaximo, 30, reason: 'igual que DIAS_PRESTAMO_MAX del servidor');
     expect(diasPrestamoValidos(0), isFalse);
     expect(diasPrestamoValidos(1), isTrue);
-    expect(diasPrestamoValidos(365), isTrue);
+    expect(diasPrestamoValidos(30), isTrue);
     expect(mensajeDiasInvalidos, 'El tiempo de préstamo debe ser mayor a cero días');
   });
 }

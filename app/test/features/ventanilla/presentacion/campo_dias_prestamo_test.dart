@@ -95,26 +95,26 @@ void main() {
       expect(dias(c), 1);
     });
 
-    testWidgets('"+" sube hasta 365 y ahí se detiene', (tester) async {
+    testWidgets('"+" sube hasta 30 y ahí se detiene', (tester) async {
       final c = await conTaladro(tester);
-      await tester.enterText(campoDias, '365');
+      await tester.enterText(campoDias, '30');
       await tester.pump();
 
       await tester.tap(mas, warnIfMissed: false);
       await tester.pump();
 
-      expect(dias(c), 365);
-      expect(find.text('Devolución prevista: 19/11/2027'), findsOneWidget);
+      expect(dias(c), 30);
+      expect(find.text('Devolución prevista: 19/12/2026'), findsOneWidget);
     });
 
-    testWidgets('escribir más de 365 lo deja en 365', (tester) async {
+    testWidgets('escribir más de 30 lo deja en 30', (tester) async {
       final c = await conTaladro(tester);
 
       await tester.enterText(campoDias, '999');
       await tester.pump();
 
-      expect(dias(c), 365);
-      expect(textoDelCampo(tester), '365');
+      expect(dias(c), 30);
+      expect(textoDelCampo(tester), '30');
     });
 
     testWidgets('solo acepta dígitos', (tester) async {
