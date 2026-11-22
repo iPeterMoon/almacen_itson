@@ -85,9 +85,9 @@ class BoletaCreada {
   }
 }
 
-// Una herramienta del resumen de POST /boletas. SUPUESTO: el servidor agregará
-// `prestamo` (folio PRE-) y `fechaPrevista` (ISO 8601) con los mismos nombres que ya
-// usa GET /activos; mientras no lleguen quedan en null.
+// Una herramienta de resumen.herramientas de POST /boletas: el folio del préstamo
+// (`folioPrestamo`, PRE-AAAA-NNNN) y la fecha prevista (ISO 8601) que generó la base.
+// Pueden llegar en null si el servidor no pudo consultar el seguimiento de préstamos.
 class PrestamoCreado {
   const PrestamoCreado({required this.codigo, this.folio, this.fechaPrevista});
 
@@ -97,7 +97,7 @@ class PrestamoCreado {
 
   factory PrestamoCreado.fromJson(Map<String, dynamic> json) => PrestamoCreado(
         codigo: json['codigo'] as String? ?? '',
-        folio: json['prestamo'] as String?,
+        folio: json['folioPrestamo'] as String?,
         fechaPrevista: json['fechaPrevista'] as String?,
       );
 }

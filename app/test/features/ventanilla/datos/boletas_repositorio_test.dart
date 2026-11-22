@@ -65,7 +65,7 @@ void main() {
       'resumen': {
         'materiales': [],
         'herramientas': [
-          {'codigo': 'ACT-104', 'prestamo': 'PRE-2026-0008', 'fechaPrevista': '2026-11-23T18:00:00.000Z'},
+          {'codigo': 'ACT-104', 'folioPrestamo': 'PRE-2026-0008', 'fechaPrevista': '2026-11-23T18:00:00.000Z'},
           {'codigo': 'ACT-105'},
         ],
       },

@@ -149,12 +149,13 @@ class _FichaPrestamo extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.all(12),
         child: RejillaCampos(anchoMinimoColumna: 140, campos: [
+          // El folio del préstamo va primero (en negritas): es el que se usa en la devolución.
+          // Sin folio: el servidor no pudo consultar el seguimiento de préstamos.
+          CampoDato('Folio de préstamo', h.folioPrestamo ?? 'Sin folio'),
           CampoDato('Herramienta', h.nombre),
           CampoDato('Código', h.codigo),
           CampoDato('Modelo', h.modelo),
           CampoDato('N° Serie', h.serie),
-          // Sin folio todavía: el servidor aún no lo devolvió en el resumen.
-          CampoDato('Folio de préstamo', h.folioPrestamo ?? 'Pendiente'),
           CampoDato('Préstamo', '${h.dias} día(s)'),
           CampoDato('Devolución prevista', h.fechaPrevista),
         ]),

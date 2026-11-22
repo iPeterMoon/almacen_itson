@@ -338,7 +338,7 @@ class LineaHerramientaResumen {
   final int dias;
   // Fecha prevista de devolución ya formateada (DD/MM/AAAA).
   final String fechaPrevista;
-  // null mientras el servidor no lo devuelva en el resumen.
+  // null si el servidor no pudo consultar el seguimiento de préstamos.
   final String? folioPrestamo;
 }
 

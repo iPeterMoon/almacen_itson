@@ -159,7 +159,7 @@ void main() {
       expect(find.text('Materiales entregados'), findsNothing);
     });
 
-    testWidgets('sin folio de préstamo del servidor se muestra "Pendiente"', (tester) async {
+    testWidgets('si el servidor no manda el folio de préstamo se muestra "Sin folio"', (tester) async {
       const sinFolio = LineaHerramientaResumen(
         codigo: 'ACT-104',
         nombre: 'Taladro percutor',
@@ -170,7 +170,7 @@ void main() {
       );
       await _abrirResumen(tester, _resumen(herramientas: const [sinFolio]));
 
-      expect(find.text('Pendiente'), findsOneWidget);
+      expect(find.text('Sin folio'), findsOneWidget);
     });
   });
 

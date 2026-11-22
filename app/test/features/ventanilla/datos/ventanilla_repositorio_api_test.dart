@@ -673,7 +673,7 @@ void main() {
             'herramientas': [
               {
                 'codigo': 'TAL-001',
-                'prestamo': 'PRE-2026-0008',
+                'folioPrestamo': 'PRE-2026-0008',
                 'fechaPrevista': '2026-10-21T18:00:00.000Z',
               },
             ],

@@ -300,7 +300,7 @@ class VentanillaRepositorioApi implements VentanillaRepositorio {
   }
 
   // Une lo capturado (nombre, modelo, serie, días) con lo que generó la base para
-  // cada préstamo (folio PRE- y fecha prevista). Si el servidor aún no manda la
+  // cada préstamo (folio PRE- y fecha prevista). Si el servidor no pudo mandar la
   // fecha, se muestra la misma que se calculó en la revisión.
   List<LineaHerramientaResumen> _herramientasDelResumen(
     List<ItemActivo> activos,
