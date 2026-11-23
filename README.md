@@ -248,6 +248,26 @@ Cada caso imprime `PASA` o `FALLA` con el error, y al final el total (`169/169 c
 Corre `reiniciar.sh` antes de cada `probar.py`, porque las pruebas dejan datos en la base.
 Para borrar el contenedor: `docker rm -f almacenes-pruebas`.
 
+## Pruebas de integración (API + base)
+
+`servidor/test/integracion/` recorre la API real contra la base de pruebas `almacenes-itson-pruebas`,
+sin simular nada: inicio de sesión, firmas, funciones y RLS. Hoy cubre la HU8 (préstamo de
+herramientas y boleta combinada).
+
+```bash
+cd servidor && npm run test:integracion
+```
+
+Usa `servidor/.env.pruebas` o, si no existe, `servidor/.env`, y se niega a correr contra otra base que
+no sea la de pruebas o la local. No corre en `npm test` ni en el CI, porque necesita internet y escribe
+en una base compartida.
+
+- Crea sus propios activos (`TEST-HU8-…`); al terminar los devuelve, los da de baja y reingresa el
+  material. Las boletas, los préstamos y las firmas quedan registrados. Si una corrida se interrumpe,
+  otra posterior limpia sus restos cuando tengan más de una hora.
+- El caso del solicitante con préstamo vencido necesita que haya **al menos un préstamo vencido en
+  Náinari**. Si no hay ninguno, presta una herramienta por 1 día y espera a que venza.
+
 ## Antes de subir cambios
 
 ```bash
