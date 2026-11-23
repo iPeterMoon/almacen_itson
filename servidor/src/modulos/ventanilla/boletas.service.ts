@@ -137,6 +137,27 @@ interface FilaBoletaHistorial {
 
 const CAMPOS_HISTORIAL =
   'id, folio, solicitante_nombre, solicitante_unidad, entregado_en, autorizo_nombre, trabajadores ( dependencia )';
+
+// Elementos del JSON de vista_detalle_boleta (AI-70): llegan con nombres en snake_case.
+interface MaterialDeVista {
+  codigo: string;
+  concepto: string;
+  almacen: string | null;
+  presentacion: string | null;
+  cantidad: number;
+}
+
+interface HerramientaDeVista {
+  codigo: string;
+  nombre: string;
+  modelo: string;
+  numero_serie: string;
+  estado: string;
+}
+
+const CAMPOS_VISTA_DETALLE =
+  'boleta_id, folio, campus_id, campus, entregado_en, entregado_por, solicitante_nombre, dependencia, unidad, autorizo_nombre, materiales, herramientas';
+
 const CAMPOS_DETALLE = `
   id, folio, campus_id, solicitante_nombre, trabajador_id, solicitante_unidad, zona_id,
   numero_solicitud, autorizo_nombre, estado, firma_recibe_path, firma_entrega_path,
@@ -365,6 +386,54 @@ export class BoletasService {
         autorizoNombre: fila.autorizo_nombre,
       })),
       total: count ?? 0,
+    };
+  }
+
+  // HU11 (AI-73): detalle completo de una boleta desde vista_detalle_boleta (AI-70).
+  // Si la boleta no existe o es de otro campus, RLS no devuelve la fila y se responde
+  // BOLETA_NO_EXISTE (404) en ambos casos, para no revelar que existe en otro campus.
+  async detalle(token: string, boletaId: number) {
+    const { data, error } = await this.supabase
+      .clienteDeUsuario(token)
+      .from('vista_detalle_boleta')
+      .select(CAMPOS_VISTA_DETALLE)
+      .eq('boleta_id', boletaId)
+      .maybeSingle();
+    if (error) throw this.errorDeBase(error);
+    if (!data) {
+      throw new ErrorNegocio('BOLETA_NO_EXISTE', `La boleta ${boletaId} no existe.`);
+    }
+
+    const materiales = (data.materiales ?? []) as unknown as MaterialDeVista[];
+    const herramientas = (data.herramientas ?? []) as unknown as HerramientaDeVista[];
+    return {
+      id: Number(data.boleta_id),
+      folio: data.folio,
+      campusId: Number(data.campus_id),
+      campus: data.campus,
+      entregadoEn: data.entregado_en,
+      entregadoPor: data.entregado_por,
+      solicitante: {
+        nombre: data.solicitante_nombre,
+        dependencia: data.dependencia,
+        unidad: data.unidad,
+      },
+      // null si no hubo autorización: el sistema solo guarda el nombre que se capturó.
+      autorizoNombre: data.autorizo_nombre,
+      materiales: materiales.map((material) => ({
+        codigo: material.codigo,
+        concepto: material.concepto,
+        almacen: material.almacen,
+        presentacion: material.presentacion,
+        cantidad: Number(material.cantidad),
+      })),
+      herramientas: herramientas.map((herramienta) => ({
+        codigo: herramienta.codigo,
+        nombre: herramienta.nombre,
+        modelo: herramienta.modelo,
+        numeroSerie: herramienta.numero_serie,
+        estado: herramienta.estado,
+      })),
     };
   }
 

@@ -314,6 +314,13 @@ export type Database = {
             foreignKeyName: "boletas_herramientas_boleta_id_fkey"
             columns: ["boleta_id"]
             isOneToOne: false
+            referencedRelation: "vista_detalle_boleta"
+            referencedColumns: ["boleta_id"]
+          },
+          {
+            foreignKeyName: "boletas_herramientas_boleta_id_fkey"
+            columns: ["boleta_id"]
+            isOneToOne: false
             referencedRelation: "vista_historial_entregas"
             referencedColumns: ["boleta_id"]
           },
@@ -363,6 +370,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "boletas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boletas_materiales_boleta_id_fkey"
+            columns: ["boleta_id"]
+            isOneToOne: false
+            referencedRelation: "vista_detalle_boleta"
+            referencedColumns: ["boleta_id"]
           },
           {
             foreignKeyName: "boletas_materiales_boleta_id_fkey"
@@ -1459,6 +1473,39 @@ export type Database = {
       }
     }
     Views: {
+      vista_detalle_boleta: {
+        Row: {
+          autorizo_nombre: string | null
+          boleta_id: number
+          campus: string
+          campus_id: number
+          dependencia: string | null
+          entregado_en: string | null
+          entregado_por: string | null
+          folio: string
+          herramientas: Json | null
+          materiales: Json | null
+          solicitante_nombre: string
+          trabajador_id: number | null
+          unidad: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boletas_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campus"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boletas_trabajador_id_fkey"
+            columns: ["trabajador_id"]
+            isOneToOne: false
+            referencedRelation: "trabajadores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vista_existencias_por_ubicacion: {
         Row: {
           actualizado_en: string | null

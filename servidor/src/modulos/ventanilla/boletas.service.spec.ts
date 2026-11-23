@@ -1394,4 +1394,124 @@ describe('BoletasService', () => {
       });
     });
   });
+  describe('detalle (HU11, AI-73)', () => {
+    // from('vista_detalle_boleta').select(...).eq(...).maybeSingle()
+    function clienteConVista(data: unknown, error: { message: string } | null = null) {
+      const maybeSingle = jest.fn().mockResolvedValue({ data, error });
+      const eq = jest.fn().mockReturnValue({ maybeSingle });
+      const select = jest.fn().mockReturnValue({ eq });
+      const from = jest.fn().mockReturnValue({ select });
+      return { from, eq };
+    }
+
+    const FILA_VISTA = {
+      boleta_id: 9,
+      folio: 'BOL-2026-000009',
+      campus_id: 2,
+      campus: 'Centro',
+      entregado_en: '2026-11-18T18:00:00.000Z',
+      entregado_por: 'Alicia García',
+      solicitante_nombre: 'Miguel Ángel Ruiz',
+      dependencia: 'MANTENIMIENTO',
+      unidad: null,
+      autorizo_nombre: 'Leonel Lares',
+      materiales: [
+        {
+          codigo: 'JAB-001',
+          concepto: 'Jabón líquido',
+          almacen: 'Almacén 1',
+          presentacion: 'Medio litro',
+          cantidad: 2,
+        },
+      ],
+      herramientas: [
+        {
+          codigo: 'ACT-104',
+          nombre: 'Rotomartillo',
+          modelo: 'GBH 2-28',
+          numero_serie: 'BSH-987654321',
+          estado: 'EN_PRESTAMO',
+        },
+      ],
+    };
+
+    it('boleta con autorización: devuelve encabezado, materiales, herramientas y quién autorizó', async () => {
+      const cliente = clienteConVista(FILA_VISTA);
+      const servicio = crearServicio({ from: cliente.from });
+
+      const resultado = await servicio.detalle('token', 9);
+
+      expect(cliente.from).toHaveBeenCalledWith('vista_detalle_boleta');
+      expect(cliente.eq).toHaveBeenCalledWith('boleta_id', 9);
+      expect(resultado).toEqual({
+        id: 9,
+        folio: 'BOL-2026-000009',
+        campusId: 2,
+        campus: 'Centro',
+        entregadoEn: '2026-11-18T18:00:00.000Z',
+        entregadoPor: 'Alicia García',
+        solicitante: { nombre: 'Miguel Ángel Ruiz', dependencia: 'MANTENIMIENTO', unidad: null },
+        autorizoNombre: 'Leonel Lares',
+        materiales: [
+          {
+            codigo: 'JAB-001',
+            concepto: 'Jabón líquido',
+            almacen: 'Almacén 1',
+            presentacion: 'Medio litro',
+            cantidad: 2,
+          },
+        ],
+        herramientas: [
+          {
+            codigo: 'ACT-104',
+            nombre: 'Rotomartillo',
+            modelo: 'GBH 2-28',
+            numeroSerie: 'BSH-987654321',
+            estado: 'EN_PRESTAMO',
+          },
+        ],
+      });
+    });
+
+    it('boleta sin autorización: autorizoNombre null y sin herramientas', async () => {
+      const fila = { ...FILA_VISTA, autorizo_nombre: null, herramientas: [] };
+      const servicio = crearServicio({ from: clienteConVista(fila).from });
+
+      const resultado = await servicio.detalle('token', 9);
+
+      expect(resultado.autorizoNombre).toBeNull();
+      expect(resultado.herramientas).toEqual([]);
+      expect(resultado.materiales).toHaveLength(1);
+    });
+
+    it('materiales o herramientas nulos se devuelven como arreglos vacíos', async () => {
+      const fila = { ...FILA_VISTA, materiales: null, herramientas: null };
+      const servicio = crearServicio({ from: clienteConVista(fila).from });
+
+      const resultado = await servicio.detalle('token', 9);
+
+      expect(resultado.materiales).toEqual([]);
+      expect(resultado.herramientas).toEqual([]);
+    });
+
+    it('boleta inexistente o de otro campus responde BOLETA_NO_EXISTE (404)', async () => {
+      const servicio = crearServicio({ from: clienteConVista(null).from });
+
+      await expect(servicio.detalle('token', 99)).rejects.toMatchObject({
+        codigo: 'BOLETA_NO_EXISTE',
+        estadoHttp: HttpStatus.NOT_FOUND,
+      });
+    });
+
+    it('traduce un error de la base a ErrorNegocio', async () => {
+      const cliente = clienteConVista(null, {
+        message: 'SIN_PERMISO: No puedes consultar boletas de otro campus.',
+      });
+      const servicio = crearServicio({ from: cliente.from });
+
+      await expect(servicio.detalle('token', 9)).rejects.toMatchObject({
+        codigo: 'SIN_PERMISO',
+      });
+    });
+  });
 });

@@ -1372,6 +1372,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       '/api/v1/boletas/validar-material',
       '/api/v1/boletas/firmas',
       '/api/v1/boletas/{id}',
+      '/api/v1/boletas/{id}/detalle',
       '/api/v1/boletas/{id}/resumen',
     ]) {
       expect(res.body.paths).toHaveProperty([ruta]);
@@ -1379,5 +1380,51 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
     for (const ruta of ['/api/v1/boletas/{id}/autorizacion', '/api/v1/boletas/{id}/entrega']) {
       expect(res.body.paths).not.toHaveProperty([ruta]);
     }
+  });
+  it('el detalle de la boleta sale de vista_detalle_boleta (HU11)', async () => {
+    base.tabla('vista_detalle_boleta', () =>
+      ok({
+        boleta_id: 9,
+        folio: 'BOL-2026-000009',
+        campus_id: 2,
+        campus: 'Centro',
+        entregado_en: '2026-11-18T18:00:00.000Z',
+        entregado_por: 'Alicia García',
+        solicitante_nombre: 'Miguel Ángel Ruiz',
+        dependencia: 'MANTENIMIENTO',
+        unidad: null,
+        autorizo_nombre: null,
+        materiales: [
+          {
+            codigo: 'JAB-001',
+            concepto: 'Jabón líquido',
+            almacen: 'Almacén 1',
+            presentacion: null,
+            cantidad: 2,
+          },
+        ],
+        herramientas: [],
+      }),
+    );
+
+    const res = await http().get('/api/v1/boletas/9/detalle').set(como('almacenista')).expect(200);
+
+    expect(res.body).toMatchObject({
+      id: 9,
+      folio: 'BOL-2026-000009',
+      autorizoNombre: null,
+      materiales: [expect.objectContaining({ codigo: 'JAB-001', almacen: 'Almacén 1' })],
+      herramientas: [],
+    });
+    const [consulta] = base.consultasA('vista_detalle_boleta');
+    expect(filtro(consulta, 'eq', 'boleta_id')).toBe(9);
+  });
+
+  it('el detalle de una boleta inexistente o de otro campus responde 404', async () => {
+    base.tabla('vista_detalle_boleta', () => ok(null));
+
+    const res = await http().get('/api/v1/boletas/99/detalle').set(como('almacenista')).expect(404);
+
+    expect(res.body).toMatchObject({ codigo: 'BOLETA_NO_EXISTE' });
   });
 });
