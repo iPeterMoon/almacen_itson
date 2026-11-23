@@ -5,6 +5,7 @@ import { BoletasService } from './boletas.service';
 import { ConfirmacionService } from './confirmacion.service';
 import { EntregasController } from './entregas.controller';
 import { EntregasService } from './entregas.service';
+import { ImportacionBoletasService } from './importacion/importacion-boletas.service';
 import { TrabajadoresController } from './trabajadores.controller';
 import { TrabajadoresService } from './trabajadores.service';
 
@@ -15,6 +16,12 @@ import { TrabajadoresService } from './trabajadores.service';
   // Préstamos exporta la caché de activos, que se invalida al entregar herramientas.
   imports: [PrestamosModule],
   controllers: [BoletasController, EntregasController, TrabajadoresController],
-  providers: [BoletasService, ConfirmacionService, EntregasService, TrabajadoresService],
+  providers: [
+    BoletasService,
+    ConfirmacionService,
+    EntregasService,
+    TrabajadoresService,
+    ImportacionBoletasService,
+  ],
 })
 export class VentanillaModule {}
