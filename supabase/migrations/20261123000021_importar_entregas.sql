@@ -9,6 +9,23 @@
 -- solo materiales; no se importan herramientas ni se crean préstamos.
 -- =====================================================================
 
+-- Una entrega histórica no tiene las firmas del sistema: no hubo nadie que
+-- firmara al recibir/entregar. Se marca explícitamente para que la regla de
+-- firmas siga exigiéndolas a las boletas capturadas normalmente, sin inventar
+-- objetos en Storage ni dejar rutas que no se puedan descargar.
+alter table public.boletas
+  add column if not exists importada boolean not null default false;
+
+alter table public.boletas drop constraint if exists boletas_entregada_ck;
+alter table public.boletas
+  add constraint boletas_entregada_ck check (
+    estado <> 'ENTREGADA' or importada or
+    (firma_recibe_path is not null and firma_entrega_path is not null
+     and entregado_en is not null));
+
+comment on column public.boletas.importada is
+  'Boleta importada desde el Excel de entregas anteriores (HU11): se entrega con fecha histórica pero sin firmas en el sistema.';
+
 -- El renglón conserva el almacén del que salió el material. Las entregas
 -- normales siguen derivándolo de movimientos_inventario; este campo es el
 -- fallback de las importadas, que no crean movimientos.
@@ -99,7 +116,6 @@ declare
   v_cantidad       numeric;
   v_folios         text[] := '{}';
   v_boleta_id      bigint;
-  v_firma          text;
   v_importadas     int := 0;
 begin
   -- El campus del token, o el que pide el servidor si el usuario tiene varios.
@@ -223,15 +239,8 @@ begin
   end if;
 
   -- ------------------------------ inserciones ------------------------------
-  -- Una entrega histórica no trae firmas, pero boletas_entregada_ck y el
-  -- trigger validar_firma exigen dos rutas del campus que existan en Storage.
-  -- Se usa un marcador reutilizable por campus (no una firma falsa de nadie).
-  v_firma := v_campus::text || '/importacion/sin-firma-importada.png';
-  insert into storage.objects (bucket_id, name, metadata)
-  select 'firmas', v_firma, jsonb_build_object('importacion', true)
-   where not exists (select 1 from storage.objects
-                      where bucket_id = 'firmas' and name = v_firma);
-
+  -- Las firmas se dejan null: la boleta está marcada como importada, así que
+  -- boletas_entregada_ck la acepta y el trigger no valida rutas inexistentes.
   for v_b in select value from jsonb_array_elements(p_boletas) loop
     v_folio := btrim(v_b->>'folio');
     v_fecha := (v_b->>'fecha')::date::timestamptz;
@@ -241,11 +250,9 @@ begin
        and lower(btrim(nombre)) = lower(btrim(v_b->>'almacen'));
 
     insert into boletas (folio, campus_id, solicitante_nombre, solicitante_unidad,
-                         estado, firma_recibe_path, firma_entrega_path,
-                         entregado_en, creado_en, entregado_por)
+                         estado, importada, entregado_en, creado_en, entregado_por)
     values (v_folio, v_campus, btrim(v_b->>'solicitante'), btrim(v_b->>'dependencia'),
-            'ENTREGADA', v_firma, v_firma,
-            v_fecha, v_fecha, auth.uid())
+            'ENTREGADA', true, v_fecha, v_fecha, auth.uid())
     returning id into v_boleta_id;
 
     for v_r in select value from jsonb_array_elements(coalesce(v_b->'materiales', '[]'::jsonb)) loop
