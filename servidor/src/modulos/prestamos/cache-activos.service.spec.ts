@@ -1,11 +1,8 @@
 // Pruebas de la caché de la búsqueda de activos (AI-49) con el mismo almacén en
 // memoria que usa el módulo. `cargar` hace las veces de la consulta a la base.
+import { crearCacheEnMemoria, TTL_BUSQUEDA_MS } from '../../comun/cache/cache-busqueda-campus';
 import { Rol } from '../../comun/tipos/usuario-autenticado';
-import {
-  CacheActivosService,
-  crearCacheEnMemoria,
-  TTL_BUSQUEDA_ACTIVOS_MS,
-} from './cache-activos.service';
+import { CacheActivosService } from './cache-activos.service';
 
 const ALMACENISTA_NAINARI = { rol: Rol.Almacenista, campusId: 1 };
 const SUPERVISOR_NAINARI = { rol: Rol.Supervisor, campusId: 1 };
@@ -93,7 +90,7 @@ describe('CacheActivosService', () => {
   it('la búsqueda expira a los 10 min', async () => {
     await cache.buscar(ALMACENISTA_NAINARI, DISPONIBLES, cargar);
 
-    jest.advanceTimersByTime(TTL_BUSQUEDA_ACTIVOS_MS - 1_000);
+    jest.advanceTimersByTime(TTL_BUSQUEDA_MS - 1_000);
     await cache.buscar(ALMACENISTA_NAINARI, DISPONIBLES, cargar);
     expect(cargar).toHaveBeenCalledTimes(1);
 

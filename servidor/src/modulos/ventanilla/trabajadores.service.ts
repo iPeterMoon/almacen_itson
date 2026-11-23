@@ -5,7 +5,9 @@ import {
   rangoDePagina,
 } from '../../comun/dto/paginacion.dto';
 import { parsearErrorBase } from '../../comun/errores/error-negocio';
+import type { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { CacheTrabajadoresService } from './cache-trabajadores.service';
 
 export interface ZonaTrabajador {
   id: number;
@@ -46,9 +48,17 @@ const CAMPOS =
 // solo se leen. RLS limita el resultado a los campus del usuario.
 @Injectable()
 export class TrabajadoresService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly cache: CacheTrabajadoresService,
+  ) {}
 
-  async listar(token: string, dto: BusquedaPaginadaDto) {
+  // Se guarda 10 min por campus (ver CacheTrabajadoresService).
+  listar(usuario: UsuarioAutenticado, dto: BusquedaPaginadaDto) {
+    return this.cache.buscar(usuario, dto, () => this.consultar(usuario.token, dto));
+  }
+
+  private async consultar(token: string, dto: BusquedaPaginadaDto) {
     const pagina = dto.pagina ?? 1;
     const limite = dto.limite ?? LIMITE_LISTA_POR_DEFECTO;
 

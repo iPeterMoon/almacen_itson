@@ -1,10 +1,11 @@
 import { HttpStatus } from '@nestjs/common';
+import { crearCacheEnMemoria } from '../../comun/cache/cache-busqueda-campus';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { crearSupabaseFalso, RespuestaFalsa } from '../../comun/pruebas/supabase-falso';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { Rol, type UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { ActivosService } from './activos.service';
-import { CacheActivosService, crearCacheEnMemoria } from './cache-activos.service';
+import { CacheActivosService } from './cache-activos.service';
 
 // Cada prueba con su propia caché, para que una respuesta guardada no pase a otra.
 function cacheNueva() {
