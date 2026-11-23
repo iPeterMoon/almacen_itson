@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ErrorImportacion, ErrorFilaImportacion } from '../errores/error-importacion';
+import { ErrorImportacion, type ErrorFilaImportacion } from '../errores/error-importacion';
 import { ErrorNegocio } from '../errores/error-negocio';
 import { PeticionConCorrelacion, rutaSinConsulta } from '../middlewares/log-peticiones.middleware';
 
