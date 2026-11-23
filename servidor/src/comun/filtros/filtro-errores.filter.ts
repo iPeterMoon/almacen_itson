@@ -7,15 +7,19 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { ErrorImportacion, ErrorFilaImportacion } from '../errores/error-importacion';
 import { ErrorNegocio } from '../errores/error-negocio';
 import { PeticionConCorrelacion, rutaSinConsulta } from '../middlewares/log-peticiones.middleware';
 
-export interface CuerpoError {
-  codigo: string;
-  mensaje: string;
-  detalles?: string[];
-  datos?: Record<string, unknown>;
-}
+export type CuerpoError =
+  | {
+      codigo: string;
+      mensaje: string;
+      detalles?: string[];
+      datos?: Record<string, unknown>;
+    }
+  // HU11: la importación responde con su propio formato cuando hay filas malas.
+  | { importadas: number; errores: ErrorFilaImportacion[] };
 
 const CODIGO_POR_ESTADO: Record<number, string> = {
   400: 'PETICION_INVALIDA',
@@ -55,6 +59,16 @@ export class FiltroErrores implements ExceptionFilter {
   }
 
   private traducir(error: unknown, contexto: string): { estado: number; cuerpo: CuerpoError } {
+    if (error instanceof ErrorImportacion) {
+      this.logger.warn(
+        `${contexto} IMPORTACION_INVALIDA: ${error.errores.length} fila(s) con errores`,
+      );
+      return {
+        estado: error.estadoHttp,
+        cuerpo: { importadas: 0, errores: error.errores },
+      };
+    }
+
     if (error instanceof ErrorNegocio) {
       this.logger.warn(`${contexto} ${error.codigo}: ${error.message}`);
       const cuerpo: CuerpoError = { codigo: error.codigo, mensaje: error.message };
