@@ -775,6 +775,37 @@ caso("Seg", "El detalle no se modifica desde la app", CEN,
      "select bool_or(has_table_privilege('vista_detalle_boleta', p)) "
      "from unnest(array['INSERT','UPDATE','DELETE','TRUNCATE']) p", contiene="f")
 
+# ---------- HU11: búsqueda del historial de boletas (AI-69) ----------
+# buscar_boletas(texto, límite, desplazamiento): una fila por boleta, de la más
+# reciente a la más antigua, con el total de las que cumplen la búsqueda.
+caso("HU11 E1", "Sin texto empieza por la boleta más reciente", CEN,
+     "select (select folio from buscar_boletas(null, 1, 0)) = "
+     "(select folio from boletas order by creado_en desc, id desc limit 1)", contiene="t")
+caso("HU11 E1", "Página de 2 con el total de boletas del campus", CEN,
+     "select count(*) = 2 and min(total_resultados) = (select count(*) from boletas) from buscar_boletas(null, 2, 0)",
+     contiene="t")
+caso("HU11 E1", "La página 2 no repite boletas de la página 1", CEN,
+     "select count(*) from buscar_boletas(null, 2, 0) a join buscar_boletas(null, 2, 2) b using (boleta_id)",
+     contiene="0")
+caso("HU11 E2", "Por solicitante sin acentos ni mayúsculas: 'MARIA sanchez' encuentra a María Sánchez", CEN,
+     "select count(*) > 0 and bool_and(solicitante_nombre = 'María Sánchez') "
+     "and min(total_resultados) = (select count(*) from boletas where solicitante_nombre = 'María Sánchez') "
+     "from buscar_boletas('MARIA sanchez')", contiene="t")
+caso("HU11 E2", "Por folio en minúsculas", CEN,
+     "select string_agg(folio, ',') from buscar_boletas('bol-2026-0007')", contiene="BOL-2026-0007")
+caso("HU11 E2", "Sin registro muestra la unidad capturada y el campus", CEN,
+     "select dependencia||'|'||campus from buscar_boletas('rosa molina')", contiene="Navojoa|Centro")
+caso("HU11 E2", "Registrado muestra la dependencia del trabajador", CEN,
+     "select string_agg(distinct dependencia, ',') from buscar_boletas('juan perez')", contiene="SERVICIOS_GENERALES")
+caso("HU11 E3", "Sin coincidencias no devuelve boletas", CEN,
+     "select count(*) from buscar_boletas('zzz')", contiene="0")
+caso("Seg", "Centro no encuentra boletas de Náinari", CEN,
+     "select count(*) from buscar_boletas('luis ochoa')", contiene="0")
+caso("Seg", "Náinari encuentra su propia boleta", NAI,
+     "select solicitante_nombre from buscar_boletas('luis ochoa')", contiene="Luis Ochoa")
+caso("Seg", "Sin sesión no se busca en el historial", "anon",
+     "select * from buscar_boletas()", espera="permission denied")
+
 cuadre = admin("""select count(*) from existencias e where e.cantidad <>
   (select coalesce(sum(m.cantidad),0) from movimientos_inventario m where m.producto_id=e.producto_id and m.ubicacion_id=e.ubicacion_id)""")
 resultados.append((cuadre == "0", "Kardex", "Saldo = suma del historial en cada ubicación", f"descuadres: {cuadre}"))
