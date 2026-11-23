@@ -45,14 +45,6 @@ import { ValidarMaterialDto } from './dto/validar-material.dto';
 // El archivo se procesa en memoria: no se guarda en disco ni en Storage.
 const LIMITE_ARCHIVO_IMPORTACION = 5 * 1024 * 1024;
 
-function soloXlsx(
-  _peticion: unknown,
-  archivo: Express.Multer.File,
-  aceptar: (error: Error | null, valido: boolean) => void,
-): void {
-  aceptar(null, archivo.originalname.toLowerCase().endsWith('.xlsx'));
-}
-
 // Capa HTTP de la boleta de entrega: valida roles, recibe DTOs y delega en BoletasService.
 // Las reglas de negocio (stock, límites, folios y firmas) viven en las funciones RPC de PostgreSQL.
 // No hay autorizaciones en el sistema: si se excede periodicidad o límite se captura el
@@ -110,7 +102,6 @@ export class BoletasController {
     FileInterceptor('archivo', {
       storage: memoryStorage(),
       limits: { fileSize: LIMITE_ARCHIVO_IMPORTACION, files: 1 },
-      fileFilter: soloXlsx,
     }),
   )
   @ApiOperation({
@@ -147,8 +138,9 @@ export class BoletasController {
     type: RespuestaImportacionDto,
     description: '{ importadas: 0, errores: [{ fila, motivo }] }. No se importó nada.',
   })
-  @ApiBadRequestResponse({ description: 'Falta el archivo o no es un .xlsx válido.' })
+  @ApiBadRequestResponse({ description: 'Falta el archivo o el XLSX está corrupto.' })
   @ApiResponse({ status: 413, description: 'El archivo supera los 5 MB.' })
+  @ApiResponse({ status: 415, description: 'La extensión no es .xlsx.' })
   importar(
     @UsuarioActual() usuario: UsuarioAutenticado,
     @UploadedFile() archivo?: Express.Multer.File,
@@ -158,6 +150,15 @@ export class BoletasController {
         'ARCHIVO_REQUERIDO',
         'Adjunta un archivo con el campo "archivo".',
         HttpStatus.BAD_REQUEST,
+      );
+    }
+    // Se valida aquí, después del multipart, para que un CSV no se confunda
+    // con "falta el archivo" (multer lo descartaba en el fileFilter).
+    if (!archivo.originalname.toLowerCase().endsWith('.xlsx')) {
+      throw new ErrorNegocio(
+        'TIPO_NO_SOPORTADO',
+        'Solo se aceptan archivos con extensión .xlsx.',
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
       );
     }
     return this.importacion.importar(usuario.token, usuario.campusId, archivo);

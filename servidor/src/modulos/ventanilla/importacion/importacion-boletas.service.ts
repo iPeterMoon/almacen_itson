@@ -4,7 +4,10 @@
 // que todo se importe o no se importe nada.
 import { Injectable } from '@nestjs/common';
 import 'multer';
-import { ErrorFilaImportacion, ErrorImportacion } from '../../../comun/errores/error-importacion';
+import {
+  ErrorImportacion,
+  type ErrorFilaImportacion,
+} from '../../../comun/errores/error-importacion';
 import { parsearErrorBase } from '../../../comun/errores/error-negocio';
 import { SupabaseService } from '../../../supabase/supabase.service';
 import { BoletaImportada, leerPlantilla } from './lector-plantilla';
@@ -64,6 +67,12 @@ export class ImportacionBoletasService {
   }
 
   private errorDeBase(error: ErrorSupabase): Error {
-    return parsearErrorBase(error.message) ?? new Error(error.message);
+    const negocio = parsearErrorBase(error.message);
+    // Estos dos códigos son del archivo, no de una fila: se devuelven con el
+    // formato de la HU para que la API no mezcle { codigo, mensaje } con 422.
+    if (negocio?.codigo === 'IMPORTACION_VACIA' || negocio?.codigo === 'IMPORTACION_EXCESIVA') {
+      return new ErrorImportacion([{ fila: 1, motivo: negocio.message }]);
+    }
+    return negocio ?? new Error(error.message);
   }
 }

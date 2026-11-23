@@ -246,5 +246,8 @@ export async function leerPlantilla(datos: Buffer): Promise<BoletaImportada[]> {
   }
 
   if (errores.length > 0) throw new ErrorImportacion(errores);
+  if (filasDatos === 0) {
+    throw new ErrorImportacion([{ fila: 1, motivo: 'El archivo no tiene filas de datos.' }]);
+  }
   return [...porFolio.values()];
 }
