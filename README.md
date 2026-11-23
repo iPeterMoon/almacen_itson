@@ -37,7 +37,7 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 | `POST` | `/api/v1/boletas/firmas`           | Sube una firma al bucket privado `firmas` y devuelve su ruta     |
 | `POST` | `/api/v1/boletas`                  | Crea la boleta y la entrega en el acto con dos firmas            |
 | `GET`  | `/api/v1/boletas`                  | Lista las boletas de los campus del usuario                      |
-| `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`)    |
+| `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`), sin distinguir mayúsculas ni acentos |
 | `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas, motivo y quien autorizó    |
 | `GET`  | `/api/v1/boletas/:id/detalle`      | Detalle para el historial: materiales con almacén, herramientas con estado actual y quién autorizó |
 | `GET`  | `/api/v1/boletas/:id/resumen`      | Resumen de la entrega para la pantalla de confirmación           |
