@@ -14,6 +14,7 @@ import { AppModule } from '../src/app.module';
 import { UsuarioSesionRepository } from '../src/comun/autenticacion/usuario-sesion.repository';
 import { Rol } from '../src/comun/tipos/usuario-autenticado';
 import { configurarApp } from '../src/configurar-app';
+import { CacheTrabajadoresService } from '../src/modulos/ventanilla/cache-trabajadores.service';
 import { SupabaseService } from '../src/supabase/supabase.service';
 import { crearBaseFalsa, fallo, filtro, ok } from './apoyo/base-falsa';
 
@@ -26,6 +27,9 @@ const USUARIOS = {
   supervisor: { id: 'u-sup', nombre: 'Leonel Lares', rol: Rol.Supervisor },
 } as const;
 type TokenDePrueba = keyof typeof USUARIOS;
+
+// Campus de todos los usuarios de prueba.
+const CAMPUS_SESION = 2;
 
 const PRODUCTOS: Record<number, { codigo: string; nombre_estandar: string; unidad: string }> = {
   12: { codigo: 'JAB-001', nombre_estandar: 'Jabón líquido', unidad: 'Litro' },
@@ -210,7 +214,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
     ),
     buscarPorId: jest.fn((token: string) => {
       const usuario = USUARIOS[token as TokenDePrueba];
-      return Promise.resolve({ ...usuario, campusId: 2, activo: true });
+      return Promise.resolve({ ...usuario, campusId: CAMPUS_SESION, activo: true });
     }),
   };
 
@@ -234,6 +238,9 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
 
   beforeEach(() => {
     base.reiniciar();
+    // La app es la misma en toda la suite: sin esto, una búsqueda de trabajadores
+    // guardada en una prueba se respondería en las siguientes (AI-87).
+    app.get(CacheTrabajadoresService).invalidarCampus(CAMPUS_SESION);
     boletas.clear();
     prestamos.length = 0;
     simularCatalogo();
