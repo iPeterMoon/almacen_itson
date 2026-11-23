@@ -824,6 +824,13 @@ caso("HU11 Imp", "No se crea ningún préstamo ni boleta de herramienta", None,
      "(select folio from boletas where folio like 'IMP-2025-%'))||'|'||"
      "(select count(*) from boletas_herramientas bh join boletas b on b.id=bh.boleta_id "
      "where b.folio like 'IMP-2025-%')", contiene="0|0")
+caso("HU11 Imp", "Las importadas quedan marcadas y sin firmas", None,
+     "select (select count(*) from boletas where folio like 'IMP-2025-%' and importada "
+     "and firma_recibe_path is null and firma_entrega_path is null)||'|'||"
+     "(select count(*) from boletas where folio like 'IMP-2025-%')", contiene="2|2")
+caso("HU11 Imp", "No se inventa ningún archivo de firma en Storage", None,
+     "select count(*) from storage.objects where bucket_id='firmas' "
+     "and name like '%/importacion/%'", contiene="0")
 caso("HU11 Imp", "La importación no descuenta stock (sin movimientos)", None,
      "select count(*) from movimientos_inventario mi "
      "join boletas_materiales bm on bm.id=mi.boleta_material_id "
