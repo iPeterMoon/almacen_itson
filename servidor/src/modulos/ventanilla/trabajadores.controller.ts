@@ -18,7 +18,8 @@ export class TrabajadoresController {
     summary: 'Busca trabajadores activos de los campus del usuario',
     description:
       'Búsqueda parcial por nombre, ordenada por nombre. Cada trabajador trae sus zonas: ' +
-      'si tiene una sola, la base la usa al validar y crear la boleta aunque no se mande zonaId.',
+      'si tiene una sola, la base la usa al validar y crear la boleta aunque no se mande zonaId. ' +
+      'La respuesta se guarda 10 min por campus (la del supervisor jefe no se guarda).',
   })
   @ApiOkResponse({
     description: 'Página de trabajadores.',
@@ -50,6 +51,6 @@ export class TrabajadoresController {
     },
   })
   listar(@UsuarioActual() usuario: UsuarioAutenticado, @Query() dto: BusquedaPaginadaDto) {
-    return this.trabajadores.listar(usuario.token, dto);
+    return this.trabajadores.listar(usuario, dto);
   }
 }
