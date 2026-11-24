@@ -1,10 +1,12 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import { randomUUID } from 'node:crypto';
 import { LIMITE_LISTA_POR_DEFECTO, rangoDePagina } from '../../comun/dto/paginacion.dto';
 import { ErrorNegocio, parsearErrorBase } from '../../comun/errores/error-negocio';
 import { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
+import { ExportarHistorialBoletasDto } from './dto/exportar-historial-boletas.dto';
 import { HistorialBoletasDto } from './dto/historial-boletas.dto';
 import { ListarBoletasDto } from './dto/listar-boletas.dto';
 import { SubirFirmaDto, TipoFirma } from './dto/subir-firma.dto';
@@ -165,6 +167,28 @@ const CAMPOS_DETALLE = `
 // Columnas del seguimiento de préstamos que se cruzan con cada herramienta de la boleta.
 const CAMPOS_PRESTAMO_BOLETA =
   'activo_id, codigo, folio, dias_prestamo, prestado_en, fecha_prevista, custodio, estado';
+
+// HU11: exportación del historial. Mismo RPC que el listado, sin paginar y con
+// un tope para no construir un archivo desmedido.
+export const LIMITE_EXPORTACION_BOLETAS = 1000;
+export const TIPO_CONTENIDO_XLSX =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const CABECERAS_EXPORTACION_HISTORIAL = [
+  'folio',
+  'solicitante',
+  'dependencia',
+  'fecha y hora',
+  'supervisor',
+] as const;
+
+interface FilaHistorialExportacion {
+  folio: string;
+  solicitante_nombre: string;
+  dependencia: string | null;
+  entregado_en: string | null;
+  autorizo_nombre: string | null;
+  total_resultados: number | string;
+}
 
 // Reglas del bucket privado "firmas": tamaño máximo y firmas de archivo permitidas.
 // La extensión se decide por el contenido real, no por el nombre que manda el cliente.
@@ -364,6 +388,56 @@ export class BoletasService {
         autorizoNombre: fila.autorizo_nombre,
       })),
       // Cada fila trae el mismo total; una página vacía no trae filas y el total es 0.
+      total: filas.length > 0 ? Number(filas[0].total_resultados) : 0,
+    };
+  }
+
+  // HU11: mismo filtro que el historial, pero sin paginar. Se pide de una sola vez
+  // hasta el tope y se construye el XLSX en memoria con el token del usuario,
+  // así que RLS sigue limitando las boletas a sus campus.
+  async exportarHistorial(
+    token: string,
+    dto: ExportarHistorialBoletasDto,
+  ): Promise<{ archivo: Buffer; total: number }> {
+    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('buscar_boletas', {
+      p_texto: dto.q,
+      p_limite: LIMITE_EXPORTACION_BOLETAS,
+      p_desplazar: 0,
+    });
+    if (error) throw this.errorDeBase(error);
+
+    const filas = (data ?? []) as FilaHistorialExportacion[];
+    const libro = new ExcelJS.Workbook();
+    libro.creator = 'Almacenes ITSON';
+    const hoja = libro.addWorksheet('Historial');
+    hoja.addRow([...CABECERAS_EXPORTACION_HISTORIAL]);
+
+    for (const fila of filas) {
+      hoja.addRow([
+        fila.folio,
+        fila.solicitante_nombre,
+        fila.dependencia ?? '',
+        // El texto de PostgreSQL ya trae fecha y hora; se conserva tal cual.
+        fila.entregado_en ?? '',
+        fila.autorizo_nombre ?? '',
+      ]);
+    }
+
+    const cabecera = hoja.getRow(1);
+    cabecera.font = { bold: true };
+    cabecera.eachCell((celda) => {
+      celda.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE8EEF7' },
+      };
+    });
+    hoja.columns = [{ width: 22 }, { width: 28 }, { width: 24 }, { width: 26 }, { width: 24 }];
+    hoja.views = [{ state: 'frozen', ySplit: 1 }];
+
+    return {
+      archivo: Buffer.from(await libro.xlsx.writeBuffer()),
+      // Viene de count(*) over () en la RPC: puede superar el tope de filas del archivo.
       total: filas.length > 0 ? Number(filas[0].total_resultados) : 0,
     };
   }

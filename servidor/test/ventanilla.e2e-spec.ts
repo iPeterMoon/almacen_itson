@@ -9,6 +9,7 @@
 // prueban aparte en supabase/tests (AI-61); aquí se prueba cómo viaja cada caso por la API.
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { UsuarioSesionRepository } from '../src/comun/autenticacion/usuario-sesion.repository';
@@ -1366,6 +1367,87 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       .expect(400);
   });
 
+  it('exporta el historial filtrado a XLSX con los encabezados y las filas', async () => {
+    base.funcion('buscar_boletas', () =>
+      ok([
+        {
+          boleta_id: 7,
+          folio: 'BOL-2026-000007',
+          solicitante_nombre: 'Miguel Ángel Ruiz',
+          dependencia: 'SERVICIOS_GENERALES',
+          campus: 'Centro',
+          entregado_en: '2026-11-10T18:00:00.000Z',
+          autorizo_nombre: 'Leonel Lares',
+          total_resultados: 1,
+        },
+      ]),
+    );
+
+    const res = await http()
+      .get('/api/v1/boletas/historial/exportar')
+      .responseType('blob')
+      .query({ q: '  miguel ' })
+      .set(como('almacenista'))
+      .expect(200);
+
+    expect(res.headers['content-type']).toContain('spreadsheetml.sheet');
+    expect(res.headers['content-disposition']).toMatch(
+      /^attachment; filename="historial-entregas-\d{4}-\d{2}-\d{2}\.xlsx"$/,
+    );
+    expect(res.headers['x-total-resultados']).toBe('1');
+    // Sin paginar: una sola llamada con el tope y desde la primera fila.
+    expect(base.rpc).toHaveBeenCalledWith('buscar_boletas', {
+      p_texto: 'miguel',
+      p_limite: 1000,
+      p_desplazar: 0,
+    });
+
+    const libro = new ExcelJS.Workbook();
+    await libro.xlsx.load(res.body as ArrayBuffer);
+    const hoja = libro.getWorksheet('Historial');
+    expect(hoja).toBeDefined();
+    expect(hoja!.rowCount).toBe(2);
+    const fila = (numero: number) =>
+      [1, 2, 3, 4, 5].map((columna) => hoja!.getCell(numero, columna).text);
+    expect(fila(1)).toEqual(['folio', 'solicitante', 'dependencia', 'fecha y hora', 'supervisor']);
+    expect(fila(2)).toEqual([
+      'BOL-2026-000007',
+      'Miguel Ángel Ruiz',
+      'SERVICIOS_GENERALES',
+      '2026-11-10T18:00:00.000Z',
+      'Leonel Lares',
+    ]);
+  });
+
+  it('exporta solo la cabecera cuando el filtro no encuentra boletas y valida q', async () => {
+    base.funcion('buscar_boletas', () => ok([]));
+
+    const res = await http()
+      .get('/api/v1/boletas/historial/exportar')
+      .responseType('blob')
+      .query({ q: 'zzzz' })
+      .set(como('supervisor'))
+      .expect(200);
+
+    expect(res.headers['x-total-resultados']).toBe('0');
+    const libro = new ExcelJS.Workbook();
+    await libro.xlsx.load(res.body as ArrayBuffer);
+    const hoja = libro.getWorksheet('Historial');
+    expect(hoja!.rowCount).toBe(1);
+    expect(hoja!.getCell(1, 1).text).toBe('folio');
+
+    await http()
+      .get('/api/v1/boletas/historial/exportar')
+      .query({ q: 'a%' })
+      .set(como('supervisor'))
+      .expect(400);
+    await http()
+      .get('/api/v1/boletas/historial/exportar')
+      .query({ pagina: '2' })
+      .set(como('supervisor'))
+      .expect(400);
+  });
+
   it('documenta en Swagger todas las rutas de la HU 6', async () => {
     const res = await http().get('/docs-json').expect(200);
 
@@ -1374,6 +1456,7 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       '/api/v1/entregas',
       '/api/v1/boletas',
       '/api/v1/boletas/historial',
+      '/api/v1/boletas/historial/exportar',
       '/api/v1/boletas/validar-material',
       '/api/v1/boletas/firmas',
       '/api/v1/boletas/{id}',
