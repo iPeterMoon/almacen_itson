@@ -186,6 +186,7 @@ export type Database = {
           firma_recibe_path: string | null
           folio: string
           id: number
+          importada: boolean
           numero_solicitud: string | null
           solicitante_nombre: string
           solicitante_unidad: string | null
@@ -204,6 +205,7 @@ export type Database = {
           firma_recibe_path?: string | null
           folio: string
           id?: never
+          importada?: boolean
           numero_solicitud?: string | null
           solicitante_nombre: string
           solicitante_unidad?: string | null
@@ -222,6 +224,7 @@ export type Database = {
           firma_recibe_path?: string | null
           folio?: string
           id?: never
+          importada?: boolean
           numero_solicitud?: string | null
           solicitante_nombre?: string
           solicitante_unidad?: string | null
@@ -328,6 +331,7 @@ export type Database = {
       }
       boletas_materiales: {
         Row: {
+          almacen_id: number | null
           boleta_id: number
           cantidad: number
           cantidad_base: number
@@ -340,6 +344,7 @@ export type Database = {
           producto_id: number
         }
         Insert: {
+          almacen_id?: number | null
           boleta_id: number
           cantidad: number
           cantidad_base: number
@@ -352,6 +357,7 @@ export type Database = {
           producto_id: number
         }
         Update: {
+          almacen_id?: number | null
           boleta_id?: number
           cantidad?: number
           cantidad_base?: number
@@ -364,6 +370,20 @@ export type Database = {
           producto_id?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "boletas_materiales_almacen_id_fkey"
+            columns: ["almacen_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boletas_materiales_almacen_id_fkey"
+            columns: ["almacen_id"]
+            isOneToOne: false
+            referencedRelation: "vista_existencias_por_ubicacion"
+            referencedColumns: ["almacen_id"]
+          },
           {
             foreignKeyName: "boletas_materiales_boleta_id_fkey"
             columns: ["boleta_id"]
@@ -1476,16 +1496,16 @@ export type Database = {
       vista_detalle_boleta: {
         Row: {
           autorizo_nombre: string | null
-          boleta_id: number
-          campus: string
-          campus_id: number
+          boleta_id: number | null
+          campus: string | null
+          campus_id: number | null
           dependencia: string | null
           entregado_en: string | null
           entregado_por: string | null
-          folio: string
+          folio: string | null
           herramientas: Json | null
           materiales: Json | null
-          solicitante_nombre: string
+          solicitante_nombre: string | null
           trabajador_id: number | null
           unidad: string | null
         }
@@ -1758,6 +1778,10 @@ export type Database = {
           estado: string
           folio: string
         }[]
+      }
+      importar_entregas: {
+        Args: { p_boletas: Json; p_campus_id?: number }
+        Returns: Json
       }
       obtener_notificaciones: {
         Args: never

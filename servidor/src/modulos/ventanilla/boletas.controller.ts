@@ -8,25 +8,42 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiResponse,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { memoryStorage } from 'multer';
+import 'multer';
 import { Roles } from '../../comun/decoradores/roles.decorator';
 import { UsuarioActual } from '../../comun/decoradores/usuario-actual.decorator';
+import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { Rol } from '../../comun/tipos/usuario-autenticado';
 import type { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 import { BoletasService } from './boletas.service';
 import { ConfirmacionService } from './confirmacion.service';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
 import { HistorialBoletasDto } from './dto/historial-boletas.dto';
+import { ImportacionBoletasService } from './importacion/importacion-boletas.service';
+import { MAX_FILAS_DATOS } from './importacion/lector-plantilla';
 import { ListarBoletasDto } from './dto/listar-boletas.dto';
+import { RespuestaImportacionDto } from './dto/importar-boletas.dto';
 import { SubirFirmaDto } from './dto/subir-firma.dto';
 import { ValidarMaterialDto } from './dto/validar-material.dto';
+
+// El archivo se procesa en memoria: no se guarda en disco ni en Storage.
+const LIMITE_ARCHIVO_IMPORTACION = 5 * 1024 * 1024;
 
 // Capa HTTP de la boleta de entrega: valida roles, recibe DTOs y delega en BoletasService.
 // Las reglas de negocio (stock, límites, folios y firmas) viven en las funciones RPC de PostgreSQL.
@@ -39,6 +56,7 @@ export class BoletasController {
   constructor(
     private readonly boletas: BoletasService,
     private readonly confirmacion: ConfirmacionService,
+    private readonly importacion: ImportacionBoletasService,
   ) {}
 
   // Validación previa: no crea la boleta, solo devuelve alertas para que el almacenista decida.
@@ -73,6 +91,77 @@ export class BoletasController {
   })
   subirFirma(@UsuarioActual() usuario: UsuarioAutenticado, @Body() dto: SubirFirmaDto) {
     return this.boletas.subirFirma(usuario.token, usuario, dto);
+  }
+
+  // HU11: importa entregas anteriores. El campo `archivo` llega como multipart;
+  // cualquier fila inválida responde 422 y no se llama a la RPC de importación.
+  @Post('importar')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Rol.Almacenista, Rol.Supervisor, Rol.SupervisorJefe, Rol.Admin)
+  @UseInterceptors(
+    FileInterceptor('archivo', {
+      storage: memoryStorage(),
+      limits: { fileSize: LIMITE_ARCHIVO_IMPORTACION, files: 1 },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Importa entregas anteriores desde un Excel .xlsx (HU11)',
+    description:
+      'Plantilla: folio, fecha, solicitante, dependencia, código de material, cantidad y ' +
+      'almacén (columnas extra se ignoran). ' +
+      'Varias filas con el mismo folio forman una boleta; todas deben tener la misma ' +
+      'fecha, solicitante, dependencia y almacén. Cada fila lleva un material (código + ' +
+      'cantidad entera). ' +
+      `Máximo 5 MB y ${MAX_FILAS_DATOS} filas de datos. ` +
+      'Si hay errores responde 422 con { importadas: 0, errores: [{ fila, motivo }] } ' +
+      'y no se importa nada; la fila 1 es la cabecera.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['archivo'],
+      properties: {
+        archivo: {
+          type: 'string',
+          format: 'binary',
+          description: 'Archivo .xlsx con la plantilla de entregas anteriores.',
+        },
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: RespuestaImportacionDto,
+    description: '{ importadas, errores: [] }.',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: RespuestaImportacionDto,
+    description: '{ importadas: 0, errores: [{ fila, motivo }] }. No se importó nada.',
+  })
+  @ApiBadRequestResponse({ description: 'Falta el archivo o el XLSX está corrupto.' })
+  @ApiResponse({ status: 413, description: 'El archivo supera los 5 MB.' })
+  @ApiResponse({ status: 415, description: 'La extensión no es .xlsx.' })
+  importar(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+    @UploadedFile() archivo?: Express.Multer.File,
+  ) {
+    if (!archivo) {
+      throw new ErrorNegocio(
+        'ARCHIVO_REQUERIDO',
+        'Adjunta un archivo con el campo "archivo".',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    // Se valida aquí, después del multipart, para que un CSV no se confunda
+    // con "falta el archivo" (multer lo descartaba en el fileFilter).
+    if (!archivo.originalname.toLowerCase().endsWith('.xlsx')) {
+      throw new ErrorNegocio(
+        'TIPO_NO_SOPORTADO',
+        'Solo se aceptan archivos con extensión .xlsx.',
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      );
+    }
+    return this.importacion.importar(usuario.token, usuario.campusId, archivo);
   }
 
   // La función crear_boleta valida stock y excepciones, descuenta existencias y entrega en el acto.

@@ -1,5 +1,5 @@
 -- =====================================================================
--- Sistema de Almacenes ITSON - Migración 21: búsqueda del historial de boletas
+-- Sistema de Almacenes ITSON - Migración 22: búsqueda del historial de boletas
 -- Módulo: 3 Ventanilla.
 -- HU11 (AI-69): el historial muestra una fila por boleta y se busca por
 -- solicitante o folio sin distinguir mayúsculas ni acentos ("jose" encuentra

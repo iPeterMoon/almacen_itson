@@ -1,5 +1,5 @@
 """Prueba los escenarios de HU1 a HU5 contra la base local, como usuarios reales de la app."""
-import os, subprocess, sys, time
+import json, os, subprocess, sys, time
 
 sys.stdout.reconfigure(encoding="utf-8")
 # Corre psql dentro del contenedor que levanta reiniciar.sh
@@ -805,6 +805,86 @@ caso("Seg", "Náinari encuentra su propia boleta", NAI,
      "select solicitante_nombre from buscar_boletas('luis ochoa')", contiene="Luis Ochoa")
 caso("Seg", "Sin sesión no se busca en el historial", "anon",
      "select * from buscar_boletas()", espera="permission denied")
+
+# ---------- HU11: importar entregas anteriores ----------
+# La plantilla de la HU solo trae materiales; el RPC ignora cualquier clave
+# extra que llegue en el JSON (por ejemplo, herramientas de un Excel ajeno).
+IMP_BOLETAS = [
+    {
+        "fila": 2, "folio": "IMP-2025-0001", "fecha": "2025-03-04",
+        "solicitante": "Solicitante Importado", "dependencia": "MANTENIMIENTO",
+        "almacen": "Almacén 1",
+        "materiales": [
+            {"fila": 2, "codigo": "CD-123", "cantidad": 2},
+            {"fila": 3, "codigo": "CD-700", "cantidad": 1},
+        ],
+    },
+    {
+        "fila": 4, "folio": "IMP-2025-0002", "fecha": "2025-03-05",
+        "solicitante": "Otra Persona", "dependencia": "MANTENIMIENTO",
+        "almacen": "Almacén 1",
+        "materiales": [{"fila": 4, "codigo": "CD-700", "cantidad": 3}],
+    },
+]
+
+
+def json_sql(datos):
+    return json.dumps(datos, ensure_ascii=False).replace("'", "''")
+
+
+IMP_JSON = json_sql(IMP_BOLETAS)
+FALLIDAS = json.loads(json.dumps(IMP_BOLETAS))
+FALLIDAS[0]["materiales"][1]["codigo"] = "CD-NO-EXISTE"
+FALLIDAS[0]["folio"] = "IMP-2025-0099"
+CON_EXTRAS = [json.loads(json.dumps(IMP_BOLETAS[1]))]
+CON_EXTRAS[0]["folio"] = "IMP-2025-0097"
+CON_EXTRAS[0]["herramientas"] = [
+    {"fila": 4, "codigo": "ACT-NO-EXISTE", "dias_prestamo": 3}
+]
+
+caso("HU11 Imp", "Importa dos boletas de materiales", CEN,
+     f"select importar_entregas('{IMP_JSON}'::jsonb, {CEN_ID})", contiene='"importadas": 2')
+caso("HU11 Imp", "Dos filas del mismo folio forman una sola boleta", CEN,
+     "select count(*)||'|'||(select jsonb_array_length(materiales) from vista_detalle_boleta "
+     "where folio='IMP-2025-0001') from boletas where folio like 'IMP-2025-%'", contiene="2|2")
+caso("HU11 Imp", "Detalle usa el almacén declarado en la importación", CEN,
+     "select materiales->0->>'almacen' from vista_detalle_boleta where folio='IMP-2025-0001'",
+     contiene="Almacén 1")
+caso("HU11 Imp", "No se crea ningún préstamo ni boleta de herramienta", None,
+     "select (select count(*) from prestamos where folio in "
+     "(select folio from boletas where folio like 'IMP-2025-%'))||'|'||"
+     "(select count(*) from boletas_herramientas bh join boletas b on b.id=bh.boleta_id "
+     "where b.folio like 'IMP-2025-%')", contiene="0|0")
+caso("HU11 Imp", "Las importadas quedan marcadas y sin firmas", None,
+     "select (select count(*) from boletas where folio like 'IMP-2025-%' and importada "
+     "and firma_recibe_path is null and firma_entrega_path is null)||'|'||"
+     "(select count(*) from boletas where folio like 'IMP-2025-%')", contiene="2|2")
+caso("HU11 Imp", "No se inventa ningún archivo de firma en Storage", None,
+     "select count(*) from storage.objects where bucket_id='firmas' "
+     "and name like '%/importacion/%'", contiene="0")
+caso("HU11 Imp", "La importación no descuenta stock (sin movimientos)", None,
+     "select count(*) from movimientos_inventario mi "
+     "join boletas_materiales bm on bm.id=mi.boleta_material_id "
+     "join boletas b on b.id=bm.boleta_id where b.folio like 'IMP-2025-%'", contiene="0")
+caso("HU11 Imp", "Un folio ya existente no importa nada", CEN,
+     f"select importar_entregas('{IMP_JSON}'::jsonb, {CEN_ID})",
+     contiene='"importadas": 0')
+caso("HU11 Imp", "El motivo indica el folio duplicado", CEN,
+     f"select (importar_entregas('{IMP_JSON}'::jsonb, {CEN_ID})->'errores'->0->>'motivo')",
+     contiene="IMP-2025-0001 ya existe")
+caso("HU11 Imp", "Código de material inexistente: cero importadas", CEN,
+     f"select importar_entregas('{json_sql(FALLIDAS)}'::jsonb, {CEN_ID})",
+     contiene='"importadas": 0')
+caso("HU11 Imp", "El error del código inexistente señala su fila", CEN,
+     f"select (importar_entregas('{json_sql(FALLIDAS)}'::jsonb, {CEN_ID})->'errores'->0->>'fila')",
+     contiene="3")
+caso("HU11 Imp", "Ninguna boleta del archivo fallido se insertó", None,
+     "select count(*) from boletas where folio like 'IMP-2025-009%'", contiene="0")
+caso("HU11 Imp", "Claves extra de herramienta se ignoran", CEN,
+     f"select importar_entregas('{json_sql(CON_EXTRAS)}'::jsonb, {CEN_ID})",
+     contiene='"importadas": 1')
+caso("Seg", "Otro campus no puede importar en Centro", CEN,
+     f"select importar_entregas('{IMP_JSON}'::jsonb, {NAI_ID})", espera="SIN_PERMISO")
 
 cuadre = admin("""select count(*) from existencias e where e.cantidad <>
   (select coalesce(sum(m.cantidad),0) from movimientos_inventario m where m.producto_id=e.producto_id and m.ubicacion_id=e.ubicacion_id)""")

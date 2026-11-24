@@ -35,6 +35,7 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 | ------ | -------------------------------- | --------------------------------------------------------------- |
 | `POST` | `/api/v1/boletas/validar-material` | Valida existencia, periodicidad y límite de zona antes de agregar |
 | `POST` | `/api/v1/boletas/firmas`           | Sube una firma al bucket privado `firmas` y devuelve su ruta     |
+| `POST` | `/api/v1/boletas/importar`         | Importa entregas anteriores desde un Excel `.xlsx` (HU11)        |
 | `POST` | `/api/v1/boletas`                  | Crea la boleta y la entrega en el acto con dos firmas            |
 | `GET`  | `/api/v1/boletas`                  | Lista las boletas de los campus del usuario                      |
 | `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`), sin distinguir mayúsculas ni acentos |
@@ -45,6 +46,38 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 
 Todas requieren `Authorization: Bearer <token>`. El contrato completo, con ejemplos y roles,
 está en Swagger (`/docs`).
+
+### Importar entregas anteriores (HU11)
+
+`POST /api/v1/boletas/importar` recibe `multipart/form-data` con el campo `archivo` (solo
+`.xlsx`, máximo 5 MB y 1 000 filas de datos). La plantilla de ejemplo está en
+`servidor/plantillas/plantilla-importar-entregas.xlsx` (se regenera con `npm run gen:plantilla`
+desde `servidor/`). Columnas, en cualquier orden; las columnas extra se ignoran:
+
+| Columna               | Uso                                                                 |
+| --------------------- | ------------------------------------------------------------------- |
+| `folio`               | Folio de la boleta. Varias filas con el mismo folio forman una boleta |
+| `fecha`               | `AAAA-MM-DD` o `DD/MM/AAAA`; se guarda como fecha de entrega         |
+| `solicitante`         | Nombre del solicitante                                              |
+| `dependencia`         | Unidad capturada en la boleta                                       |
+| `código de material`  | Código de un producto del catálogo                                  |
+| `cantidad`            | Entero mayor a cero                                                 |
+| `almacén`             | Nombre del almacén del campus del usuario                            |
+
+Cada fila lleva **un material** (código de material + cantidad); si el Excel trae columnas
+adicionales —por ejemplo `código de herramienta` o `días de préstamo`— se ignoran. Todas las
+filas de un mismo folio deben tener la misma fecha, solicitante, dependencia y almacén. La
+respuesta correcta es `{ "importadas": 3, "errores": [] }`. Si hay errores de fila o de datos
+(folio ya existente, código de material o almacén desconocido), responde **422** con
+`{ "importadas": 0, "errores": [{ "fila": 4, "motivo": "..." }] }` y no se importa nada; `fila`
+es el número real de fila del Excel (la cabecera es la 1). Un archivo sin filas de datos responde
+**422** con el mismo formato y el motivo en la fila 1. Una extensión distinta de `.xlsx` responde
+**415 `TIPO_NO_SOPORTADO`**; falta de archivo **400**, corrupto **400** y tamaño **413**.
+
+Las boletas importadas quedan `ENTREGADA` con `entregado_en` = fecha y marcadas como importadas,
+pero **sin firmas**: no hubo captura de firma en el sistema, así que no se inventa ningún archivo
+en Storage. La importación no genera movimientos de inventario: no descuenta stock ni crea
+préstamos.
 
 ## API de catálogo
 
