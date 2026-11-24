@@ -8,6 +8,7 @@ import { CacheTrabajadoresService } from './cache-trabajadores.service';
 import { ConfirmacionService } from './confirmacion.service';
 import { EntregasController } from './entregas.controller';
 import { EntregasService } from './entregas.service';
+import { ImportacionBoletasService } from './importacion/importacion-boletas.service';
 import { TrabajadoresController } from './trabajadores.controller';
 import { TrabajadoresService } from './trabajadores.service';
 
@@ -23,6 +24,7 @@ import { TrabajadoresService } from './trabajadores.service';
     CacheTrabajadoresService,
     ConfirmacionService,
     EntregasService,
+    ImportacionBoletasService,
     TrabajadoresService,
     // Caché en memoria propia del módulo (AI-87), para que las búsquedas de
     // trabajadores y las de activos no compitan por el mismo límite de LRU.

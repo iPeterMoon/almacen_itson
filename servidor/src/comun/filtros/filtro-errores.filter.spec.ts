@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ErrorImportacion } from '../errores/error-importacion';
 import { ErrorNegocio } from '../errores/error-negocio';
 import { FiltroErrores } from './filtro-errores.filter';
 
@@ -29,6 +30,14 @@ describe('FiltroErrores', () => {
       codigo: 'STOCK_INSUFICIENTE',
       mensaje: 'Solo hay 3.',
     });
+  });
+
+  it('traduce ErrorImportacion a 422 con { importadas: 0, errores }', () => {
+    const { host, respuesta } = hostFalso();
+    const errores = [{ fila: 4, motivo: 'La cantidad debe ser mayor a cero.' }];
+    filtro.catch(new ErrorImportacion(errores), host);
+    expect(respuesta.status).toHaveBeenCalledWith(422);
+    expect(respuesta.json).toHaveBeenCalledWith({ importadas: 0, errores });
   });
 
   it('incluye los datos del ErrorNegocio cuando los trae', () => {
