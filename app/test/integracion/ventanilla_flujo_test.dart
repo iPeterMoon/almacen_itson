@@ -104,6 +104,8 @@ Map<String, dynamic> _validacion({
 /// Cada prueba cambia solo las rutas que le interesan.
 ServidorApiFalso _servidorBase() {
   final s = ServidorApiFalso();
+  // Pantalla principal (HU11): historial de entregas, vacío en estas pruebas.
+  s.en('GET /boletas/historial', (_) => const RespuestaApi.ok({'datos': [], 'total': 0}));
   s.en('GET /trabajadores', (_) => const RespuestaApi.ok({
         'datos': [_trabajador],
         'total': 1,

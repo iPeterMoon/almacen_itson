@@ -9,6 +9,7 @@ import '../datos/modelos.dart';
 import 'dialogos/dialogo_sugerencia_autorizacion.dart';
 import 'dialogos/dialogo_stock_y_resumen.dart';
 import 'entrega_controlador.dart';
+import 'widgets/encabezado_ventanilla.dart';
 import 'widgets/indicador_pasos.dart';
 import 'widgets/paso_confirmacion.dart';
 import 'widgets/paso_materiales.dart';
@@ -113,18 +114,7 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
     };
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        titleSpacing: 16,
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Ventanilla de entregas', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
-            Text('Entrega de material y equipo',
-                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-          ],
-        ),
-      ),
+      appBar: const EncabezadoVentanilla(),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(

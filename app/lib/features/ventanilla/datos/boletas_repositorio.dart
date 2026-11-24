@@ -202,3 +202,12 @@ String formatearHoraFecha(String? iso) {
   final sufijo = f.hour < 12 ? 'a.m.' : 'p.m.';
   return '${_dos(hora12)}:${_dos(f.minute)} $sufijo ${formatearFecha(iso)}';
 }
+
+// "20/10/2026 08:35 a.m.": fecha primero, como en la tabla del historial (HU11).
+String formatearFechaHora(String? iso) {
+  final f = _aHermosillo(iso);
+  if (f == null) return iso ?? '';
+  final hora12 = f.hour % 12 == 0 ? 12 : f.hour % 12;
+  final sufijo = f.hour < 12 ? 'a.m.' : 'p.m.';
+  return '${formatearFecha(iso)} ${_dos(hora12)}:${_dos(f.minute)} $sufijo';
+}
