@@ -199,7 +199,8 @@ export class BoletasController {
   @ApiOperation({
     summary: 'Historial de boletas con búsqueda por solicitante o folio',
     description:
-      'Parámetros: q (solicitante o folio, mínimo 2 caracteres), pagina y porPagina. ' +
+      'Parámetros: q (solicitante o folio, mínimo 2 caracteres, sin distinguir mayúsculas ni acentos), ' +
+      'pagina y porPagina. De la boleta más reciente a la más antigua. ' +
       'Sin coincidencias responde 200 con datos [] y total 0.',
   })
   @ApiOkResponse({

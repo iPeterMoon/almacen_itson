@@ -1299,21 +1299,19 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
   // -------------------------------------------------------------------------
 
   it('el historial responde en /boletas/historial (no lo toma como id) y busca por solicitante o folio', async () => {
-    base.tabla('boletas', () =>
-      ok(
-        [
-          {
-            id: 7,
-            folio: 'BOL-2026-000007',
-            solicitante_nombre: 'Miguel Ángel Ruiz',
-            solicitante_unidad: null,
-            entregado_en: '2026-11-10T18:00:00.000Z',
-            autorizo_nombre: null,
-            trabajadores: { dependencia: 'SERVICIOS_GENERALES' },
-          },
-        ],
-        1,
-      ),
+    base.funcion('buscar_boletas', () =>
+      ok([
+        {
+          boleta_id: 7,
+          folio: 'BOL-2026-000007',
+          solicitante_nombre: 'Miguel Ángel Ruiz',
+          dependencia: 'SERVICIOS_GENERALES',
+          campus: 'Centro',
+          entregado_en: '2026-11-10T18:00:00.000Z',
+          autorizo_nombre: null,
+          total_resultados: 1,
+        },
+      ]),
     );
 
     const res = await http()
@@ -1335,16 +1333,16 @@ describe('Ventanilla HU 6 (integración API → servicios)', () => {
       ],
       total: 1,
     });
-    const [consulta] = base.consultasA('boletas');
-    expect(consulta.llamadas).toContainEqual([
-      'or',
-      'folio.ilike.%miguel%,solicitante_nombre.ilike.%miguel%',
-    ]);
-    expect(consulta.llamadas).toContainEqual(['range', 5, 9]);
+    // El texto llega recortado por el DTO y la página 2 de 5 empieza en la boleta 6.
+    expect(base.rpc).toHaveBeenCalledWith('buscar_boletas', {
+      p_texto: 'miguel',
+      p_limite: 5,
+      p_desplazar: 5,
+    });
   });
 
   it('el historial sin coincidencias responde 200 con datos vacío y total 0', async () => {
-    base.tabla('boletas', () => ok([], 0));
+    base.funcion('buscar_boletas', () => ok([]));
 
     const res = await http()
       .get('/api/v1/boletas/historial')

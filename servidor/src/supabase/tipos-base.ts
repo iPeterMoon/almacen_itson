@@ -1706,6 +1706,19 @@ export type Database = {
         }
         Returns: number
       }
+      buscar_boletas: {
+        Args: { p_desplazar?: number; p_limite?: number; p_texto?: string }
+        Returns: {
+          autorizo_nombre: string
+          boleta_id: number
+          campus: string
+          dependencia: string
+          entregado_en: string
+          folio: string
+          solicitante_nombre: string
+          total_resultados: number
+        }[]
+      }
       buscar_productos: {
         Args: {
           p_almacen_id?: number
@@ -1886,6 +1899,7 @@ export type Database = {
         Returns: string
       }
       siguiente_folio: { Args: { p_tipo: string }; Returns: string }
+      sin_acentos: { Args: { p_texto: string }; Returns: string }
       validar_activo: {
         Args: { p_codigo: string; p_trabajador_id?: number }
         Returns: {

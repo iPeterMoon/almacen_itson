@@ -124,20 +124,6 @@ interface FilaBoletaDetalle {
 const CAMPOS_RESUMEN =
   'id, folio, campus_id, estado, solicitante_nombre, trabajador_id, zona_id, numero_solicitud, creado_en, entregado_en';
 
-// Fila del historial: la relación anidada se declara a mano, igual que en el detalle.
-interface FilaBoletaHistorial {
-  id: number;
-  folio: string;
-  solicitante_nombre: string;
-  solicitante_unidad: string | null;
-  entregado_en: string | null;
-  autorizo_nombre: string | null;
-  trabajadores: { dependencia: string } | null;
-}
-
-const CAMPOS_HISTORIAL =
-  'id, folio, solicitante_nombre, solicitante_unidad, entregado_en, autorizo_nombre, trabajadores ( dependencia )';
-
 // Elementos del JSON de vista_detalle_boleta (AI-70): llegan con nombres en snake_case.
 interface MaterialDeVista {
   codigo: string;
@@ -350,42 +336,35 @@ export class BoletasService {
     };
   }
 
-  // HU11 (AI-72): historial paginado. Con q busca, sin distinguir mayúsculas, por nombre del
-  // solicitante o por folio. El DTO ya dejó fuera los comodines de ILIKE y los signos de
-  // PostgREST (coma, paréntesis), así que el texto va tal cual en el filtro "or", igual que
-  // en la búsqueda de activos. RLS limita el resultado a los campus del usuario.
+  // HU11 (AI-72): historial paginado. Con q busca por nombre del solicitante o por folio
+  // sin distinguir mayúsculas ni acentos ("jose" encuentra "José"). La búsqueda, el orden
+  // (más reciente primero), la página y el total los resuelve buscar_boletas en la base
+  // (AI-69); RLS limita el resultado a los campus del usuario.
   async historial(token: string, dto: HistorialBoletasDto) {
     const pagina = dto.pagina ?? 1;
     const porPagina = dto.porPagina ?? LIMITE_LISTA_POR_DEFECTO;
 
-    let consulta = this.supabase
-      .clienteDeUsuario(token)
-      .from('boletas')
-      .select(CAMPOS_HISTORIAL, { count: 'exact' });
-    if (dto.q) {
-      const t = `%${dto.q}%`;
-      consulta = consulta.or(`folio.ilike.${t},solicitante_nombre.ilike.${t}`);
-    }
-
-    const { data, error, count } = await consulta
-      .order('creado_en', { ascending: false })
-      .order('id', { ascending: false })
-      .range(...rangoDePagina(pagina, porPagina));
+    const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('buscar_boletas', {
+      p_texto: dto.q,
+      p_limite: porPagina,
+      p_desplazar: (pagina - 1) * porPagina,
+    });
     if (error) throw this.errorDeBase(error);
 
     // Sin coincidencias responde 200 con datos [] y total 0; el mensaje lo muestra la app.
-    const filas = (data ?? []) as unknown as FilaBoletaHistorial[];
+    const filas = data ?? [];
     return {
       datos: filas.map((fila) => ({
-        id: Number(fila.id),
+        id: Number(fila.boleta_id),
         folio: fila.folio,
         solicitanteNombre: fila.solicitante_nombre,
         // Registrado: la dependencia del trabajador. Sin registro: la unidad capturada.
-        dependencia: fila.trabajadores?.dependencia ?? fila.solicitante_unidad,
+        dependencia: fila.dependencia,
         entregadoEn: fila.entregado_en,
         autorizoNombre: fila.autorizo_nombre,
       })),
-      total: count ?? 0,
+      // Cada fila trae el mismo total; una página vacía no trae filas y el total es 0.
+      total: filas.length > 0 ? Number(filas[0].total_resultados) : 0,
     };
   }
 
