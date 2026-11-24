@@ -114,6 +114,7 @@ class _VentanillaEntregaPageState extends ConsumerState<VentanillaEntregaPage> {
     };
 
     return Scaffold(
+      // Sin botón de regresar: se sale con "Cancelar" (paso 1) o al terminar la entrega.
       appBar: const EncabezadoVentanilla(),
       body: SafeArea(
         child: Center(

@@ -179,6 +179,18 @@ void main() {
     for (final s in SeccionApp.values) {
       expect(find.text(s.etiqueta), findsOneWidget);
     }
+    expect(find.byType(BackButton), findsNothing);
+  });
+
+  testWidgets('nueva entrega no muestra el botón de regresar del encabezado', (tester) async {
+    await _abrir(tester, _RepoFalso());
+
+    await tester.tap(find.widgetWithText(FilledButton, '+ Nueva entrega'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.byType(VentanillaEntregaPage), findsOneWidget);
+    expect(find.byType(BackButton), findsNothing);
+    expect(find.text('Ventanilla de entregas'), findsOneWidget);
   });
 
   testWidgets('sin entregas muestra el mensaje de historial vacío', (tester) async {

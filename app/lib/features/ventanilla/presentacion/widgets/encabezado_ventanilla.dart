@@ -5,7 +5,8 @@ import '../../../../core/tema/tema.dart';
 import '../../../autenticacion/presentacion/sesion_controlador.dart';
 
 /// Encabezado común de todas las pantallas de Ventanilla (Figma): título,
-/// subtítulo, notificaciones y cierre de sesión.
+/// subtítulo, notificaciones y cierre de sesión. No lleva botón de regresar:
+/// se sale con la barra de navegación inferior o con "Cancelar".
 class EncabezadoVentanilla extends ConsumerWidget implements PreferredSizeWidget {
   const EncabezadoVentanilla({super.key});
 
@@ -15,6 +16,7 @@ class EncabezadoVentanilla extends ConsumerWidget implements PreferredSizeWidget
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return AppBar(
+      automaticallyImplyLeading: false,
       toolbarHeight: 72,
       titleSpacing: 16,
       title: const Column(
