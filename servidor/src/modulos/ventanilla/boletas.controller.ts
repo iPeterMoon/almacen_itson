@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -20,10 +21,12 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiResponse,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import 'multer';
 import { Roles } from '../../comun/decoradores/roles.decorator';
@@ -31,9 +34,10 @@ import { UsuarioActual } from '../../comun/decoradores/usuario-actual.decorator'
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { Rol } from '../../comun/tipos/usuario-autenticado';
 import type { UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
-import { BoletasService } from './boletas.service';
+import { BoletasService, LIMITE_EXPORTACION_BOLETAS, TIPO_CONTENIDO_XLSX } from './boletas.service';
 import { ConfirmacionService } from './confirmacion.service';
 import { CrearBoletaDto } from './dto/crear-boleta.dto';
+import { ExportarHistorialBoletasDto } from './dto/exportar-historial-boletas.dto';
 import { HistorialBoletasDto } from './dto/historial-boletas.dto';
 import { ImportacionBoletasService } from './importacion/importacion-boletas.service';
 import { MAX_FILAS_DATOS } from './importacion/lector-plantilla';
@@ -195,6 +199,45 @@ export class BoletasController {
   }
 
   // Va antes de ':id': si no, Nest tomaría "historial" como el id de una boleta.
+  @Get('historial/exportar')
+  @ApiOperation({
+    summary: 'Exporta el historial de boletas a Excel .xlsx (HU11)',
+    description:
+      'Mismo filtro q que el historial, sin paginar y con un tope de ' +
+      `${LIMITE_EXPORTACION_BOLETAS} filas. Columnas: folio, solicitante, dependencia, ` +
+      'fecha y hora y supervisor. Sin coincidencias devuelve el archivo solo con la cabecera.',
+  })
+  @ApiProduces(TIPO_CONTENIDO_XLSX)
+  @ApiOkResponse({
+    description: 'Archivo .xlsx con el historial filtrado.',
+    content: {
+      [TIPO_CONTENIDO_XLSX]: { schema: { type: 'string', format: 'binary' } },
+    },
+    headers: {
+      'X-Total-Resultados': {
+        description:
+          'Total de boletas que coinciden con el filtro; puede superar el tope de filas del archivo.',
+        schema: { type: 'integer' },
+      },
+    },
+  })
+  @ApiBadRequestResponse({ description: 'El filtro q no es válido.' })
+  async exportarHistorial(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+    @Query() dto: ExportarHistorialBoletasDto,
+    @Res() respuesta: Response,
+  ): Promise<void> {
+    const { archivo, total } = await this.boletas.exportarHistorial(usuario.token, dto);
+    const fecha = new Date().toISOString().slice(0, 10);
+    respuesta.setHeader('Content-Type', TIPO_CONTENIDO_XLSX);
+    respuesta.setHeader(
+      'Content-Disposition',
+      `attachment; filename="historial-entregas-${fecha}.xlsx"`,
+    );
+    respuesta.setHeader('X-Total-Resultados', String(total));
+    respuesta.send(archivo);
+  }
+
   @Get('historial')
   @ApiOperation({
     summary: 'Historial de boletas con búsqueda por solicitante o folio',

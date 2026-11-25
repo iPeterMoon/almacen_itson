@@ -2,9 +2,10 @@
 // cliente falso para comprobar los parámetros de las RPC y el mapeo de respuestas
 // sin depender de una base de datos real.
 import { HttpStatus } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import { ErrorNegocio } from '../../comun/errores/error-negocio';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { BoletasService } from './boletas.service';
+import { BoletasService, LIMITE_EXPORTACION_BOLETAS } from './boletas.service';
 import { Rol, UsuarioAutenticado } from '../../comun/tipos/usuario-autenticado';
 
 interface ClienteFalso {
@@ -1396,6 +1397,126 @@ describe('BoletasService', () => {
       });
     });
   });
+
+  describe('exportarHistorial (HU11)', () => {
+    function clienteConHistorial(data: unknown, error: { message: string } | null = null) {
+      return { rpc: jest.fn().mockResolvedValue({ data, error }) };
+    }
+
+    const FILA_EXPORTACION = {
+      boleta_id: 7,
+      folio: 'BOL-2026-000007',
+      solicitante_nombre: 'Miguel Ángel Ruiz',
+      dependencia: 'SERVICIOS_GENERALES',
+      campus: 'Centro',
+      entregado_en: '2026-11-10T18:00:00.000Z',
+      autorizo_nombre: 'Leonel Lares',
+      total_resultados: 2,
+    };
+
+    // Carga el XLSX devuelto por el servicio para comprobar celdas reales, no el RPC.
+    async function celdas(archivo: Buffer) {
+      const libro = new ExcelJS.Workbook();
+      await libro.xlsx.load(archivo as unknown as Parameters<typeof libro.xlsx.load>[0]);
+      const hoja = libro.getWorksheet('Historial');
+      expect(hoja).toBeDefined();
+      return {
+        filas: hoja!.rowCount,
+        valores: (fila: number) =>
+          [1, 2, 3, 4, 5].map((columna) => hoja!.getCell(fila, columna).text),
+      };
+    }
+
+    it('pide todas las boletas del filtro sin paginar y las escribe en el XLSX', async () => {
+      const cliente = clienteConHistorial([
+        FILA_EXPORTACION,
+        {
+          ...FILA_EXPORTACION,
+          boleta_id: 8,
+          folio: 'BOL-2026-000008',
+          solicitante_nombre: ' Visitante ',
+          dependencia: null,
+          entregado_en: null,
+          autorizo_nombre: null,
+        },
+      ]);
+      const servicio = crearServicio(cliente);
+
+      const { archivo, total } = await servicio.exportarHistorial('token', { q: 'miguel' });
+
+      expect(cliente.rpc).toHaveBeenCalledTimes(1);
+      expect(cliente.rpc).toHaveBeenCalledWith('buscar_boletas', {
+        p_texto: 'miguel',
+        p_limite: LIMITE_EXPORTACION_BOLETAS,
+        p_desplazar: 0,
+      });
+      expect(total).toBe(2);
+
+      const { filas, valores } = await celdas(archivo);
+      expect(filas).toBe(3);
+      expect(valores(1)).toEqual([
+        'folio',
+        'solicitante',
+        'dependencia',
+        'fecha y hora',
+        'supervisor',
+      ]);
+      expect(valores(2)).toEqual([
+        'BOL-2026-000007',
+        'Miguel Ángel Ruiz',
+        'SERVICIOS_GENERALES',
+        '2026-11-10T18:00:00.000Z',
+        'Leonel Lares',
+      ]);
+      expect(valores(3)).toEqual(['BOL-2026-000008', ' Visitante ', '', '', '']);
+    });
+
+    it('sin q no manda texto de búsqueda y exporta todas las boletas visibles', async () => {
+      const cliente = clienteConHistorial([FILA_EXPORTACION]);
+      const servicio = crearServicio(cliente);
+
+      await servicio.exportarHistorial('token', {});
+
+      expect(cliente.rpc).toHaveBeenCalledWith(
+        'buscar_boletas',
+        expect.objectContaining({ p_texto: undefined, p_desplazar: 0 }),
+      );
+    });
+
+    it('informa del total completo aunque el archivo se corte en el tope', async () => {
+      const cliente = clienteConHistorial([{ ...FILA_EXPORTACION, total_resultados: 1500 }]);
+      const servicio = crearServicio(cliente);
+
+      const { archivo, total } = await servicio.exportarHistorial('token', {});
+
+      expect(total).toBe(1500);
+      expect((await celdas(archivo)).filas).toBe(2);
+    });
+
+    it('sin coincidencias devuelve un XLSX con la cabecera y sin filas', async () => {
+      const servicio = crearServicio(clienteConHistorial([]));
+
+      const { archivo, total } = await servicio.exportarHistorial('token', { q: 'zzz' });
+
+      expect(total).toBe(0);
+      const { filas, valores } = await celdas(archivo);
+      expect(filas).toBe(1);
+      expect(valores(1)[0]).toBe('folio');
+    });
+
+    it('traduce un error de la base a ErrorNegocio', async () => {
+      const servicio = crearServicio(
+        clienteConHistorial(null, {
+          message: 'SIN_PERMISO: No puedes consultar boletas de otro campus.',
+        }),
+      );
+
+      await expect(servicio.exportarHistorial('token', {})).rejects.toMatchObject({
+        codigo: 'SIN_PERMISO',
+      });
+    });
+  });
+
   describe('detalle (HU11, AI-73)', () => {
     // from('vista_detalle_boleta').select(...).eq(...).maybeSingle()
     function clienteConVista(data: unknown, error: { message: string } | null = null) {
