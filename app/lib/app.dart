@@ -11,35 +11,6 @@ class _AvisoSesion extends ChangeNotifier {
   void avisar() => notifyListeners();
 }
 
-/// Pantalla principal después de iniciar sesión: la ventanilla de entregas.
-/// Conserva el botón "+ Nueva entrega" original y agrega el cierre de sesión.
-class _PantallaInicio extends ConsumerWidget {
-  const _PantallaInicio();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ventanilla de entregas'),
-        actions: [
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: () => ref.read(controladorSesionProvider.notifier).cerrarSesion(),
-            icon: const Icon(Icons.logout_outlined),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Center(
-        child: FilledButton(
-          onPressed: () => context.push('/ventanilla/nueva-entrega'),
-          child: const Text('+ Nueva entrega'),
-        ),
-      ),
-    );
-  }
-}
-
 // El router escucha la sesión: sin sesión solo se puede ver /login; al iniciar
 // sesión se entra a la pantalla principal. Los tokens se restauran al arrancar.
 final proveedorRouter = Provider<GoRouter>((ref) {
@@ -64,7 +35,6 @@ final proveedorRouter = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const _PantallaInicio()),
       ...rutasAutenticacion,
       ...rutasVentanilla,
     ],

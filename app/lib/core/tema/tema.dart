@@ -23,6 +23,7 @@ class Colores {
   static const deshabilitado = Color(0xFF9CA3AF);
   static const encabezadoTabla = Color(0xFFF1F5F9);
   static const paginaActual = Color(0xFFE8EEF7);
+  static const navegacionActual = Color(0xFFE3EBFD); // sección actual de la barra inferior
 }
 
 class Tema {

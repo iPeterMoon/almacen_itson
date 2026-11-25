@@ -465,6 +465,8 @@ class EntregaController extends Notifier<EntregaState> {
         firmaRecibe: fr,
       ));
       state = state.copyWith(enviando: false, resumen: resumen);
+      // Avisa que hay una boleta nueva: el historial (HU11) se recarga con ella.
+      ref.read(entregasTerminadasProvider.notifier).avisar();
     } on ErrorNegocio catch (e) {
       // El diálogo para ajustar la cantidad necesita saber qué material falló. El
       // servidor real no manda ese detalle (solo el mensaje), así que en ese caso
@@ -521,6 +523,17 @@ final relojProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
 final entregaControllerProvider =
     NotifierProvider<EntregaController, EntregaState>(EntregaController.new);
+
+/// Cuenta las entregas terminadas en esta sesión de la app. No guarda datos:
+/// solo sirve de señal para que quien lo observe (el historial) se recargue.
+class EntregasTerminadasNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  void avisar() => state++;
+}
+
+final entregasTerminadasProvider =
+    NotifierProvider<EntregasTerminadasNotifier, int>(EntregasTerminadasNotifier.new);
 
 /// Texto de búsqueda simple (Notifier en lugar de StateProvider, compatible con Riverpod 2.x y 3.x).
 class ConsultaNotifier extends Notifier<String> {
