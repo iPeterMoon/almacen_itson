@@ -17,6 +17,7 @@ import 'exportar_historial_controlador.dart';
 import 'historial_entregas_controlador.dart';
 import 'ventanilla_rutas.dart';
 import 'widgets/encabezado_ventanilla.dart';
+import 'widgets/importar_entregas.dart';
 
 /// HU11: pantalla principal de Ventanilla con el historial de entregas paginado,
 /// el buscador por solicitante o folio, el filtro por fechas inline y el botón
@@ -104,16 +105,7 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    // Pendiente: importar entregas anteriores desde Excel (otro ticket).
-                    onPressed: () {},
-                    icon: const Icon(Icons.upload_outlined, color: Colores.primario),
-                    label: const Text('Importar entregas anteriores desde Excel',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
+                const ImportarEntregas(),
                 const SizedBox(height: 16),
                 TarjetaSeccion(
                   titulo: 'Historial de entregas',
