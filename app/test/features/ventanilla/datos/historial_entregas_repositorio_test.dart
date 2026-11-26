@@ -58,6 +58,23 @@ void main() {
     expect(pagina.items.last.supervisor, isNull);
   });
 
+  test('con búsqueda manda q sin espacios a los lados', () async {
+    final (:repo, :servidor) = crear(cuerpo: {'datos': [], 'total': 0});
+
+    await repo.listar(pagina: 1, porPagina: 9, consulta: '  ENT-2026-0191 ');
+
+    expect(servidor.ultimaPeticion!.queryParameters,
+        {'q': 'ENT-2026-0191', 'pagina': 1, 'porPagina': 9});
+  });
+
+  test('con menos de 2 caracteres no manda q y pide el historial completo', () async {
+    final (:repo, :servidor) = crear(cuerpo: {'datos': [], 'total': 0});
+
+    await repo.listar(pagina: 1, porPagina: 9, consulta: ' m ');
+
+    expect(servidor.ultimaPeticion!.queryParameters, {'pagina': 1, 'porPagina': 9});
+  });
+
   test('sin entregas responde una página vacía', () async {
     final (:repo, servidor: _) = crear(cuerpo: {'datos': [], 'total': 0});
 

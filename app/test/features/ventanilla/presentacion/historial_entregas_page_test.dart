@@ -16,21 +16,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 // 20 entregas, de la más reciente (folio 0020) a la más antigua (0001), como las
-// ordena el servidor. Cada página devuelve su tramo.
+// ordena el servidor. Cada página devuelve su tramo. Como el servidor, filtra por
+// solicitante o folio (parcial, sin distinguir mayúsculas) cuando la consulta tiene
+// al menos 2 caracteres.
 class _RepoFalso extends HistorialEntregasRepositorio {
   _RepoFalso({this.total = 20, this.error}) : super(Dio());
 
   int total;
   final ErrorNegocio? error;
   final List<int> paginasPedidas = [];
+  final List<String> consultas = [];
 
   @override
-  Future<Pagina<EntregaHistorial>> listar({required int pagina, required int porPagina}) async {
+  Future<Pagina<EntregaHistorial>> listar({
+    required int pagina,
+    required int porPagina,
+    String consulta = '',
+  }) async {
     paginasPedidas.add(pagina);
+    consultas.add(consulta);
     if (error != null) throw error!;
-    final inicio = (pagina - 1) * porPagina;
-    final items = [
-      for (var i = inicio; i < total && i < inicio + porPagina; i++)
+    final texto = consulta.trim().toLowerCase();
+    final todas = [
+      for (var i = 0; i < total; i++)
         EntregaHistorial(
           id: total - i,
           folio: 'ENT-2026-${(total - i).toString().padLeft(4, '0')}',
@@ -40,7 +48,19 @@ class _RepoFalso extends HistorialEntregasRepositorio {
           supervisor: i == 0 ? null : 'Carlos Mendoza Ruiz',
         ),
     ];
-    return Pagina(items: items, total: total, pagina: pagina, porPagina: porPagina);
+    final filtradas = texto.length < 2
+        ? todas
+        : todas
+            .where((e) =>
+                e.folio.toLowerCase().contains(texto) || e.solicitante.toLowerCase().contains(texto))
+            .toList();
+    final inicio = (pagina - 1) * porPagina;
+    return Pagina(
+      items: filtradas.skip(inicio).take(porPagina).toList(),
+      total: filtradas.length,
+      pagina: pagina,
+      porPagina: porPagina,
+    );
   }
 }
 
@@ -210,6 +230,120 @@ void main() {
     await tester.tap(find.text('Reintentar'));
     await tester.pumpAndSettle();
     expect(repo.paginasPedidas, [1, 1]);
+  });
+
+  group('buscador', () {
+    Finder campo() => find.byType(TextField);
+
+    Future<void> escribir(WidgetTester tester, String texto) async {
+      await tester.enterText(campo(), texto);
+      await tester.pump(HistorialEntregasPage.esperaBusqueda);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('buscar por nombre del solicitante filtra la tabla y vuelve a la página 1',
+        (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      await escribir(tester, 'solicitante 1');
+
+      // "Solicitante 1" y de "Solicitante 10" a "Solicitante 19".
+      expect(repo.consultas.last, 'solicitante 1');
+      expect(repo.paginasPedidas.last, 1);
+      expect(find.text('Solicitante 19'), findsOneWidget);
+      expect(find.text('Solicitante 20'), findsNothing);
+      expect(find.text('Mostrando 9 de 11 registros'), findsOneWidget);
+      expect(tester.widget<PaginadorTabla>(find.byType(PaginadorTabla)).pagina, 1);
+    });
+
+    testWidgets('buscar por folio muestra solo esa boleta', (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+
+      await escribir(tester, 'ent-2026-0007');
+
+      expect(repo.consultas.last, 'ent-2026-0007');
+      expect(find.text('ENT-2026-0007'), findsOneWidget);
+      expect(find.text('ENT-2026-0020'), findsNothing);
+      expect(find.text('Mostrando 1 de 1 registros'), findsOneWidget);
+    });
+
+    testWidgets('sin coincidencias muestra el mensaje en lugar de la tabla', (tester) async {
+      await _abrir(tester, _RepoFalso());
+
+      await escribir(tester, 'Zacarías');
+
+      expect(find.text('No hay boletas que coincidan con la búsqueda'), findsOneWidget);
+      expect(find.byType(TablaDatos), findsNothing);
+      expect(find.byType(PaginadorTabla), findsNothing);
+      expect(find.text('Aún no hay entregas registradas.'), findsNothing);
+    });
+
+    testWidgets('espera a que se deje de escribir antes de consultar', (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+
+      await tester.enterText(campo(), 'EN');
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.enterText(campo(), 'ENT');
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.enterText(campo(), 'ENT-2026-0003');
+      expect(repo.consultas, [''], reason: 'aún no pasan 300 ms desde la última tecla');
+
+      await tester.pump(HistorialEntregasPage.esperaBusqueda);
+      await tester.pumpAndSettle();
+      expect(repo.consultas, ['', 'ENT-2026-0003']);
+    });
+
+    testWidgets('al borrar el texto regresa al historial completo', (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+      await escribir(tester, 'Zacarías');
+      expect(find.text('No hay boletas que coincidan con la búsqueda'), findsOneWidget);
+
+      await escribir(tester, '');
+
+      expect(repo.consultas.last, '');
+      expect(find.text('ENT-2026-0020'), findsOneWidget);
+      expect(find.text('Mostrando 9 de 20 registros'), findsOneWidget);
+    });
+
+    testWidgets('la "x" del campo borra la búsqueda sin esperar', (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+      await escribir(tester, 'ENT-2026-0007');
+
+      await tester.tap(find.byTooltip('Borrar búsqueda'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ENT-2026-0020'), findsOneWidget);
+      expect(find.byTooltip('Borrar búsqueda'), findsNothing);
+      expect(repo.consultas, ['', 'ENT-2026-0007', '']);
+    });
+
+    testWidgets('la paginación conserva la búsqueda', (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+      await escribir(tester, 'solicitante 1');
+
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      expect(repo.consultas.last, 'solicitante 1');
+      expect(find.text('Solicitante 1'), findsOneWidget);
+      expect(find.text('Mostrando 2 de 11 registros'), findsOneWidget);
+    });
+
+    testWidgets('no deja escribir caracteres que el servidor rechaza', (tester) async {
+      await _abrir(tester, _RepoFalso());
+
+      await tester.enterText(campo(), 'Pérez; <ENT> 😀');
+
+      expect(tester.widget<TextField>(campo()).controller!.text, 'Pérez ENT ');
+    });
   });
 
   test('el controlador pide 9 filas por página, como el Figma', () {
