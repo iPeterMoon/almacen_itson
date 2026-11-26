@@ -73,7 +73,11 @@ class _RepoFalso extends HistorialEntregasRepositorio {
   final List<int> detallesPedidos = [];
 
   @override
-  Future<Pagina<EntregaHistorial>> listar({required int pagina, required int porPagina}) async =>
+  Future<Pagina<EntregaHistorial>> listar({
+    required int pagina,
+    required int porPagina,
+    String consulta = '',
+  }) async =>
       const Pagina(
         items: [
           EntregaHistorial(id: 184, folio: 'ENT-2026-0184', solicitante: 'Juan Pérez Soto'),
