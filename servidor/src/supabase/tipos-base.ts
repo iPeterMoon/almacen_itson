@@ -1707,7 +1707,13 @@ export type Database = {
         Returns: number
       }
       buscar_boletas: {
-        Args: { p_desplazar?: number; p_limite?: number; p_texto?: string }
+        Args: {
+          p_desde?: string
+          p_desplazar?: number
+          p_hasta?: string
+          p_limite?: number
+          p_texto?: string
+        }
         Returns: {
           autorizo_nombre: string
           boleta_id: number

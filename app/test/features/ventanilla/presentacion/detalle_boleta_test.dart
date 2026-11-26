@@ -77,6 +77,8 @@ class _RepoFalso extends HistorialEntregasRepositorio {
     required int pagina,
     required int porPagina,
     String consulta = '',
+    DateTime? desde,
+    DateTime? hasta,
   }) async =>
       const Pagina(
         items: [

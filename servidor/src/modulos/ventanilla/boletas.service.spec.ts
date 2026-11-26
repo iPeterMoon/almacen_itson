@@ -1288,6 +1288,8 @@ describe('BoletasService', () => {
         p_texto: 'miguel',
         p_limite: 8,
         p_desplazar: 0,
+        p_desde: undefined,
+        p_hasta: undefined,
       });
       expect(resultado).toEqual({
         datos: [
@@ -1348,12 +1350,31 @@ describe('BoletasService', () => {
         p_texto: undefined,
         p_limite: 5,
         p_desplazar: 10,
+        p_desde: undefined,
+        p_hasta: undefined,
       });
       expect(cliente.rpc).toHaveBeenNthCalledWith(2, 'buscar_boletas', {
         p_texto: undefined,
         p_limite: 8,
         p_desplazar: 0,
+        p_desde: undefined,
+        p_hasta: undefined,
       });
+    });
+
+    it('manda el rango de fechas y rechaza un rango invertido', async () => {
+      const cliente = clienteConHistorial([]);
+      const servicio = crearServicio(cliente);
+
+      await servicio.historial('token', { desde: '2026-11-01', hasta: '2026-11-30' });
+
+      expect(cliente.rpc).toHaveBeenCalledWith(
+        'buscar_boletas',
+        expect.objectContaining({ p_desde: '2026-11-01', p_hasta: '2026-11-30' }),
+      );
+      await expect(
+        servicio.historial('token', { desde: '2026-11-30', hasta: '2026-11-01' }),
+      ).rejects.toMatchObject({ codigo: 'FILTRO_FECHAS_INVALIDO', estadoHttp: 400 });
     });
 
     it('el total es el de todas las páginas, no el de la página', async () => {
@@ -1449,6 +1470,8 @@ describe('BoletasService', () => {
         p_texto: 'miguel',
         p_limite: LIMITE_EXPORTACION_BOLETAS,
         p_desplazar: 0,
+        p_desde: undefined,
+        p_hasta: undefined,
       });
       expect(total).toBe(2);
 
@@ -1480,6 +1503,18 @@ describe('BoletasService', () => {
       expect(cliente.rpc).toHaveBeenCalledWith(
         'buscar_boletas',
         expect.objectContaining({ p_texto: undefined, p_desplazar: 0 }),
+      );
+    });
+
+    it('respeta el rango de fechas del historial', async () => {
+      const cliente = clienteConHistorial([FILA_EXPORTACION]);
+      const servicio = crearServicio(cliente);
+
+      await servicio.exportarHistorial('token', { desde: '2026-11-01', hasta: '2026-11-30' });
+
+      expect(cliente.rpc).toHaveBeenCalledWith(
+        'buscar_boletas',
+        expect.objectContaining({ p_desde: '2026-11-01', p_hasta: '2026-11-30' }),
       );
     });
 

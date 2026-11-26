@@ -776,11 +776,12 @@ caso("Seg", "El detalle no se modifica desde la app", CEN,
      "from unnest(array['INSERT','UPDATE','DELETE','TRUNCATE']) p", contiene="f")
 
 # ---------- HU11: búsqueda del historial de boletas (AI-69) ----------
-# buscar_boletas(texto, límite, desplazamiento): una fila por boleta, de la más
-# reciente a la más antigua, con el total de las que cumplen la búsqueda.
+# buscar_boletas(texto, límite, desplazamiento, desde, hasta): una fila por boleta,
+# de la más reciente a la más antigua por fecha de entrega, con el total de las
+# que cumplen los filtros.
 caso("HU11 E1", "Sin texto empieza por la boleta más reciente", CEN,
      "select (select folio from buscar_boletas(null, 1, 0)) = "
-     "(select folio from boletas order by creado_en desc, id desc limit 1)", contiene="t")
+     "(select folio from boletas order by entregado_en desc nulls last, id desc limit 1)", contiene="t")
 caso("HU11 E1", "Página de 2 con el total de boletas del campus", CEN,
      "select count(*) = 2 and min(total_resultados) = (select count(*) from boletas) from buscar_boletas(null, 2, 0)",
      contiene="t")
@@ -799,6 +800,32 @@ caso("HU11 E2", "Registrado muestra la dependencia del trabajador", CEN,
      "select string_agg(distinct dependencia, ',') from buscar_boletas('juan perez')", contiene="SERVICIOS_GENERALES")
 caso("HU11 E3", "Sin coincidencias no devuelve boletas", CEN,
      "select count(*) from buscar_boletas('zzz')", contiene="0")
+# Entrega a las 23:30 del 20/11 en Hermosillo (ya es 21/11 en UTC).
+admin(f"insert into boletas (folio, campus_id, solicitante_nombre, solicitante_unidad, "
+      "estado, importada, entregado_en, creado_en, creado_por) values ('FECHA-2026-0001', "
+      f"(select id from campus where clave='CEN'), 'Prueba Fecha', 'PRUEBAS', 'ENTREGADA', true, "
+      f"'2026-11-21T06:30:00Z', '2026-11-21T06:30:00Z', '{CEN}')")
+caso("HU11 E5", "El rango de fechas usa el día de Hermosillo", CEN,
+     "select count(*) from buscar_boletas('FECHA-2026-0001', 50, 0, '2026-11-20', '2026-11-20')",
+     contiene="1")
+caso("HU11 E5", "El día siguiente en UTC no incluye la entrega", CEN,
+     "select count(*) from buscar_boletas('FECHA-2026-0001', 50, 0, '2026-11-21', '2026-11-21')",
+     contiene="0")
+caso("HU11 E5", "El rango se combina con la búsqueda", CEN,
+     "select count(*) from buscar_boletas('FECHA-2026-0001', 50, 0, null, '2026-11-19')",
+     contiene="0")
+caso("HU11 E5", "El total corresponde solo a las fechas filtradas", CEN,
+     "select bool_and(total_resultados = 1) from "
+     "buscar_boletas('FECHA-2026-0001', 50, 0, '2026-11-20', '2026-11-20')", contiene="t")
+# Entregado antes pero creado después: el orden debe seguir la fecha visible.
+admin(f"insert into boletas (folio, campus_id, solicitante_nombre, solicitante_unidad, "
+      "estado, importada, entregado_en, creado_en, creado_por) values ('FECHA-2026-0002', "
+      f"(select id from campus where clave='CEN'), 'Prueba Orden', 'PRUEBAS', 'ENTREGADA', true, "
+      f"'2026-11-19T12:00:00Z', '2026-11-22T12:00:00Z', '{CEN}')")
+caso("HU11 E5", "El orden dentro del rango sigue la fecha de entrega", CEN,
+     "select string_agg(folio, ',') from "
+     "buscar_boletas('FECHA-2026', 50, 0, '2026-11-19', '2026-11-20')",
+     contiene="FECHA-2026-0001,FECHA-2026-0002")
 caso("Seg", "Centro no encuentra boletas de Náinari", CEN,
      "select count(*) from buscar_boletas('luis ochoa')", contiene="0")
 caso("Seg", "Náinari encuentra su propia boleta", NAI,
