@@ -9,6 +9,7 @@ import 'package:almacen_itson/core/errores/error_negocio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/historial_entregas_repositorio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/importacion_entregas_repositorio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/modelos.dart';
+import 'package:almacen_itson/features/ventanilla/presentacion/historial_entregas_controlador.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/historial_entregas_page.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/importacion_entregas_controlador.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/widgets/importar_entregas.dart';
@@ -106,7 +107,10 @@ void main() {
     guardador = _GuardadorFalso();
   });
 
-  Future<void> abrir(WidgetTester tester, {Size logico = const Size(800, 1280)}) async {
+  Future<ProviderContainer> abrir(
+    WidgetTester tester, {
+    Size logico = const Size(800, 1280),
+  }) async {
     tester.view.physicalSize = logico;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -127,6 +131,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    return c;
   }
 
   Future<void> importar(WidgetTester tester) async {
@@ -153,6 +158,11 @@ void main() {
     expect(importacion.nombres, ['entregas.xlsx']);
     expect(find.text('Enviando archivo… 0 %'), findsOneWidget);
     expect(boton(tester).onPressed, isNull, reason: 'no se puede importar dos veces a la vez');
+    expect(
+      tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.description_outlined)).onPressed,
+      isNull,
+      reason: 'la plantilla tampoco se descarga mientras se envía',
+    );
 
     importacion.progreso!(0.5);
     await tester.pump();
@@ -165,11 +175,25 @@ void main() {
     importacion.respuesta.complete(const ResultadoImportacion(importadas: 3));
     await tester.pumpAndSettle();
 
-    expect(find.text('Se importaron 3 boletas'), findsOneWidget);
+    expect(find.text('Se importaron 3 boletas.'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(historial.consultas, 2);
     expect(find.text('BOL-2025-0001'), findsOneWidget);
     expect(boton(tester).onPressed, isNotNull);
+  });
+
+  testWidgets('con filtros activos el aviso sugiere quitarlos para ver lo importado', (
+    tester,
+  ) async {
+    final c = await abrir(tester);
+    await c.read(historialEntregasProvider.notifier).filtrarPorFechas(DateTime(2026, 11));
+    await tester.pumpAndSettle();
+
+    await importar(tester);
+    importacion.respuesta.complete(const ResultadoImportacion(importadas: 2));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Se importaron 2 boletas. $textoQuitarFiltros'), findsOneWidget);
   });
 
   testWidgets('con errores: muestra fila y motivo en un diálogo y no recarga el historial', (
@@ -248,7 +272,7 @@ void main() {
     importacion.respuesta.complete(const ResultadoImportacion(importadas: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Se importó 1 boleta'), findsOneWidget);
+    expect(find.text('Se importó 1 boleta.'), findsOneWidget);
   });
 
   testWidgets('un error del servidor muestra su mensaje y permite reintentar', (tester) async {

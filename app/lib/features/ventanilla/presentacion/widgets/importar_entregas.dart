@@ -7,6 +7,7 @@ import '../../../../core/archivos/selector_archivos.dart';
 import '../../../../core/errores/error_negocio.dart';
 import '../../../../core/tema/tema.dart';
 import '../dialogos/dialogo_errores_importacion.dart';
+import '../historial_entregas_controlador.dart';
 import '../importacion_entregas_controlador.dart';
 
 /// Copia de servidor/plantillas/ (una prueba verifica que sean iguales).
@@ -16,6 +17,9 @@ const rutaPlantillaImportacion = 'assets/plantillas/$nombrePlantillaImportacion'
 const textoDescargarPlantilla = 'Descargar plantilla de ejemplo';
 
 String mensajeImportadas(int n) => n == 1 ? 'Se importó 1 boleta' : 'Se importaron $n boletas';
+
+/// Se agrega al aviso si hay filtros: las entregas anteriores suelen quedar fuera del rango.
+const textoQuitarFiltros = 'Quita los filtros para verlas todas.';
 
 /// HU11 (escenario 6): opción para importar entregas anteriores desde Excel, con el
 /// progreso del envío y la descarga de la plantilla de ejemplo.
@@ -36,7 +40,11 @@ class _ImportarEntregasState extends ConsumerState<ImportarEntregas>
   @override
   bool get wantKeepAlive => true;
 
+  // Ocupado o enviando el Excel: ningún botón responde (evita trabajos encimados).
+  bool get _bloqueado => _ocupado || ref.read(importacionEntregasProvider).enviando;
+
   Future<void> _importar() async {
+    if (_bloqueado) return;
     setState(() => _ocupado = true);
     try {
       final archivo = await ref.read(proveedorSelectorArchivos).elegirXlsx();
@@ -46,7 +54,12 @@ class _ImportarEntregasState extends ConsumerState<ImportarEntregas>
       final resultado = await ref.read(importacionEntregasProvider.notifier).importar(archivo);
       if (!mounted || resultado == null) return;
       if (resultado.exitosa) {
-        _avisar(mensajeImportadas(resultado.importadas));
+        final historial = ref.read(historialEntregasProvider.notifier);
+        final filtrado = historial.hayFechas || historial.buscando;
+        _avisar([
+          '${mensajeImportadas(resultado.importadas)}.',
+          if (filtrado) textoQuitarFiltros,
+        ].join(' '));
       } else {
         await mostrarDialogoErroresImportacion(context, resultado.errores);
       }
@@ -60,6 +73,7 @@ class _ImportarEntregasState extends ConsumerState<ImportarEntregas>
   }
 
   Future<void> _descargarPlantilla() async {
+    if (_bloqueado) return;
     setState(() => _ocupado = true);
     try {
       final datos = await rootBundle.load(rutaPlantillaImportacion);
@@ -91,6 +105,7 @@ class _ImportarEntregasState extends ConsumerState<ImportarEntregas>
   Widget build(BuildContext context) {
     super.build(context);
     final estado = ref.watch(importacionEntregasProvider);
+    final bloqueado = _ocupado || estado.enviando;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -100,7 +115,7 @@ class _ImportarEntregasState extends ConsumerState<ImportarEntregas>
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             IconButton(
-              onPressed: _ocupado ? null : _descargarPlantilla,
+              onPressed: bloqueado ? null : _descargarPlantilla,
               tooltip: textoDescargarPlantilla,
               color: Colores.primario,
               icon: const Icon(Icons.description_outlined),
@@ -109,7 +124,7 @@ class _ImportarEntregasState extends ConsumerState<ImportarEntregas>
             // Flexible: en pantallas angostas el texto pasa a dos líneas en vez de desbordarse.
             Flexible(
               child: OutlinedButton.icon(
-                onPressed: _ocupado || estado.enviando ? null : _importar,
+                onPressed: bloqueado ? null : _importar,
                 icon: const Icon(Icons.upload_outlined, color: Colores.primario),
                 label: const Text(
                   'Importar entregas anteriores desde Excel',

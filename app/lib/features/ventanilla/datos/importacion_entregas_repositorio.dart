@@ -73,10 +73,12 @@ class ImportacionEntregasRepositorio {
     } on DioException catch (error) {
       // Las filas inválidas llegan como 422 { importadas: 0, errores: [...] }, sin el
       // { codigo, mensaje } del resto de la API: no son un fallo, son un resultado.
+      // Un 422 sin filas no es eso: se trata como error para no avisar "0 importadas".
       final cuerpo = error.response?.data;
       if (error.response?.statusCode == 422 &&
           cuerpo is Map<String, dynamic> &&
-          cuerpo['errores'] is List) {
+          cuerpo['errores'] is List &&
+          (cuerpo['errores'] as List).isNotEmpty) {
         return ResultadoImportacion.fromJson(cuerpo);
       }
       // El archivo ya se envió: el servidor pudo haber terminado la importación.

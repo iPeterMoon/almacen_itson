@@ -5,13 +5,20 @@ import 'package:dio/dio.dart';
 
 // Adaptador HTTP falso para probar repositorios sin salir a la red: guarda la
 // última petición y responde el estado y el cuerpo JSON indicados. Con
-// [falloDeRed] simula que el servidor no responde.
+// [falloDeRed] simula que el servidor no responde y con [tiempoAgotado], que
+// recibió la petición pero no contestó a tiempo.
 class AdaptadorHttpFalso implements HttpClientAdapter {
-  AdaptadorHttpFalso({this.estado = 200, this.cuerpo, this.falloDeRed = false});
+  AdaptadorHttpFalso({
+    this.estado = 200,
+    this.cuerpo,
+    this.falloDeRed = false,
+    this.tiempoAgotado = false,
+  });
 
   int estado;
   Object? cuerpo;
   bool falloDeRed;
+  bool tiempoAgotado;
   RequestOptions? ultimaPeticion;
 
   @override
@@ -23,6 +30,12 @@ class AdaptadorHttpFalso implements HttpClientAdapter {
     ultimaPeticion = options;
     if (falloDeRed) {
       throw DioException.connectionError(requestOptions: options, reason: 'Sin red (prueba)');
+    }
+    if (tiempoAgotado) {
+      throw DioException.receiveTimeout(
+        timeout: options.receiveTimeout ?? Duration.zero,
+        requestOptions: options,
+      );
     }
     return ResponseBody.fromString(
       jsonEncode(cuerpo),

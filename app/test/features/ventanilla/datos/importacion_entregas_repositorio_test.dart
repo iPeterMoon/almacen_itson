@@ -76,6 +76,27 @@ void main() {
     }
   });
 
+  test('un 422 sin filas con error no se toma como importación exitosa', () async {
+    final (:repo, servidor: _) = crear(estado: 422, cuerpo: {'importadas': 0, 'errores': []});
+
+    await expectLater(
+      repo.importar(nombre: 'entregas.xlsx', contenido: _contenido),
+      throwsA(isA<ErrorNegocio>()),
+    );
+  });
+
+  test('si el servidor tarda en responder pide revisar el historial antes de reintentar', () async {
+    final (:repo, :servidor) = crear();
+    servidor.tiempoAgotado = true;
+
+    await expectLater(
+      repo.importar(nombre: 'entregas.xlsx', contenido: _contenido),
+      throwsA(isA<ErrorNegocio>()
+          .having((e) => e.codigo, 'codigo', 'TIEMPO_AGOTADO')
+          .having((e) => e.mensaje, 'mensaje', contains('Revisa el historial'))),
+    );
+  });
+
   test('sin red avisa que no hay conexión', () async {
     final (:repo, servidor: _) = crear(falloDeRed: true);
 
