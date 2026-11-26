@@ -192,7 +192,7 @@ describe('HU11: exportar e importar entregas en Excel (API + base de pruebas)', 
     }
     const productos = productosData.map((p) => ({
       id: Number(p.id),
-      codigo: p.codigo as string,
+      codigo: p.codigo,
     }));
     const preferido = productos.find((p) => p.codigo === CODIGO_MATERIAL_PREFERIDO) ?? productos[0];
     const otro = productos.find((p) => p.id !== preferido.id) ?? preferido;
@@ -277,7 +277,7 @@ describe('HU11: exportar e importar entregas en Excel (API + base de pruebas)', 
     if (error || !data?.length) {
       throw new Error(`No hay almacén activo en campus ${campusId}: ${error?.message ?? ''}`);
     }
-    return data[0].nombre as string;
+    return data[0].nombre;
   }
 
   async function stockDisponible(sesion: Sesion, productoId: number): Promise<number> {
@@ -441,7 +441,15 @@ describe('HU11: exportar e importar entregas en Excel (API + base de pruebas)', 
       // Caso B: error validado por la RPC (folio duplicado en la fila 3), fila 2 válida -> rollback total.
       const folioDupValido = `${etiqueta}-DUP-NO`;
       const xlsxDuplicado = await crearXlsx([
-        [folioDupValido, FECHA_ISO, solicitanteA, dependenciaA, productoA.codigo, 1, almacenNainari],
+        [
+          folioDupValido,
+          FECHA_ISO,
+          solicitanteA,
+          dependenciaA,
+          productoA.codigo,
+          1,
+          almacenNainari,
+        ],
         [
           folioPlantilla2,
           FECHA_ISO,
