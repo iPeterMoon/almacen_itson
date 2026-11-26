@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsDateString,
   IsInt,
   IsOptional,
   IsString,
@@ -37,6 +38,24 @@ export class HistorialBoletasDto {
     message: "El texto solo puede tener letras, números, espacios y los signos . - / # '",
   })
   q?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-11-01',
+    description: 'Primer día de entrega (AAAA-MM-DD, inclusivo, horario de Hermosillo).',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsDateString({ strict: true })
+  desde?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-11-30',
+    description: 'Último día de entrega (AAAA-MM-DD, inclusivo, horario de Hermosillo).',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsDateString({ strict: true })
+  hasta?: string;
 
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()

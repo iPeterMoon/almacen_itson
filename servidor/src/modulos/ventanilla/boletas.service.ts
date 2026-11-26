@@ -360,11 +360,24 @@ export class BoletasService {
     };
   }
 
+  // Las fechas llegan como AAAA-MM-DD; comparar el texto funciona porque el formato
+  // es fijo y el rango es inclusivo en la base.
+  private validarRangoFechas(dto: { desde?: string; hasta?: string }) {
+    if (dto.desde && dto.hasta && dto.desde > dto.hasta) {
+      throw new ErrorNegocio(
+        'FILTRO_FECHAS_INVALIDO',
+        'La fecha inicial no puede ser posterior a la final.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   // HU11 (AI-72): historial paginado. Con q busca por nombre del solicitante o por folio
   // sin distinguir mayúsculas ni acentos ("jose" encuentra "José"). La búsqueda, el orden
   // (más reciente primero), la página y el total los resuelve buscar_boletas en la base
   // (AI-69); RLS limita el resultado a los campus del usuario.
   async historial(token: string, dto: HistorialBoletasDto) {
+    this.validarRangoFechas(dto);
     const pagina = dto.pagina ?? 1;
     const porPagina = dto.porPagina ?? LIMITE_LISTA_POR_DEFECTO;
 
@@ -372,6 +385,8 @@ export class BoletasService {
       p_texto: dto.q,
       p_limite: porPagina,
       p_desplazar: (pagina - 1) * porPagina,
+      p_desde: dto.desde,
+      p_hasta: dto.hasta,
     });
     if (error) throw this.errorDeBase(error);
 
@@ -399,10 +414,13 @@ export class BoletasService {
     token: string,
     dto: ExportarHistorialBoletasDto,
   ): Promise<{ archivo: Buffer; total: number }> {
+    this.validarRangoFechas(dto);
     const { data, error } = await this.supabase.clienteDeUsuario(token).rpc('buscar_boletas', {
       p_texto: dto.q,
       p_limite: LIMITE_EXPORTACION_BOLETAS,
       p_desplazar: 0,
+      p_desde: dto.desde,
+      p_hasta: dto.hasta,
     });
     if (error) throw this.errorDeBase(error);
 

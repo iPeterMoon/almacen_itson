@@ -56,6 +56,13 @@ describe('HistorialBoletasDto', () => {
     expect((await validar({ porPagina: '51' })).campos).toEqual(['porPagina']);
   });
 
+  it('acepta fechas AAAA-MM-DD y rechaza formatos o fechas inválidas', async () => {
+    expect((await validar({ desde: '2026-11-01', hasta: '2026-11-30' })).campos).toEqual([]);
+    for (const fecha of ['2026-13-01', '2026-02-31', '2026-11-01T00:00:00Z', '01/11/2026']) {
+      expect((await validar({ desde: fecha })).campos).toEqual(['desde']);
+    }
+  });
+
   it('rechaza parámetros que no existen, como limite', async () => {
     expect((await validar({ limite: '5' })).campos).toEqual(['limite']);
   });

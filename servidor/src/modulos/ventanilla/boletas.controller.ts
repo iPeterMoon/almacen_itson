@@ -203,7 +203,7 @@ export class BoletasController {
   @ApiOperation({
     summary: 'Exporta el historial de boletas a Excel .xlsx (HU11)',
     description:
-      'Mismo filtro q que el historial, sin paginar y con un tope de ' +
+      'Mismos filtros q, desde y hasta que el historial, sin paginar y con un tope de ' +
       `${LIMITE_EXPORTACION_BOLETAS} filas. Columnas: folio, solicitante, dependencia, ` +
       'fecha y hora y supervisor. Sin coincidencias devuelve el archivo solo con la cabecera.',
   })
@@ -240,10 +240,11 @@ export class BoletasController {
 
   @Get('historial')
   @ApiOperation({
-    summary: 'Historial de boletas con búsqueda por solicitante o folio',
+    summary: 'Historial de boletas con búsqueda por solicitante, folio o fecha',
     description:
       'Parámetros: q (solicitante o folio, mínimo 2 caracteres, sin distinguir mayúsculas ni acentos), ' +
-      'pagina y porPagina. De la boleta más reciente a la más antigua. ' +
+      'desde y hasta (AAAA-MM-DD, inclusivos, día de Hermosillo), pagina y porPagina. ' +
+      'De la boleta más reciente a la más antigua. ' +
       'Sin coincidencias responde 200 con datos [] y total 0.',
   })
   @ApiOkResponse({
