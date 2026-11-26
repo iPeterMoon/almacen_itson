@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,14 +18,51 @@ import 'ventanilla_rutas.dart';
 import 'widgets/encabezado_ventanilla.dart';
 
 /// HU11: pantalla principal de Ventanilla con el historial de entregas paginado
-/// (de la más reciente a la más antigua) y el botón "+ Nueva entrega".
-class HistorialEntregasPage extends ConsumerWidget {
+/// (de la más reciente a la más antigua), el buscador por solicitante o folio y
+/// el botón "+ Nueva entrega".
+class HistorialEntregasPage extends ConsumerStatefulWidget {
   const HistorialEntregasPage({super.key});
 
   static const encabezados = ['Folio', 'Solicitante', 'Dependencia', 'Fecha y hora', 'Supervisor'];
 
+  /// Espera desde la última tecla antes de consultar, igual que la búsqueda de materiales.
+  static const esperaBusqueda = Duration(milliseconds: 300);
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HistorialEntregasPage> createState() => _HistorialEntregasPageState();
+}
+
+// Solo los caracteres que acepta el servidor en `q` (letras, números, espacios y
+// . - / # '): así nunca se manda una búsqueda que respondería 400. Tampoco deja pasar emojis.
+final _caracteresBusqueda =
+    FilteringTextInputFormatter.allow(RegExp(r"[\p{L}\p{N} .\-/#']", unicode: true));
+
+class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
+  Timer? _espera;
+  final _campo = TextEditingController();
+
+  @override
+  void dispose() {
+    _espera?.cancel();
+    _campo.dispose();
+    super.dispose();
+  }
+
+  void _buscar(String texto) {
+    _espera?.cancel();
+    _espera = Timer(HistorialEntregasPage.esperaBusqueda,
+        () => ref.read(historialEntregasProvider.notifier).buscar(texto));
+  }
+
+  // La "x" del campo regresa al historial completo sin esperar.
+  void _limpiar() {
+    _espera?.cancel();
+    _campo.clear();
+    ref.read(historialEntregasProvider.notifier).buscar('');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final historial = ref.watch(historialEntregasProvider);
 
     return Scaffold(
@@ -49,14 +89,37 @@ class HistorialEntregasPage extends ConsumerWidget {
                 TarjetaSeccion(
                   titulo: 'Historial de entregas',
                   subtitulo: 'Registro de entregas de material y/o equipos.',
-                  child: switch (historial) {
-                    AsyncData(:final value) => _Tabla(pagina: value),
-                    AsyncError(:final error) => _Error(error: error),
-                    _ => const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 48),
-                        child: Center(child: CircularProgressIndicator()),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    ValueListenableBuilder(
+                      valueListenable: _campo,
+                      builder: (context, valor, _) => TextField(
+                        controller: _campo,
+                        inputFormatters: [_caracteresBusqueda, LengthLimitingTextInputFormatter(100)],
+                        onChanged: _buscar,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar por solicitante o folio',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: valor.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Borrar búsqueda',
+                                  onPressed: _limpiar,
+                                  icon: const Icon(Icons.close),
+                                ),
+                        ),
                       ),
-                  },
+                    ),
+                    const SizedBox(height: 16),
+                    switch (historial) {
+                      AsyncData(:final value) => _Tabla(pagina: value),
+                      AsyncError(:final error) => _Error(error: error),
+                      _ => const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                    },
+                  ]),
                 ),
                 const SizedBox(height: 16),
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -97,10 +160,14 @@ class _Tabla extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (pagina.total == 0) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 32),
+      final buscando = ref.read(historialEntregasProvider.notifier).buscando;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
         child: Center(
-          child: Text('Aún no hay entregas registradas.', style: TextStyle(color: Colores.textoSuave)),
+          child: Text(
+            buscando ? 'No hay boletas que coincidan con la búsqueda' : 'Aún no hay entregas registradas.',
+            style: const TextStyle(color: Colores.textoSuave),
+          ),
         ),
       );
     }

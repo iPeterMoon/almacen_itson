@@ -5,6 +5,7 @@ import '../../../core/errores/error_negocio.dart';
 import '../../../core/red/cliente_api.dart';
 import 'detalle_boleta.dart';
 import 'modelos.dart';
+import 'ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
 
 // Una fila del historial de entregas (HU11). Refleja un elemento de `datos` en
 // GET /boletas/historial: { id, folio, solicitanteNombre, dependencia, entregadoEn, autorizoNombre }.
@@ -38,17 +39,30 @@ class EntregaHistorial {
 }
 
 // Único punto de la app que consulta el historial de entregas. El servidor ya
-// ordena de la más reciente a la más antigua y filtra por el campus del usuario.
+// ordena de la más reciente a la más antigua, filtra por el campus del usuario y
+// busca por solicitante o folio (parcial, sin distinguir mayúsculas ni acentos).
 class HistorialEntregasRepositorio {
   const HistorialEntregasRepositorio(this._dio);
 
   final Dio _dio;
 
-  Future<Pagina<EntregaHistorial>> listar({required int pagina, required int porPagina}) async {
+  /// [consulta] filtra por solicitante o folio. El servidor exige al menos
+  /// [minimoCaracteresBusqueda] caracteres: con menos (o vacía) no se manda `q`
+  /// y se recibe el historial completo.
+  Future<Pagina<EntregaHistorial>> listar({
+    required int pagina,
+    required int porPagina,
+    String consulta = '',
+  }) async {
+    final texto = consulta.trim();
     try {
       final respuesta = await _dio.get<Map<String, dynamic>>(
         '/boletas/historial',
-        queryParameters: {'pagina': pagina, 'porPagina': porPagina},
+        queryParameters: {
+          if (texto.length >= minimoCaracteresBusqueda) 'q': texto,
+          'pagina': pagina,
+          'porPagina': porPagina,
+        },
       );
       final json = respuesta.data!;
       // El servidor responde solo { datos, total }: la página y su tamaño son los que se pidieron.
