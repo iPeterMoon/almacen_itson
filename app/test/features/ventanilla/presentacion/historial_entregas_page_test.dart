@@ -1,10 +1,15 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:almacen_itson/arranque.dart';
+import 'package:almacen_itson/core/archivos/guardador_archivos.dart';
 import 'package:almacen_itson/core/errores/error_negocio.dart';
 import 'package:almacen_itson/core/widgets/barra_navegacion.dart';
 import 'package:almacen_itson/core/widgets/componentes.dart';
 import 'package:almacen_itson/features/ventanilla/datos/historial_entregas_repositorio.dart';
 import 'package:almacen_itson/features/ventanilla/datos/modelos.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/entrega_controlador.dart';
+import 'package:almacen_itson/features/ventanilla/presentacion/exportar_historial_controlador.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/historial_entregas_controlador.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/historial_entregas_page.dart';
 import 'package:almacen_itson/features/ventanilla/presentacion/ventanilla_entrega_page.dart';
@@ -28,6 +33,23 @@ class _RepoFalso extends HistorialEntregasRepositorio {
   final List<String> consultas = [];
   final List<DateTime?> desdes = [];
   final List<DateTime?> hastas = [];
+  // Exportar (AI-79): filtros recibidos, total que responde, error y una espera opcional.
+  final List<({String consulta, DateTime? desde, DateTime? hasta})> exportaciones = [];
+  int totalExportado = 20;
+  ErrorNegocio? errorExportar;
+  Completer<void>? exportarPendiente;
+
+  @override
+  Future<ArchivoHistorial> exportar({String consulta = '', DateTime? desde, DateTime? hasta}) async {
+    exportaciones.add((consulta: consulta, desde: desde, hasta: hasta));
+    await exportarPendiente?.future;
+    if (errorExportar != null) throw errorExportar!;
+    return ArchivoHistorial(
+      nombre: 'historial-entregas-2026-11-25.xlsx',
+      bytes: Uint8List.fromList([0x50, 0x4B]),
+      total: totalExportado,
+    );
+  }
 
   @override
   Future<Pagina<EntregaHistorial>> listar({
@@ -79,7 +101,19 @@ class _RepoFalso extends HistorialEntregasRepositorio {
   }
 }
 
-Future<(ProviderContainer, GoRouter)> _abrir(WidgetTester tester, _RepoFalso repo) async {
+// Guarda en memoria en lugar de escribir en Descargas.
+class _GuardadorFalso implements GuardadorArchivos {
+  final List<String> nombres = [];
+
+  @override
+  Future<String> guardarEnDescargas({required String nombre, required Uint8List bytes}) async {
+    nombres.add(nombre);
+    return 'Descargas';
+  }
+}
+
+Future<(ProviderContainer, GoRouter)> _abrir(WidgetTester tester, _RepoFalso repo,
+    {_GuardadorFalso? guardador}) async {
   // Tableta en vertical, ancho lógico de 800 como el prototipo.
   tester.view.physicalSize = const Size(1200, 1920);
   tester.view.devicePixelRatio = 1.5;
@@ -88,6 +122,7 @@ Future<(ProviderContainer, GoRouter)> _abrir(WidgetTester tester, _RepoFalso rep
   // Mismos reintentos que la app: un ErrorNegocio no se reintenta solo.
   final c = ProviderContainer(retry: reintentoProveedores, overrides: [
     proveedorHistorialEntregasRepositorio.overrideWithValue(repo),
+    proveedorGuardadorArchivos.overrideWithValue(guardador ?? _GuardadorFalso()),
   ]);
   addTearDown(c.dispose);
   final router = GoRouter(initialLocation: rutaHistorialEntregas, routes: rutasVentanilla);
@@ -494,6 +529,87 @@ void main() {
       expect(find.widgetWithText(OutlinedButton, '20/11/2026'), findsOneWidget);
       expect(find.text('Mostrando 9 de 20 registros'), findsOneWidget);
     });
+  });
+
+  group('Exportar Excel (AI-79)', () {
+    Finder botonExportar() => find.widgetWithText(OutlinedButton, 'Exportar Excel');
+
+    testWidgets('exporta con la búsqueda y las fechas activas y avisa dónde quedó el archivo',
+        (tester) async {
+      final repo = _RepoFalso();
+      final guardador = _GuardadorFalso();
+      final (c, _) = await _abrir(tester, repo, guardador: guardador);
+      final historial = c.read(historialEntregasProvider.notifier);
+      await historial.buscar('solicitante 1');
+      await historial.filtrarPorFechas(DateTime(2026, 11, 3), hasta: DateTime(2026, 11, 24));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(botonExportar());
+      await tester.tap(botonExportar());
+      await tester.pumpAndSettle();
+
+      expect(repo.exportaciones.single,
+          (consulta: 'solicitante 1', desde: DateTime(2026, 11, 3), hasta: DateTime(2026, 11, 24)));
+      expect(guardador.nombres, ['historial-entregas-2026-11-25.xlsx']);
+      expect(find.text('Se guardó historial-entregas-2026-11-25.xlsx en Descargas.'), findsOneWidget);
+    });
+
+    testWidgets('mientras exporta el botón se desactiva y muestra un indicador', (tester) async {
+      final repo = _RepoFalso()..exportarPendiente = Completer<void>();
+      await _abrir(tester, repo);
+
+      await tester.ensureVisible(botonExportar());
+      await tester.tap(botonExportar());
+      await tester.pump();
+
+      expect(tester.widget<OutlinedButton>(botonExportar()).onPressed, isNull);
+      expect(find.descendant(of: botonExportar(), matching: find.byType(CircularProgressIndicator)),
+          findsOneWidget);
+      await tester.tap(botonExportar(), warnIfMissed: false);
+      expect(repo.exportaciones, hasLength(1), reason: 'un segundo toque no inicia otra descarga');
+
+      repo.exportarPendiente!.complete();
+      await tester.pumpAndSettle();
+      expect(tester.widget<OutlinedButton>(botonExportar()).onPressed, isNotNull);
+    });
+
+    testWidgets('avisa si el archivo trae solo las primeras 1000 entregas', (tester) async {
+      final repo = _RepoFalso()..totalExportado = 1500;
+      await _abrir(tester, repo);
+
+      await tester.ensureVisible(botonExportar());
+      await tester.tap(botonExportar());
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Trae solo las primeras 1000 de 1500 entregas'), findsOneWidget);
+    });
+
+    testWidgets('si falla muestra el mensaje del servidor y se puede volver a intentar', (tester) async {
+      final repo = _RepoFalso()
+        ..errorExportar = const ErrorNegocio('SIN_CONEXION', 'No hay conexión con el servidor.');
+      await _abrir(tester, repo);
+
+      await tester.ensureVisible(botonExportar());
+      await tester.tap(botonExportar());
+      await tester.pumpAndSettle();
+
+      expect(find.text('No hay conexión con el servidor.'), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(botonExportar()).onPressed, isNotNull);
+    });
+  });
+
+  test('mensajeExportacion explica dónde quedó y si se cortó', () {
+    expect(
+      mensajeExportacion(const ExportacionHistorial(
+          nombre: 'historial.xlsx', carpeta: 'Descargas', total: 3, recortado: false)),
+      'Se guardó historial.xlsx en Descargas.',
+    );
+    expect(
+      mensajeExportacion(const ExportacionHistorial(
+          nombre: 'historial.xlsx', carpeta: 'Descargas', total: 1200, recortado: true)),
+      'Se guardó historial.xlsx en Descargas. Trae solo las primeras 1000 de 1200 entregas; '
+      'usa la búsqueda o las fechas para exportar el resto.',
+    );
   });
 
   test('el controlador pide 9 filas por página, como el Figma', () {
