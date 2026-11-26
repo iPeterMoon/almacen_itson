@@ -13,6 +13,7 @@ import '../datos/boletas_repositorio.dart';
 import '../datos/historial_entregas_repositorio.dart';
 import '../datos/modelos.dart';
 import 'dialogos/dialogo_detalle_boleta.dart';
+import 'exportar_historial_controlador.dart';
 import 'historial_entregas_controlador.dart';
 import 'ventanilla_rutas.dart';
 import 'widgets/encabezado_ventanilla.dart';
@@ -222,15 +223,7 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
                 ),
                 const SizedBox(height: 16),
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  SizedBox(
-                    width: 168,
-                    child: OutlinedButton.icon(
-                      // Pendiente: exportar el historial a Excel (otro ticket).
-                      onPressed: () {},
-                      icon: const Icon(Icons.download_outlined, color: Colores.primario),
-                      label: const Text('Exportar Excel', style: TextStyle(fontWeight: FontWeight.w700)),
-                    ),
-                  ),
+                  const SizedBox(width: 168, child: _BotonExportar()),
                   const SizedBox(width: 8),
                   SizedBox(
                     width: 226,
@@ -247,6 +240,50 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Aviso al terminar de exportar (AI-79): dónde quedó el archivo y, si se cortó en
+/// el tope del servidor, cuántas boletas no alcanzaron a entrar.
+String mensajeExportacion(ExportacionHistorial r) {
+  final guardado = 'Se guardó ${r.nombre} en ${r.carpeta}.';
+  if (!r.recortado) return guardado;
+  return '$guardado Trae solo las primeras ${ArchivoHistorial.maximoFilas} de ${r.total} entregas; '
+      'usa la búsqueda o las fechas para exportar el resto.';
+}
+
+const mensajeErrorExportacion = 'No se pudo exportar el historial. Intenta de nuevo.';
+
+/// "Exportar Excel" (AI-79): descarga el historial con los filtros activos (búsqueda
+/// y fechas) y lo guarda en Descargas. Mientras exporta se desactiva y muestra un
+/// indicador; al terminar avisa dónde quedó el archivo o muestra el error.
+class _BotonExportar extends ConsumerWidget {
+  const _BotonExportar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(exportarHistorialProvider, (anterior, estado) {
+      // Solo se avisa cuando termina una exportación (de cargando a listo o error).
+      if (anterior?.isLoading != true || estado.isLoading) return;
+      final mensaje = switch (estado) {
+        AsyncError(:final error) => error is ErrorNegocio ? error.mensaje : mensajeErrorExportacion,
+        AsyncData(:final value?) => mensajeExportacion(value),
+        _ => null,
+      };
+      if (mensaje == null) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(mensaje), duration: const Duration(seconds: 6)));
+    });
+    final exportando = ref.watch(exportarHistorialProvider).isLoading;
+
+    return OutlinedButton.icon(
+      onPressed: exportando ? null : ref.read(exportarHistorialProvider.notifier).exportar,
+      icon: exportando
+          ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.download_outlined, color: Colores.primario),
+      label: const Text('Exportar Excel', style: TextStyle(fontWeight: FontWeight.w700)),
     );
   }
 }
