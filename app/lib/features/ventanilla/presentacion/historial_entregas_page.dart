@@ -16,9 +16,9 @@ import 'historial_entregas_controlador.dart';
 import 'ventanilla_rutas.dart';
 import 'widgets/encabezado_ventanilla.dart';
 
-/// HU11: pantalla principal de Ventanilla con el historial de entregas paginado
-/// (de la más reciente a la más antigua), el buscador por solicitante o folio y
-/// el botón "+ Nueva entrega".
+/// HU11: pantalla principal de Ventanilla con el historial de entregas paginado,
+/// el buscador por solicitante o folio, el filtro por fechas inline y el botón
+/// "+ Nueva entrega".
 class HistorialEntregasPage extends ConsumerStatefulWidget {
   const HistorialEntregasPage({super.key});
 
@@ -40,6 +40,10 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
   Timer? _espera;
   final _campo = TextEditingController();
 
+  /// 0 = eligiendo "Desde", 1 = eligiendo "Hasta", null = calendario cerrado.
+  /// El calendario se despliega dentro de la tarjeta: no abre otra pantalla ni diálogo.
+  int? _editandoFecha;
+
   @override
   void dispose() {
     _espera?.cancel();
@@ -60,9 +64,33 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
     ref.read(historialEntregasProvider.notifier).buscar('');
   }
 
+  String _formatoFecha(DateTime f) =>
+      '${f.day.toString().padLeft(2, '0')}/'
+      '${f.month.toString().padLeft(2, '0')}/${f.year}';
+
+  void _elegirFecha(DateTime dia) {
+    final notifier = ref.read(historialEntregasProvider.notifier);
+    final elegida = DateTime(dia.year, dia.month, dia.day);
+    if (_editandoFecha == 0) {
+      final hasta = notifier.hasta;
+      // Si el nuevo "Desde" pasa el "Hasta" actual, el rango se vuelve ese único día.
+      notifier.filtrarPorFechas(
+          elegida, hasta: hasta != null && elegida.isAfter(hasta) ? elegida : hasta);
+    } else {
+      notifier.filtrarPorFechas(notifier.desde ?? elegida, hasta: elegida);
+    }
+    setState(() => _editandoFecha = null);
+  }
+
   @override
   Widget build(BuildContext context) {
     final historial = ref.watch(historialEntregasProvider);
+    final notifier = ref.read(historialEntregasProvider.notifier);
+    final hoy = DateTime.now();
+    final hoyMidnight = DateTime(hoy.year, hoy.month, hoy.day);
+    final fechaInicial = _editandoFecha == 1
+        ? (notifier.hasta ?? notifier.desde ?? hoyMidnight)
+        : (notifier.desde ?? hoyMidnight);
 
     return Scaffold(
       appBar: const EncabezadoVentanilla(),
@@ -99,16 +127,84 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
                         decoration: InputDecoration(
                           hintText: 'Buscar por solicitante o folio',
                           prefixIcon: const Icon(Icons.search),
-                          suffixIcon: valor.text.isEmpty
-                              ? null
-                              : IconButton(
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (valor.text.isNotEmpty)
+                                IconButton(
                                   tooltip: 'Borrar búsqueda',
                                   onPressed: _limpiar,
                                   icon: const Icon(Icons.close),
                                 ),
+                              IconButton(
+                                tooltip: 'Filtrar por fecha',
+                                onPressed: () => setState(() => _editandoFecha ??= 0),
+                                icon: const Icon(Icons.calendar_month_outlined),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
+                    // El selector vive en esta tarjeta: el icono del buscador abre el
+                    // calendario debajo, sin navegar a otra pantalla ni mostrar un diálogo.
+                    if (notifier.hayFechas) ...[
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => setState(() => _editandoFecha = 0),
+                            icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                            label: Text(
+                              notifier.desde == null ? 'Desde' : _formatoFecha(notifier.desde!),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => setState(() => _editandoFecha = 1),
+                            icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                            label: Text(
+                              notifier.hasta == null ? 'Hasta' : _formatoFecha(notifier.hasta!),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Quitar filtro de fecha',
+                          onPressed: () {
+                            setState(() => _editandoFecha = null);
+                            notifier.limpiarFechas();
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                      ]),
+                    ],
+                    if (_editandoFecha != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colores.borde),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: CalendarDatePicker(
+                          initialDate: fechaInicial,
+                          firstDate: DateTime(2020),
+                          lastDate: hoyMidnight,
+                          onDateChanged: _elegirFecha,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => setState(() => _editandoFecha = null),
+                          child: const Text('Cancelar'),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     switch (historial) {
                       AsyncData(:final value) => _Tabla(pagina: value),
@@ -158,15 +254,17 @@ class _Tabla extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(historialEntregasProvider.notifier);
     if (pagina.total == 0) {
-      final buscando = ref.read(historialEntregasProvider.notifier).buscando;
+      final mensaje = notifier.buscando
+          ? 'No hay boletas que coincidan con la búsqueda'
+          : notifier.hayFechas
+              ? 'No hay entregas en el rango de fechas seleccionado.'
+              : 'Aún no hay entregas registradas.';
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 32),
         child: Center(
-          child: Text(
-            buscando ? 'No hay boletas que coincidan con la búsqueda' : 'Aún no hay entregas registradas.',
-            style: const TextStyle(color: Colores.textoSuave),
-          ),
+          child: Text(mensaje, style: const TextStyle(color: Colores.textoSuave)),
         ),
       );
     }
@@ -190,7 +288,7 @@ class _Tabla extends ConsumerWidget {
         totalPaginas: pagina.totalPaginas,
         mostrando: pagina.items.length,
         total: pagina.total,
-        onCambiar: ref.read(historialEntregasProvider.notifier).irAPagina,
+        onCambiar: notifier.irAPagina,
       ),
     ]);
   }
