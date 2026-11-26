@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,6 +38,32 @@ class EntregaHistorial {
         entregadoEn: json['entregadoEn'] as String?,
         supervisor: json['autorizoNombre'] as String?,
       );
+}
+
+// Excel del historial (HU11, AI-79) tal como lo genera GET /boletas/historial/exportar.
+class ArchivoHistorial {
+  const ArchivoHistorial({required this.nombre, required this.bytes, required this.total});
+
+  /// Filas máximas que trae el archivo (LIMITE_EXPORTACION_BOLETAS en el servidor).
+  static const maximoFilas = 1000;
+
+  /// Nombre sugerido por el servidor, por ejemplo "historial-entregas-2026-11-25.xlsx".
+  final String nombre;
+  final Uint8List bytes;
+
+  /// Boletas que cumplen el filtro (encabezado X-Total-Resultados); puede ser mayor
+  /// que las filas del archivo.
+  final int total;
+
+  /// true si el archivo se cortó en [maximoFilas] y no trae todas las boletas.
+  bool get recortado => total > maximoFilas;
+}
+
+/// Nombre del archivo en "Content-Disposition: attachment; filename=...". Si no
+/// viene, se usa uno genérico.
+String nombreDeArchivo(String? contentDisposition) {
+  final nombre = RegExp(r'filename="?([^";]+)"?').firstMatch(contentDisposition ?? '')?.group(1);
+  return (nombre == null || nombre.trim().isEmpty) ? 'historial-entregas.xlsx' : nombre.trim();
 }
 
 // Único punto de la app que consulta el historial de entregas. El servidor ya
@@ -77,6 +106,46 @@ class HistorialEntregasRepositorio {
     } on DioException catch (error) {
       throw ErrorNegocio.desdeDio(error);
     }
+  }
+
+  /// Descarga en Excel las boletas que cumplen [consulta], sin paginar (AI-79).
+  /// Igual que en [listar], con menos de [minimoCaracteresBusqueda] caracteres no
+  /// se manda `q` y se exporta el historial completo.
+  Future<ArchivoHistorial> exportar({String consulta = ''}) async {
+    final texto = consulta.trim();
+    try {
+      final respuesta = await _dio.get<List<int>>(
+        '/boletas/historial/exportar',
+        queryParameters: {
+          if (texto.length >= minimoCaracteresBusqueda) 'q': texto,
+        },
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return ArchivoHistorial(
+        nombre: nombreDeArchivo(respuesta.headers.value('content-disposition')),
+        bytes: Uint8List.fromList(respuesta.data ?? const []),
+        total: int.tryParse(respuesta.headers.value('x-total-resultados') ?? '') ?? 0,
+      );
+    } on DioException catch (error) {
+      throw _errorDeExportacion(error);
+    }
+  }
+
+  // Al pedir bytes, Dio deja también el cuerpo de un error como bytes. Si es el
+  // JSON de error del servidor ({ codigo, mensaje }) se lee para mostrar su mensaje.
+  ErrorNegocio _errorDeExportacion(DioException error) {
+    final datos = error.response?.data;
+    if (error.error is! ErrorNegocio && datos is List<int>) {
+      try {
+        final json = jsonDecode(utf8.decode(datos));
+        if (json is Map<String, dynamic>) {
+          return ErrorNegocio.fromJson(json, estadoHttp: error.response?.statusCode);
+        }
+      } on FormatException {
+        // No era JSON: se usa el mensaje genérico de abajo.
+      }
+    }
+    return ErrorNegocio.desdeDio(error);
   }
 }
 
