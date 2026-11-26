@@ -38,7 +38,7 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 | `POST` | `/api/v1/boletas/importar`         | Importa entregas anteriores desde un Excel `.xlsx`               |
 | `POST` | `/api/v1/boletas`                  | Crea la boleta y la entrega en el acto con dos firmas            |
 | `GET`  | `/api/v1/boletas`                  | Lista las boletas de los campus del usuario                      |
-| `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`) y rango de fechas (`desde`/`hasta`, `AAAA-MM-DD`) |
+| `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`) y rango de fechas (`desde`/`hasta`, `AAAA-MM-DD`), ordenado por fecha de entrega |
 | `GET`  | `/api/v1/boletas/historial/exportar` | Exporta el historial filtrado a `.xlsx` (mismos `q`, `desde` y `hasta`, sin paginar; máximo 1 000 filas) |
 | `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas, motivo y quien autorizó    |
 | `GET`  | `/api/v1/boletas/:id/detalle`      | Detalle para el historial: materiales con almacén, herramientas con estado actual y quién autorizó |
@@ -194,7 +194,7 @@ un error. Inicia sesión con `almacen.nainari@itson.mx` / `demo1234`.
 
 En Ventanilla → Historial, el icono de calendario del buscador abre el selector **dentro de la
 misma pantalla**: elige "Desde" y luego "Hasta"; el rango se combina con el texto y se conserva al
-paginar. La "x" del filtro lo quita. Hay boletas de ejemplo del 5, 15, 20 y 25 de noviembre de 2026.
+paginar. La "x" del filtro lo quita.
 
 ### Logs de la API
 

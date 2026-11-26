@@ -77,7 +77,7 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
       notifier.filtrarPorFechas(
           elegida, hasta: hasta != null && elegida.isAfter(hasta) ? elegida : hasta);
     } else {
-      notifier.filtrarPorFechas(notifier.desde ?? elegida, hasta: elegida);
+      notifier.filtrarPorFechas(notifier.desde, hasta: elegida);
     }
     setState(() => _editandoFecha = null);
   }
@@ -191,6 +191,9 @@ class _HistorialEntregasPageState extends ConsumerState<HistorialEntregasPage> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: CalendarDatePicker(
+                          // initialDate solo se lee al montarse: cambiar la key al
+                          // pasar de "Desde" a "Hasta" fuerza el nuevo estado.
+                          key: ValueKey(_editandoFecha),
                           initialDate: fechaInicial,
                           firstDate: DateTime(2020),
                           lastDate: hoyMidnight,

@@ -462,6 +462,38 @@ void main() {
       expect(repo.hastas.last, DateTime(2026, 10, 31));
       expect(find.text('Mostrando 9 de 20 registros'), findsOneWidget);
     });
+
+    testWidgets('cambiar de Desde a Hasta reconstruye el calendario con la otra fecha',
+        (tester) async {
+      final repo = _RepoFalso();
+      final (c, _) = await _abrir(tester, repo);
+      await c.read(historialEntregasProvider.notifier)
+          .filtrarPorFechas(DateTime(2026, 10, 10), hasta: DateTime(2026, 11, 20));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Filtrar por fecha'));
+      await tester.pumpAndSettle();
+      expect(find.text('October 2026'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, '20/11/2026'));
+      await tester.pumpAndSettle();
+      expect(find.text('November 2026'), findsOneWidget);
+      expect(find.text('October 2026'), findsNothing);
+    });
+
+    testWidgets('elegir solo hasta deja el inicio del rango abierto', (tester) async {
+      final repo = _RepoFalso();
+      final (c, _) = await _abrir(tester, repo);
+      await c.read(historialEntregasProvider.notifier)
+          .filtrarPorFechas(null, hasta: DateTime(2026, 11, 20));
+      await tester.pumpAndSettle();
+
+      expect(repo.desdes.last, isNull);
+      expect(repo.hastas.last, DateTime(2026, 11, 20));
+      expect(find.widgetWithText(OutlinedButton, 'Desde'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, '20/11/2026'), findsOneWidget);
+      expect(find.text('Mostrando 9 de 20 registros'), findsOneWidget);
+    });
   });
 
   test('el controlador pide 9 filas por página, como el Figma', () {

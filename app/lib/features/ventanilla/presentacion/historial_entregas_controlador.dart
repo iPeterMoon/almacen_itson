@@ -57,13 +57,13 @@ class HistorialEntregasControlador extends AsyncNotifier<Pagina<EntregaHistorial
     return irAPagina(1);
   }
 
-  /// Rango inclusivo de fechas de entrega. Con [hasta] null el filtro queda abierto
-  /// desde ese día (para poder elegir el segundo extremo después). Si el orden está
-  /// invertido, se normaliza para que el API no responda 400.
-  Future<void> filtrarPorFechas(DateTime desde, {DateTime? hasta}) {
-    var inicio = _dia(desde);
+  /// Rango inclusivo de fechas de entrega. Cualquier extremo puede ser null: con
+  /// [desde] null el rango queda abierto al inicio (el API lo acepta). Si ambos
+  /// están y el orden está invertido, se normaliza para que no responda 400.
+  Future<void> filtrarPorFechas(DateTime? desde, {DateTime? hasta}) {
+    var inicio = desde == null ? null : _dia(desde);
     var fin = hasta == null ? null : _dia(hasta);
-    if (fin != null && fin.isBefore(inicio)) {
+    if (inicio != null && fin != null && fin.isBefore(inicio)) {
       final aux = inicio;
       inicio = fin;
       fin = aux;

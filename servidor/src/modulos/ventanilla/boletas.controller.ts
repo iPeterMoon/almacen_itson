@@ -244,7 +244,7 @@ export class BoletasController {
     description:
       'Parámetros: q (solicitante o folio, mínimo 2 caracteres, sin distinguir mayúsculas ni acentos), ' +
       'desde y hasta (AAAA-MM-DD, inclusivos, día de Hermosillo), pagina y porPagina. ' +
-      'De la boleta más reciente a la más antigua. ' +
+      'Ordenado por fecha de entrega, de la más reciente a la más antigua. ' +
       'Sin coincidencias responde 200 con datos [] y total 0.',
   })
   @ApiOkResponse({

@@ -4,7 +4,8 @@
 --
 -- buscar_boletas agrega un rango de fechas inclusivo sobre entregado_en, en
 -- días calendario de Hermosillo (la misma fecha que muestra la tabla). Se
--- combina con la búsqueda por solicitante o folio.
+-- combina con la búsqueda por solicitante o folio. El orden también sigue
+-- entregado_en: es la fecha que ve el usuario, incluso en boletas importadas.
 --
 --   select * from buscar_boletas(null, 8, 0, '2026-11-01', '2026-11-30')
 -- =====================================================================
@@ -13,11 +14,12 @@
 -- que PostgREST no sabría resolver cuando solo se mandan tres argumentos.
 drop function if exists public.buscar_boletas(text, int, int);
 
--- Acelera el filtro por fecha. El índice del orden (creado_en desc, id desc)
--- sigue siendo el que resuelve el historial sin fechas.
+-- Acelera el filtro y el orden por entregado_en (id desempata). Se recrea el
+-- índice de la primera versión de esta migración para que incluya el orden.
+-- El índice de creado_en de la migración 22 sigue sirviendo a otros listados.
+drop index if exists public.boletas_entregado_en_ix;
 create index if not exists boletas_entregado_en_ix
-  on public.boletas (entregado_en desc)
-  where entregado_en is not null;
+  on public.boletas (entregado_en desc nulls last, id desc);
 
 create function public.buscar_boletas(
   p_texto     text default null,
@@ -47,7 +49,7 @@ language sql stable security invoker set search_path = public as $$
           or b.entregado_en >= (p_desde::timestamp at time zone 'America/Hermosillo'))
      and (p_hasta is null
           or b.entregado_en < ((p_hasta + 1)::timestamp at time zone 'America/Hermosillo'))
-   order by b.creado_en desc, b.id desc
+   order by b.entregado_en desc nulls last, b.id desc
    limit p_limite offset p_desplazar
 $$;
 
