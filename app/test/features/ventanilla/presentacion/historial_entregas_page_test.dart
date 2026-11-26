@@ -26,15 +26,21 @@ class _RepoFalso extends HistorialEntregasRepositorio {
   final ErrorNegocio? error;
   final List<int> paginasPedidas = [];
   final List<String> consultas = [];
+  final List<DateTime?> desdes = [];
+  final List<DateTime?> hastas = [];
 
   @override
   Future<Pagina<EntregaHistorial>> listar({
     required int pagina,
     required int porPagina,
     String consulta = '',
+    DateTime? desde,
+    DateTime? hasta,
   }) async {
     paginasPedidas.add(pagina);
     consultas.add(consulta);
+    desdes.add(desde);
+    hastas.add(hasta);
     if (error != null) throw error!;
     final texto = consulta.trim().toLowerCase();
     final todas = [
@@ -48,12 +54,21 @@ class _RepoFalso extends HistorialEntregasRepositorio {
           supervisor: i == 0 ? null : 'Carlos Mendoza Ruiz',
         ),
     ];
-    final filtradas = texto.length < 2
+    var filtradas = texto.length < 2
         ? todas
         : todas
             .where((e) =>
                 e.folio.toLowerCase().contains(texto) || e.solicitante.toLowerCase().contains(texto))
             .toList();
+    if (desde != null || hasta != null) {
+      bool enRango(EntregaHistorial e) {
+        final f = DateTime.parse(e.entregadoEn!).toUtc();
+        final dia = DateTime(f.year, f.month, f.day);
+        return (desde == null || !dia.isBefore(desde)) && (hasta == null || !dia.isAfter(hasta));
+      }
+
+      filtradas = filtradas.where(enRango).toList();
+    }
     final inicio = (pagina - 1) * porPagina;
     return Pagina(
       items: filtradas.skip(inicio).take(porPagina).toList(),
@@ -343,6 +358,109 @@ void main() {
       await tester.enterText(campo(), 'Pérez; <ENT> 😀');
 
       expect(tester.widget<TextField>(campo()).controller!.text, 'Pérez ENT ');
+    });
+  });
+
+  group('filtro por fecha inline', () {
+    testWidgets('el calendario se abre dentro de la tarjeta, sin otra pantalla', (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+
+      await tester.tap(find.byTooltip('Filtrar por fecha'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CalendarDatePicker), findsOneWidget);
+      expect(find.byType(HistorialEntregasPage), findsOneWidget);
+
+      await tester.tap(
+          find.descendant(of: find.byType(CalendarDatePicker), matching: find.text('15')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CalendarDatePicker), findsNothing);
+      expect(repo.desdes.last, DateTime(2026, 11, 15));
+      expect(repo.hastas.last, isNull, reason: 'falta elegir el segundo extremo');
+    });
+
+    testWidgets('elegir desde y hasta manda el rango inclusivo y vuelve a la página 1',
+        (tester) async {
+      final repo = _RepoFalso();
+      await _abrir(tester, repo);
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Filtrar por fecha'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+          find.descendant(of: find.byType(CalendarDatePicker), matching: find.text('10')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Hasta'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+          find.descendant(of: find.byType(CalendarDatePicker), matching: find.text('20')));
+      await tester.pumpAndSettle();
+
+      expect(repo.desdes.last, DateTime(2026, 11, 10));
+      expect(repo.hastas.last, DateTime(2026, 11, 20));
+      expect(repo.paginasPedidas.last, 1);
+      expect(find.widgetWithText(OutlinedButton, '10/11/2026'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, '20/11/2026'), findsOneWidget);
+    });
+
+    testWidgets('quitar el filtro de fecha vuelve al historial completo', (tester) async {
+      final repo = _RepoFalso();
+      final (c, _) = await _abrir(tester, repo);
+      await c.read(historialEntregasProvider.notifier).filtrarPorFechas(DateTime(2026, 11, 10),
+          hasta: DateTime(2026, 11, 20));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Quitar filtro de fecha'));
+      await tester.pumpAndSettle();
+
+      expect(repo.desdes.last, isNull);
+      expect(repo.hastas.last, isNull);
+      expect(repo.paginasPedidas.last, 1);
+      expect(find.byTooltip('Quitar filtro de fecha'), findsNothing);
+      expect(find.byTooltip('Filtrar por fecha'), findsOneWidget);
+    });
+
+    testWidgets('la paginación conserva el rango de fechas', (tester) async {
+      final repo = _RepoFalso();
+      final (c, _) = await _abrir(tester, repo);
+      await c.read(historialEntregasProvider.notifier).filtrarPorFechas(DateTime(2026, 10, 1),
+          hasta: DateTime(2026, 10, 31));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      expect(repo.desdes.last, DateTime(2026, 10, 1));
+      expect(repo.hastas.last, DateTime(2026, 10, 31));
+      expect(repo.paginasPedidas, [1, 1, 2]);
+    });
+
+    testWidgets('un rango sin entregas muestra el mensaje de fecha, no el de búsqueda',
+        (tester) async {
+      final repo = _RepoFalso();
+      final (c, _) = await _abrir(tester, repo);
+      await c.read(historialEntregasProvider.notifier).filtrarPorFechas(DateTime(2026, 11, 1),
+          hasta: DateTime(2026, 11, 30));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No hay entregas en el rango de fechas seleccionado.'), findsOneWidget);
+      expect(find.text('No hay boletas que coincidan con la búsqueda'), findsNothing);
+    });
+
+    testWidgets('un rango invertido se normaliza antes de consultar', (tester) async {
+      final repo = _RepoFalso();
+      final (c, _) = await _abrir(tester, repo);
+      await c.read(historialEntregasProvider.notifier).filtrarPorFechas(DateTime(2026, 10, 31),
+          hasta: DateTime(2026, 10, 1));
+      await tester.pumpAndSettle();
+
+      expect(repo.desdes.last, DateTime(2026, 10, 1));
+      expect(repo.hastas.last, DateTime(2026, 10, 31));
+      expect(find.text('Mostrando 9 de 20 registros'), findsOneWidget);
     });
   });
 

@@ -67,6 +67,26 @@ void main() {
         {'q': 'ENT-2026-0191', 'pagina': 1, 'porPagina': 9});
   });
 
+  test('con rango de fechas manda desde y hasta en AAAA-MM-DD', () async {
+    final (:repo, :servidor) = crear(cuerpo: {'datos': [], 'total': 0});
+
+    await repo.listar(
+      pagina: 1,
+      porPagina: 9,
+      consulta: '  ana  ',
+      desde: DateTime(2026, 11, 1),
+      hasta: DateTime(2026, 11, 30),
+    );
+
+    expect(servidor.ultimaPeticion!.queryParameters, {
+      'q': 'ana',
+      'desde': '2026-11-01',
+      'hasta': '2026-11-30',
+      'pagina': 1,
+      'porPagina': 9,
+    });
+  });
+
   test('con menos de 2 caracteres no manda q y pide el historial completo', () async {
     final (:repo, :servidor) = crear(cuerpo: {'datos': [], 'total': 0});
 

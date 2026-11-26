@@ -46,12 +46,14 @@ class HistorialEntregasRepositorio {
   final Dio _dio;
 
   /// [consulta] filtra por solicitante o folio. El servidor exige al menos
-  /// [minimoCaracteresBusqueda] caracteres: con menos (o vacía) no se manda `q`
-  /// y se recibe el historial completo.
+  /// [minimoCaracteresBusqueda] caracteres: con menos (o vacía) no se manda `q`.
+  /// [desde] y [hasta] son días calendario inclusivos en horario de Hermosillo.
   Future<Pagina<EntregaHistorial>> listar({
     required int pagina,
     required int porPagina,
     String consulta = '',
+    DateTime? desde,
+    DateTime? hasta,
   }) async {
     final texto = consulta.trim();
     try {
@@ -59,6 +61,8 @@ class HistorialEntregasRepositorio {
         '/boletas/historial',
         queryParameters: {
           if (texto.length >= minimoCaracteresBusqueda) 'q': texto,
+          if (desde != null) 'desde': _fechaApi(desde),
+          if (hasta != null) 'hasta': _fechaApi(hasta),
           'pagina': pagina,
           'porPagina': porPagina,
         },
@@ -78,6 +82,12 @@ class HistorialEntregasRepositorio {
       throw ErrorNegocio.desdeDio(error);
     }
   }
+
+  // El contrato del API exige AAAA-MM-DD, sin hora ni zona.
+  static String _fechaApi(DateTime f) =>
+      '${f.year.toString().padLeft(4, '0')}-'
+      '${f.month.toString().padLeft(2, '0')}-'
+      '${f.day.toString().padLeft(2, '0')}';
 }
 
 final proveedorHistorialEntregasRepositorio = Provider<HistorialEntregasRepositorio>(
