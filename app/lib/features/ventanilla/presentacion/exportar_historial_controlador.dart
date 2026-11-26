@@ -25,8 +25,8 @@ class ExportacionHistorial {
   final bool recortado;
 }
 
-/// HU11 (AI-79): exporta a Excel las boletas que muestra el historial, con la
-/// búsqueda activa, y las guarda en Descargas.
+/// HU11 (AI-79): exporta a Excel las boletas que muestra el historial, con los
+/// filtros activos (búsqueda y rango de fechas), y las guarda en Descargas.
 ///
 /// Estado: `AsyncData(null)` antes de exportar; `AsyncLoading` mientras descarga y
 /// guarda (la pantalla desactiva el botón); `AsyncData` con el resultado para avisar
@@ -38,12 +38,14 @@ class ExportarHistorialControlador extends AsyncNotifier<ExportacionHistorial?> 
   Future<void> exportar() async {
     // Un segundo toque mientras se exporta no inicia otra descarga.
     if (state.isLoading) return;
-    // La misma búsqueda con la que se pidió la tabla que se ve en pantalla.
-    final consulta = ref.read(historialEntregasProvider.notifier).consulta;
+    // Los mismos filtros con los que se pidió la tabla que se ve en pantalla.
+    final historial = ref.read(historialEntregasProvider.notifier);
+    final (consulta, desde, hasta) = (historial.consulta, historial.desde, historial.hasta);
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      final archivo =
-          await ref.read(proveedorHistorialEntregasRepositorio).exportar(consulta: consulta);
+      final archivo = await ref
+          .read(proveedorHistorialEntregasRepositorio)
+          .exportar(consulta: consulta, desde: desde, hasta: hasta);
       final carpeta = await ref
           .read(proveedorGuardadorArchivos)
           .guardarEnDescargas(nombre: archivo.nombre, bytes: archivo.bytes);

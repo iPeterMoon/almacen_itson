@@ -251,6 +251,18 @@ void main() {
       expect(servidor.ultimaPeticion!.queryParameters, isEmpty);
     });
 
+    test('manda el rango de fechas como AAAA-MM-DD junto con la búsqueda', () async {
+      final (:repo, :servidor) = crearExportar();
+
+      await repo.exportar(consulta: 'jose', desde: DateTime(2026, 11, 3), hasta: DateTime(2026, 11, 24, 18, 30));
+      expect(servidor.ultimaPeticion!.queryParameters,
+          {'q': 'jose', 'desde': '2026-11-03', 'hasta': '2026-11-24'});
+
+      // Solo "hasta": el rango queda abierto al inicio, como lo acepta el API.
+      await repo.exportar(hasta: DateTime(2026, 11, 24));
+      expect(servidor.ultimaPeticion!.queryParameters, {'hasta': '2026-11-24'});
+    });
+
     test('marca el archivo como recortado si hay más boletas que el tope de filas', () async {
       final (:repo, servidor: _) = crearExportar(encabezados: {
         'x-total-resultados': ['1500'],

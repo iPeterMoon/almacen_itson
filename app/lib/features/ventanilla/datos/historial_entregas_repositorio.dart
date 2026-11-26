@@ -113,16 +113,19 @@ class HistorialEntregasRepositorio {
     }
   }
 
-  /// Descarga en Excel las boletas que cumplen [consulta], sin paginar (AI-79).
-  /// Igual que en [listar], con menos de [minimoCaracteresBusqueda] caracteres no
-  /// se manda `q` y se exporta el historial completo.
-  Future<ArchivoHistorial> exportar({String consulta = ''}) async {
+  /// Descarga en Excel las boletas que cumplen los mismos filtros de [listar]
+  /// ([consulta], [desde] y [hasta]), sin paginar (AI-79). Con menos de
+  /// [minimoCaracteresBusqueda] caracteres no se manda `q`, y sin filtros se
+  /// exporta el historial completo.
+  Future<ArchivoHistorial> exportar({String consulta = '', DateTime? desde, DateTime? hasta}) async {
     final texto = consulta.trim();
     try {
       final respuesta = await _dio.get<List<int>>(
         '/boletas/historial/exportar',
         queryParameters: {
           if (texto.length >= minimoCaracteresBusqueda) 'q': texto,
+          if (desde != null) 'desde': _fechaApi(desde),
+          if (hasta != null) 'hasta': _fechaApi(hasta),
         },
         options: Options(responseType: ResponseType.bytes),
       );

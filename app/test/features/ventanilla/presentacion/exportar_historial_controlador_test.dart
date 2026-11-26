@@ -21,6 +21,7 @@ class _RepoFalso extends HistorialEntregasRepositorio {
   final int total;
   final ErrorNegocio? error;
   final List<String> consultasExportadas = [];
+  final List<(DateTime?, DateTime?)> fechasExportadas = [];
   Completer<void>? pendiente;
 
   @override
@@ -34,8 +35,9 @@ class _RepoFalso extends HistorialEntregasRepositorio {
       Pagina(items: const [], total: 0, pagina: pagina, porPagina: porPagina);
 
   @override
-  Future<ArchivoHistorial> exportar({String consulta = ''}) async {
+  Future<ArchivoHistorial> exportar({String consulta = '', DateTime? desde, DateTime? hasta}) async {
     consultasExportadas.add(consulta);
+    fechasExportadas.add((desde, hasta));
     await pendiente?.future;
     if (error != null) throw error!;
     return ArchivoHistorial(
@@ -104,13 +106,39 @@ void main() {
     expect(resultado.recortado, isFalse);
   });
 
-  test('sin búsqueda exporta el historial completo', () async {
+  test('sin búsqueda ni fechas exporta el historial completo', () async {
     final (:c, :repo, guardador: _) = _crear();
     await c.read(historialEntregasProvider.future);
 
     await c.read(exportarHistorialProvider.notifier).exportar();
 
     expect(repo.consultasExportadas, ['']);
+    expect(repo.fechasExportadas, [(null, null)]);
+  });
+
+  test('exporta con el rango de fechas activo junto con la búsqueda', () async {
+    final (:c, :repo, guardador: _) = _crear();
+    final historial = c.read(historialEntregasProvider.notifier);
+    await c.read(historialEntregasProvider.future);
+    await historial.buscar('jose');
+    await historial.filtrarPorFechas(DateTime(2026, 11, 3), hasta: DateTime(2026, 11, 24));
+
+    await c.read(exportarHistorialProvider.notifier).exportar();
+
+    expect(repo.consultasExportadas, ['jose']);
+    expect(repo.fechasExportadas, [(DateTime(2026, 11, 3), DateTime(2026, 11, 24))]);
+  });
+
+  test('al quitar el rango de fechas vuelve a exportar sin fechas', () async {
+    final (:c, :repo, guardador: _) = _crear();
+    final historial = c.read(historialEntregasProvider.notifier);
+    await c.read(historialEntregasProvider.future);
+    await historial.filtrarPorFechas(DateTime(2026, 11, 3), hasta: DateTime(2026, 11, 24));
+    await historial.limpiarFechas();
+
+    await c.read(exportarHistorialProvider.notifier).exportar();
+
+    expect(repo.fechasExportadas, [(null, null)]);
   });
 
   test('al borrar la búsqueda vuelve a exportar todo', () async {
