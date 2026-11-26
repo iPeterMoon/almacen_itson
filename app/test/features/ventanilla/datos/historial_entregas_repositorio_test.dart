@@ -117,6 +117,84 @@ void main() {
     );
   });
 
+  test('detalle pide /boletas/:id/detalle y lee datos, materiales, herramientas y autorización',
+      () async {
+    final (:repo, :servidor) = crear(cuerpo: {
+      'id': 184,
+      'folio': 'ENT-2026-0184',
+      'campusId': 1,
+      'campus': 'Náinari',
+      'entregadoEn': '2026-10-17T16:35:00Z',
+      'entregadoPor': 'Ana Lucía Torres',
+      'solicitante': {'nombre': 'Juan Pérez Soto', 'dependencia': 'Mantenimiento', 'unidad': 'Obregón'},
+      'autorizoNombre': 'Carlos Mendoza Ruiz',
+      'materiales': [
+        {
+          'codigo': 'CD-987',
+          'concepto': 'Pintura epóxica',
+          'almacen': 'Mantenimiento',
+          'presentacion': 'L',
+          'cantidad': 0.5,
+        },
+        {'codigo': 'CD-1', 'concepto': 'Guantes', 'almacen': null, 'presentacion': null, 'cantidad': 3},
+      ],
+      'herramientas': [
+        {
+          'codigo': '912398',
+          'nombre': 'Rotomartillo',
+          'modelo': 'DCF997D2',
+          'numeroSerie': '2023351982',
+          'estado': 'EN_PRESTAMO',
+        },
+      ],
+    });
+
+    final d = await repo.detalle(184);
+
+    expect(servidor.ultimaPeticion!.method, 'GET');
+    expect(servidor.ultimaPeticion!.path, '/boletas/184/detalle');
+    expect(d.folio, 'ENT-2026-0184');
+    expect(d.solicitante, 'Juan Pérez Soto');
+    expect(d.dependencia, 'Mantenimiento');
+    expect(d.unidad, 'Obregón');
+    expect(d.campus, 'Náinari');
+    expect(d.entregadoPor, 'Ana Lucía Torres');
+    expect(d.requirioAutorizacion, isTrue);
+    expect(d.materiales.first.cantidadTexto, '0.5 L');
+    expect(d.materiales.last.cantidadTexto, '3');
+    expect(d.materiales.last.almacen, isNull);
+    expect(d.herramientas.single.numeroSerie, '2023351982');
+    expect(d.herramientas.single.estado, 'EN_PRESTAMO');
+  });
+
+  test('detalle sin autorización ni herramientas', () async {
+    final (:repo, servidor: _) = crear(cuerpo: {
+      'id': 5,
+      'folio': 'ENT-2026-0005',
+      'solicitante': {'nombre': 'Externo', 'dependencia': null, 'unidad': null},
+      'autorizoNombre': null,
+      'materiales': [],
+      'herramientas': [],
+    });
+
+    final d = await repo.detalle(5);
+
+    expect(d.requirioAutorizacion, isFalse);
+    expect(d.herramientas, isEmpty);
+  });
+
+  test('detalle de una boleta inexistente sale como ErrorNegocio', () async {
+    final (:repo, servidor: _) = crear(
+      estado: 404,
+      cuerpo: {'codigo': 'BOLETA_NO_EXISTE', 'mensaje': 'La boleta 9 no existe.'},
+    );
+
+    expect(
+      repo.detalle(9),
+      throwsA(isA<ErrorNegocio>().having((e) => e.codigo, 'codigo', 'BOLETA_NO_EXISTE')),
+    );
+  });
+
   test('formatearFechaHora muestra fecha y hora de Hermosillo como el Figma', () {
     expect(formatearFechaHora('2026-10-20T15:35:00Z'), '20/10/2026 08:35 a.m.');
     expect(formatearFechaHora('2026-10-19T20:10:00Z'), '19/10/2026 01:10 p.m.');

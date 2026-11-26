@@ -12,6 +12,7 @@ import '../../../core/widgets/componentes.dart';
 import '../datos/boletas_repositorio.dart';
 import '../datos/historial_entregas_repositorio.dart';
 import '../datos/modelos.dart';
+import 'dialogos/dialogo_detalle_boleta.dart';
 import 'historial_entregas_controlador.dart';
 import 'ventanilla_rutas.dart';
 import 'widgets/encabezado_ventanilla.dart';
@@ -275,6 +276,8 @@ class _Tabla extends ConsumerWidget {
       TablaDatos(
         encabezados: HistorialEntregasPage.encabezados,
         flex: const [1, 1, 1, 1, 1],
+        // Al tocar una fila se abre el detalle de esa boleta.
+        onTap: (fila) => mostrarDetalleBoleta(context, pagina.items[fila].id),
         filas: [
           for (final e in pagina.items)
             [

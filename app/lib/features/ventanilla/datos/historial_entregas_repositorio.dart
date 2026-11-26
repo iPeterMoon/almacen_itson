@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errores/error_negocio.dart';
 import '../../../core/red/cliente_api.dart';
+import 'detalle_boleta.dart';
 import 'modelos.dart';
 import 'ventanilla_repositorio_api.dart' show minimoCaracteresBusqueda;
 
@@ -88,8 +89,25 @@ class HistorialEntregasRepositorio {
       '${f.year.toString().padLeft(4, '0')}-'
       '${f.month.toString().padLeft(2, '0')}-'
       '${f.day.toString().padLeft(2, '0')}';
+
+  /// Detalle de una boleta: datos generales, materiales, herramientas y autorización.
+  /// Si no existe o es de otro campus, el servidor responde 404 BOLETA_NO_EXISTE.
+  Future<DetalleBoleta> detalle(int boletaId) async {
+    try {
+      final respuesta = await _dio.get<Map<String, dynamic>>('/boletas/$boletaId/detalle');
+      return DetalleBoleta.fromJson(respuesta.data!);
+    } on DioException catch (error) {
+      throw ErrorNegocio.desdeDio(error);
+    }
+  }
 }
 
 final proveedorHistorialEntregasRepositorio = Provider<HistorialEntregasRepositorio>(
   (ref) => HistorialEntregasRepositorio(ref.watch(proveedorClienteApi)),
+);
+
+/// Detalle de la boleta con ese id. Se descarta al cerrar el diálogo (autoDispose),
+/// así al volver a abrirlo se ve el estado actual de las herramientas.
+final detalleBoletaProvider = FutureProvider.autoDispose.family<DetalleBoleta, int>(
+  (ref, boletaId) => ref.read(proveedorHistorialEntregasRepositorio).detalle(boletaId),
 );
