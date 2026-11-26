@@ -22,7 +22,8 @@ prefijo automáticamente. Si da 404, revisa el log del servidor: la ruta debe em
 ## Paquetes acordados
 
 `flutter_riverpod` (estado), `go_router` (navegación), `dio` (HTTP),
-`flutter_secure_storage` (tokens de sesión) y `signature` (captura de firmas).
+`flutter_secure_storage` (tokens de sesión), `signature` (captura de firmas), `file_saver`
+(guardar en Descargas) y `file_picker` (elegir archivos).
 
 ## Estructura (por funcionalidad)
 
@@ -34,6 +35,7 @@ lib/
     config/            URL del servidor (--dart-define=API_URL)
     tema/              colores, tipografía y espaciados del Figma
     red/               cliente dio con token y renovación
+    archivos/          elegir y guardar archivos del dispositivo
     errores/           ErrorNegocio a partir de { codigo, mensaje }
     widgets/           botones, campos y tarjetas reutilizables
   features/            una carpeta por funcionalidad
