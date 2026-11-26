@@ -38,8 +38,8 @@ El flujo de ventanilla y su historial se exponen en `servidor/src/modulos/ventan
 | `POST` | `/api/v1/boletas/importar`         | Importa entregas anteriores desde un Excel `.xlsx`               |
 | `POST` | `/api/v1/boletas`                  | Crea la boleta y la entrega en el acto con dos firmas            |
 | `GET`  | `/api/v1/boletas`                  | Lista las boletas de los campus del usuario                      |
-| `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`), sin distinguir mayúsculas ni acentos |
-| `GET`  | `/api/v1/boletas/historial/exportar` | Exporta el historial filtrado a `.xlsx` (mismo `q`, sin paginar; máximo 1 000 filas) |
+| `GET`  | `/api/v1/boletas/historial`        | Historial paginado con búsqueda por solicitante o folio (`q`) y rango de fechas (`desde`/`hasta`, `AAAA-MM-DD`) |
+| `GET`  | `/api/v1/boletas/historial/exportar` | Exporta el historial filtrado a `.xlsx` (mismos `q`, `desde` y `hasta`, sin paginar; máximo 1 000 filas) |
 | `GET`  | `/api/v1/boletas/:id`              | Detalle con materiales, herramientas, motivo y quien autorizó    |
 | `GET`  | `/api/v1/boletas/:id/detalle`      | Detalle para el historial: materiales con almacén, herramientas con estado actual y quién autorizó |
 | `GET`  | `/api/v1/boletas/:id/resumen`      | Resumen de la entrega para la pantalla de confirmación           |
@@ -191,6 +191,10 @@ cd app && flutter run --dart-define=API_URL=http://10.0.2.2:3000/api/v1   # term
 
 La primera compilación de Android puede tardar 10 minutos o más; el aviso "SDK XML version 4" no es
 un error. Inicia sesión con `almacen.nainari@itson.mx` / `demo1234`.
+
+En Ventanilla → Historial, el icono de calendario del buscador abre el selector **dentro de la
+misma pantalla**: elige "Desde" y luego "Hasta"; el rango se combina con el texto y se conserva al
+paginar. La "x" del filtro lo quita. Hay boletas de ejemplo del 5, 15, 20 y 25 de noviembre de 2026.
 
 ### Logs de la API
 
