@@ -150,6 +150,7 @@ class TablaDatos extends StatelessWidget {
     this.onTap,
     this.resaltada,
     this.primeraNegrita = false,
+    this.celda,
   });
 
   final List<String> encabezados;
@@ -158,8 +159,12 @@ class TablaDatos extends StatelessWidget {
   final void Function(int fila)? onTap;
   final bool Function(int fila)? resaltada;
   final bool primeraNegrita;
+  // Para dibujar un widget (una etiqueta de estado, por ejemplo) en lugar del texto
+  // de una celda. Si devuelve null, se dibuja el texto de [filas].
+  final Widget? Function(int fila, int columna)? celda;
 
-  Widget _fila(List<String> celdas, bool compacto, {Color? color, bool encabezado = false}) =>
+  Widget _fila(List<String> celdas, bool compacto,
+          {Color? color, bool encabezado = false, int? indice}) =>
       Container(
         color: color,
         constraints: const BoxConstraints(minHeight: 48),
@@ -170,7 +175,7 @@ class TablaDatos extends StatelessWidget {
               flex: flex[k],
               child: Padding(
                 padding: const EdgeInsets.only(right: 6),
-                child: Text(celdas[k],
+                child: (indice == null ? null : celda?.call(indice, k)) ?? Text(celdas[k],
                     softWrap: true,
                     style: TextStyle(
                         fontSize: compacto ? 12.5 : 14,
@@ -201,6 +206,7 @@ class TablaDatos extends StatelessWidget {
               child: _fila(
                 filas[i],
                 compacto,
+                indice: i,
                 color: (resaltada?.call(i) ?? false)
                     ? Colores.infoFondo
                     : (i.isOdd ? Colores.filaAlterna : Colors.white),

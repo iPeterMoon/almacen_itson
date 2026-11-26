@@ -28,6 +28,8 @@ class _RepoFalso extends HistorialEntregasRepositorio {
     required int pagina,
     required int porPagina,
     String consulta = '',
+    DateTime? desde,
+    DateTime? hasta,
   }) async =>
       Pagina(items: const [], total: 0, pagina: pagina, porPagina: porPagina);
 

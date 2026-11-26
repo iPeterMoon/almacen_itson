@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Smoke test local: la API corre en http://10.0.2.2:3000 dentro del emulador. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
