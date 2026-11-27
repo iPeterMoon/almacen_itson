@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Stub mínimo de Supabase para probar las migraciones en un PostgreSQL
--- vacío (contenedor postgres:16). Imita solo lo que usan las migraciones
+-- vacío (contenedor postgres:17). Imita solo lo que usan las migraciones
 -- y probar.py: roles, privilegios por defecto, auth.users, auth.uid(),
 -- el esquema extensions y storage (buckets, objects, foldername).
 -- NO se usa en Supabase real.

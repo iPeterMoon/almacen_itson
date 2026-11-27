@@ -77,18 +77,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Aplica migraciones y seeds sobre la imagen real de Supabase (Postgres 17).
-      - uses: supabase/setup-cli@v1
-        with:
-          version: 3.2.0
-
-      - name: Aplicar migraciones en Supabase local
-        run: supabase db start
-
-      - name: Detener Supabase local
-        run: supabase stop --no-backup
-
-      # Escenarios de las HU contra Postgres con el stub de Supabase.
+      # Aplica migraciones y seeds con el stub de Supabase (Postgres 17) y corre
+      # los escenarios; reiniciar.sh ya falla si alguna migración falla.
       - name: Recrear base de pruebas
         run: bash supabase/pruebas/reiniciar.sh
 
