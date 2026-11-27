@@ -483,8 +483,10 @@ describe('HU11: historial y detalle de boletas (API + base de pruebas)', () => {
           }),
         ]),
       );
-      expect(detalle.materiales[0].concepto).toBeTruthy();
-      expect(detalle.materiales[0].almacen).toBeTruthy();
+      const material = detalle.materiales.find((m) => m.codigo === CODIGO_MATERIAL);
+      expect(material).toMatchObject({ cantidad: 1 });
+      expect(material?.concepto).toBeTruthy();
+      expect(material?.almacen).toBeTruthy();
 
       expect(detalle.herramientas).toEqual(
         expect.arrayContaining([
